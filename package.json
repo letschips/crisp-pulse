@@ -1,0 +1,22 @@
+{
+  "name": "crisp-pulse",
+  "version": "1.4.0",
+  "description": "Your knowledge work, visualized. Local-first activity and contribution analytics with GitHub-style heatmap for Obsidian.",
+  "author": "letschips",
+  "authorUrl": "https://github.com/letschips",
+  "license": "SEE LICENSE IN LICENSE",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "check": "node --check main.js && node --test tests/*.test.cjs"
+  },
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "crisp",
+    "heatmap",
+    "analytics",
+    "productivity",
+    "review"
+  ]
+}

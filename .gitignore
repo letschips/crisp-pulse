@@ -1,0 +1,16 @@
+# Obsidian plugin runtime and user data (CRITICAL: DO NOT COMMIT USER NOTES/STATS)
+data.json
+backups/
+.DS_Store
+*.log
+
+# Dependencies & temporary files
+node_modules/
+dist/
+coverage/
+.idea/
+.vscode/
+
+# Local work and upgrade notes
+AUDIT.md
+UPGRADE-REPORT.md
