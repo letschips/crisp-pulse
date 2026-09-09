@@ -1050,7 +1050,6 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
     }
   }
 
-  const initialTrackingVersion = store.trackingVersion;
   if (store.trackingVersion !== 3) {
     if (!store.trackingVersion) {
       for (const record of Object.values(store.daily)) {
@@ -1061,49 +1060,13 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
     store.dirty = true;
   }
 
-  const todayStr = getTodayKey();
-  if (store.daily && store.daily[todayStr] && initialTrackingVersion >= 3) {
-    const todayRec = store.daily[todayStr];
-    if (todayRec.legacyUnverified) {
-      delete todayRec.legacyUnverified;
-      repairedCount++;
-      store.dirty = true;
-    }
-    if (todayRec.contribution && todayRec.contribution.wordsAdded > 100000 && todayRec.files) {
-      const kept = {};
-      let wordsAdded = 0;
-      let notesCreated = 0;
-      let linksCreated = 0;
-      let rewrittenWords = 0;
-      for (const [fp, m] of Object.entries(todayRec.files)) {
-        if (fp.includes(todayStr) || fp.includes(todayStr.replace(/-/g, "")) || (m.rewrittenWords && m.rewrittenWords > 0)) {
-          kept[fp] = m;
-          wordsAdded += m.wordsAdded || 0;
-          if (m.created) notesCreated++;
-          linksCreated += m.links || 0;
-          rewrittenWords += m.rewrittenWords || 0;
-        }
-      }
-      todayRec.files = kept;
-      todayRec.contribution.wordsAdded = wordsAdded;
-      todayRec.contribution.notesCreated = notesCreated;
-      todayRec.contribution.linksCreated = linksCreated;
-      todayRec.contribution.rewrittenWords = rewrittenWords;
-      todayRec.contribution.meaningfulEdits = Math.max(todayRec.contribution.meaningfulEdits || 1, Object.keys(kept).length);
-      todayRec.contribution.score = Math.round((calcWordsContribution(wordsAdded) + notesCreated * 5 + Object.keys(kept).length * 2 + linksCreated + (rewrittenWords * 0.0016)) * 10) / 10;
-      todayRec.quality = "recorded";
-      todayRec.intensity = 4;
-      repairedCount++;
-      store.dirty = true;
-    }
-  }
 
   return { store, repairedCount };
 }
 
 class CrispPulsePlugin extends Plugin {
   async onload() {
-    console.log("[Crisp Pulse] Initializing plugin (v1.4.0)...");
+    console.log(`[Crisp Pulse] Initializing plugin (v${this.manifest.version})...`);
     this.saveStatus = "idle";
     this.lastSavedTime = null;
     this.lastSaveError = null;
@@ -1329,7 +1292,13 @@ class CrispPulsePlugin extends Plugin {
     return await this.licenseManager.verify();
   }
 
-  async createBackup(reason = "manual") {
+  createBackup(reason = "manual") {
+    const pending = (this.backupQueue || Promise.resolve()).catch(() => {}).then(() => this.writeBackup(reason));
+    this.backupQueue = pending;
+    return pending;
+  }
+
+  async writeBackup(reason) {
     try {
       const adapter = this.app?.vault?.adapter;
       const baseDir = this.manifest?.dir || ".obsidian/plugins/crisp-pulse";
@@ -1337,8 +1306,18 @@ class CrispPulsePlugin extends Plugin {
 
       const now = new Date();
       const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
-      const fileName = `pulse-backup-${ts}-${reason}.json`;
-      const filePath = `${backupDir}/${fileName}`;
+      const safeReason = String(reason).replace(/[^a-zA-Z0-9-]/g, "-") || "manual";
+      let existingFiles = [];
+      if (adapter?.list && (!adapter.exists || await adapter.exists(backupDir))) {
+        existingFiles = (await adapter.list(backupDir))?.files || [];
+      }
+      let fileName;
+      let filePath;
+      do {
+        this.backupSequence = (this.backupSequence || 0) + 1;
+        fileName = `pulse-backup-${ts}-${String(this.backupSequence).padStart(6, "0")}-${safeReason}.json`;
+        filePath = `${backupDir}/${fileName}`;
+      } while (existingFiles.includes(filePath));
       const payload = JSON.stringify(this.store, null, 2);
 
       if (adapter && typeof adapter.write === "function") {
@@ -1349,7 +1328,8 @@ class CrispPulsePlugin extends Plugin {
 
         if (typeof adapter.list === "function") {
           const list = await adapter.list(backupDir);
-          const files = (list?.files || []).filter((f) => f.endsWith(".json")).sort();
+          const files = (list?.files || []).filter(f => f.startsWith(`${backupDir}/`) &&
+            /^pulse-backup-\d{8}-\d{6}-(?:\d{6}-)?[a-zA-Z0-9-]+\.json$/.test(f.slice(backupDir.length + 1))).sort();
           if (files.length > 5) {
             const toRemove = files.slice(0, files.length - 5);
             for (const rmPath of toRemove) {
@@ -1621,6 +1601,7 @@ class CrispPulsePlugin extends Plugin {
 
         try {
           const content = await this.app.vault.read(file);
+          if (this.stopped) return;
           const words = countWords(content);
           this.fileSnapshots.set(file.path, {
             words,
@@ -1744,21 +1725,25 @@ class CrispPulsePlugin extends Plugin {
   }
 
   async handleFileModification(file) {
+    if (this.stopped) return;
     if (!this.fileQueues) this.fileQueues = new Map();
-    const queue = (this.fileQueues.get(file.path) || Promise.resolve())
+    const queuedPath = file.path;
+    const queue = (this.fileQueues.get(queuedPath) || Promise.resolve())
       .catch(() => {})
-      .then(() => this.processFileModification(file));
-    this.fileQueues.set(file.path, queue);
+      .then(() => { if (!this.stopped) return this.processFileModification(file); });
+    this.fileQueues.set(queuedPath, queue);
     try {
       await queue;
     } finally {
-      if (this.fileQueues.get(file.path) === queue) this.fileQueues.delete(file.path);
+      if (this.fileQueues.get(queuedPath) === queue) this.fileQueues.delete(queuedPath);
     }
   }
 
   async processFileModification(file) {
+    if (this.stopped) return;
     try {
       const content = await this.app.vault.read(file);
+      if (this.stopped) return;
       const newWords = countWords(content);
       const newTasks = countTasks(content);
       const newLinks = countLinks(content);
@@ -2211,6 +2196,8 @@ class CrispPulseView extends ItemView {
   render() {
     const container = this.containerEl.children[1];
     const previousScroll = container?.scrollTop || 0;
+    const previousHorizontal = container.querySelector(".crisp-pulse-heatmap-scroll")?.scrollLeft || 0;
+    const focusedDate = container.ownerDocument.activeElement?.dataset?.date;
     container.empty();
     container.classList.add("crisp-pulse-view");
 
@@ -2237,6 +2224,9 @@ class CrispPulseView extends ItemView {
     }
 
     container.scrollTop = previousScroll;
+    const heatmap = container.querySelector(".crisp-pulse-heatmap-scroll");
+    if (heatmap) heatmap.scrollLeft = previousHorizontal;
+    if (focusedDate) container.querySelector(`[data-date="${focusedDate}"]`)?.focus({ preventScroll: true });
   }
 
   renderHeader(parent) {
@@ -2390,8 +2380,14 @@ class CrispPulseView extends ItemView {
     const daysUntilEndOfWeek = weekStartsOnMonday ? (7 - (dayOfWeek || 7)) : (6 - dayOfWeek);
     const endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilEndOfWeek);
 
-    const totalDays = 53 * 7;
-    const startDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() - totalDays + 1);
+    const candidates = Array.from({ length: 371 }, (_, index) =>
+      dateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 370 + index)));
+    const visibleDates = new Set(filterDatesByRange(candidates, this.currentDateRange, now));
+    const [firstYear, firstMonth, firstDay] = [...visibleDates][0].split("-").map(Number);
+    const startDate = new Date(firstYear, firstMonth - 1, firstDay);
+    const offset = (startDate.getDay() - (weekStartsOnMonday ? 1 : 0) + 7) % 7;
+    startDate.setDate(startDate.getDate() - offset);
+    const totalWeeks = Math.ceil((Math.round((endDate - startDate) / 86400000) + 1) / 7);
 
     const { map: intensityMap } = this.plugin.calculateIntensities(this.selectedMetric, this.currentScope);
 
@@ -2400,7 +2396,7 @@ class CrispPulseView extends ItemView {
     let currentMonth = -1;
 
     let cursor = new Date(startDate);
-    for (let w = 0; w < 53; w++) {
+    for (let w = 0; w < totalWeeks; w++) {
       const weekDays = [];
       for (let d = 0; d < 7; d++) {
         const y = cursor.getFullYear();
@@ -2455,7 +2451,7 @@ class CrispPulseView extends ItemView {
         const day = week[d];
         const cell = colEl.createDiv({ cls: "crisp-pulse-cell" });
 
-        if (day.isFuture) {
+        if (day.isFuture || !visibleDates.has(day.dateKey)) {
           cell.style.visibility = "hidden";
           continue;
         }
@@ -2481,8 +2477,8 @@ class CrispPulseView extends ItemView {
         const selectCell = () => {
           this.selectedDate = day.dateKey;
           this.render();
-          const target = gridWrap.querySelector(`[data-date="${day.dateKey}"]`);
-          if (target) target.focus();
+          const target = this.containerEl.children[1].querySelector(`[data-date="${day.dateKey}"]`);
+          if (target) target.focus({ preventScroll: true });
         };
 
         cell.addEventListener("click", selectCell);
@@ -2498,6 +2494,8 @@ class CrispPulseView extends ItemView {
 
           const nextEl = gridWrap.querySelector(`[data-week="${targetWeek}"][data-day="${targetDay}"]`);
           if (nextEl && nextEl.style.visibility !== "hidden") {
+            cell.tabIndex = -1;
+            nextEl.tabIndex = 0;
             nextEl.focus();
           }
         });

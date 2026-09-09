@@ -824,3 +824,11 @@
   flex-shrink: 0;
 }
 
+
+/* Keep existing filters inside narrow split panes. */
+.crisp-pulse-header > .crisp-pulse-actions {
+  flex-wrap: wrap;
+  max-width: 100%;
+  min-width: 0;
+}
+.crisp-pulse-header .crisp-pulse-scope-select { max-width: 100%; }

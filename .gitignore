@@ -12,5 +12,5 @@ coverage/
 .vscode/
 
 # Local work and upgrade notes
-AUDIT.md
+AUDIT*.md
 UPGRADE-REPORT.md

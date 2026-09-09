@@ -969,3 +969,21 @@ test('Score breakdown title renders SVG computer icon rather than emoji', () => 
   assert.ok(helpers.ICON_COMPUTER_SVG.includes("viewBox=\"0 0 281.25 281.25\""));
   assert.ok(helpers.ICON_COMPUTER_SVG.includes("crisp-pulse-breakdown-icon"));
 });
+
+test('schema validation preserves large valid daily records and their legacy warning',()=>{
+ const {helpers}=setup();const r=helpers.createEmptyDailyRecord('2026-09-08');r.legacyUnverified=true;r.contribution.wordsAdded=150000;r.contribution.notesCreated=1;r.contribution.score=35;r.files['Research.md']={wordsAdded:150000,created:true,tasks:0,links:0};
+ const before=JSON.stringify(r);const {store}=helpers.validateAndRepairStore({trackingVersion:3,daily:{[r.date]:r}});assert.equal(JSON.stringify(store.daily[r.date]),before);
+});
+test('same-second backups have distinct paths and preserve unrelated JSON files',async()=>{
+ const {p}=setup();await p.loadPluginData();const written=new Map();const unrelated='.obsidian/plugins/crisp-pulse/backups/000-notes.json';written.set(unrelated,'user data');
+ p.app.vault.adapter={exists:async path=>written.has(path),mkdir:async()=>{},write:async(path,data)=>written.set(path,data),list:async()=>({files:[...written.keys()]}),remove:async path=>written.delete(path)};
+ const paths=[];for(let i=0;i<6;i++)paths.push((await p.createBackup('manual')).path);
+ assert.equal(new Set(paths).size,6);assert.equal(written.get(unrelated),'user data');assert.equal(written.size,6);
+});
+test('in-flight modification after unload cannot change snapshots or counters',async()=>{
+ const {p}=setup();await p.loadPluginData();p.fileSnapshots.set('a.md',{words:1,tasks:0,links:0,lastTime:0});let release;p.app.vault.read=()=>new Promise(r=>release=r);
+ const pending=p.handleFileModification({path:'a.md'});await new Promise(r=>setImmediate(r));p.stopped=true;release('one two');await pending;assert.equal(p.fileSnapshots.get('a.md').words,1);assert.equal(Object.keys(p.store.daily).length,0);
+});
+test('renaming while a file read is queued cleans up its original queue key',async()=>{
+ const {p,handlers}=setup();await p.loadPluginData();p.registerVaultEvents();const file={path:'old.md',extension:'md'};let release;p.app.vault.read=()=>new Promise(r=>release=r);const pending=p.handleFileModification(file);await new Promise(r=>setImmediate(r));file.path='new.md';handlers.rename(file,'old.md');release('one');await pending;assert.equal(p.fileQueues.size,0);
+});
