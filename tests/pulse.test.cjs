@@ -50,7 +50,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8') +
-    '\nmodule.exports.helpers={CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG};',
     context
   );
   const Pulse = context.module.exports;
@@ -1004,4 +1004,67 @@ test('all time filters keep 53 complete week columns with the selected interval 
     assert.ok(days.length>=365,range);
     if(['90d','30d','7d'].includes(range))assert.equal(days.filter(e=>e.dataset.inRange==='true').length,parseInt(range),range);
   }
+});
+
+
+test('analytics distinguishes zero missing and filtered dates without mutating the store',()=>{
+ const {helpers}=setup();const r=helpers.createEmptyDailyRecord('2026-09-08');r.contribution.score=0;
+ const excluded=helpers.createEmptyDailyRecord('2026-09-07','estimated');excluded.contribution.score=100;
+ const daily={'2026-09-08':r,'2026-09-07':excluded};const before=JSON.stringify(daily);
+ const data=helpers.buildAnalyticsData(daily,['2026-09-06','2026-09-07','2026-09-08'],rec=>rec.quality==='recorded');
+ assert.equal(data.points[0].status,'missing');assert.equal(data.points[0].score,null);
+ assert.equal(data.points[1].status,'excluded');assert.equal(data.points[1].score,null);
+ assert.equal(data.points[2].score,0);assert.equal(data.recordedDays,1);assert.equal(data.totals.score,0);assert.equal(JSON.stringify(daily),before);
+});
+test('analytics keeps writing and time series in independent units',()=>{
+ const {helpers}=setup();const r=helpers.createEmptyDailyRecord('2026-09-08');Object.assign(r.contribution,{score:12.3,wordsAdded:200,wordsRemoved:30,rewrittenWords:45});Object.assign(r.activity,{activeMinutes:6.5,focusMinutes:25});
+ const d=helpers.buildAnalyticsData({[r.date]:r},[r.date],()=>true);
+ assert.equal(d.totals.score,12.3);assert.equal(d.totals.wordsAdded,200);assert.equal(d.totals.activeMinutes,6.5);assert.equal(d.totals.focusMinutes,25);
+});
+test('chart axes cover the maximum and line segments break at missing data',()=>{
+ const {helpers}=setup();for(const n of [0,0.1,7,115,1000000]){const scale=helpers.analyticsScale(n);assert.ok(scale.max>=n&&scale.max>0);assert.equal(scale.ticks[0],0);}
+ const p=helpers.analyticsLinePath([{value:2},{value:null},{value:3},{value:4}], 'value',i=>i*10,v=>100-v);
+ assert.equal(p,'M0,98 M20,97 L30,96');
+});
+
+test('small daily time values accumulate before rounding in both summaries',async()=>{
+ const {p,helpers}=setup();await p.loadPluginData();for(let i=1;i<=8;i++){const key=`2026-09-0${i}`;const r=helpers.createEmptyDailyRecord(key);r.activity.activeMinutes=.4;r.activity.focusMinutes=.4;p.store.daily[key]=r;}
+ assert.equal(p.calcStats('all').totalActiveHours,'0.1');assert.equal(p.calcStats('all').totalFocusHours,'0.1');const review=helpers.generateReviewData(p.store.daily);assert.equal(review.activeHours,'0.1');assert.equal(review.focusHours,'0.1');
+});
+test('directory shares total exactly 100 percent',()=>{
+ const {helpers}=setup();const r=helpers.createEmptyDailyRecord('2026-09-08');r.files={'A/a.md':{},'B/b.md':{},'C/c.md':{}};
+ const review=helpers.generateReviewData({[r.date]:r});assert.equal(review.dirBreakdown.reduce((n,d)=>n+d.percent,0),100);
+});
+test('impossible calendar dates cannot enter date filters',()=>{
+ const {p,helpers}=setup();assert.equal(p.recordMatchesScope({},'2026-02-31','all'),false);assert.deepEqual(Array.from(helpers.filterDatesByRange(['2026-02-31','2026-02-28','2026-13-01'],'ytd',new Date(2026,8,8))),['2026-02-28']);
+});
+test('creating a large imported note applies the existing capture discount',async()=>{
+ const {p,handlers}=setup();await p.loadPluginData();p.registerVaultEvents();
+ assert.equal(typeof p.handleFileCreation,'function');
+ await p.handleFileCreation({path:'import.md',content:'word '.repeat(600)});
+ assert.equal(p.getOrCreateTodayRecord().contribution.captureWords,600);
+});
+
+
+test('minute display limits precision without changing the underlying value',()=>{
+ const {helpers}=setup();const value=11.801533333333333;
+ assert.equal(helpers.formatPulseMinutes(value),'11.8');
+ assert.equal(helpers.formatPulseMinutes(20),'20');
+ assert.equal(helpers.formatPulseMinutes(0),'0');
+ assert.equal(helpers.formatPulseMinutes(NaN),'0');
+ assert.equal(value,11.801533333333333);
+});
+
+
+test('CSV quoting handles carriage returns and formulas preceded by whitespace',()=>{
+ const {helpers}=setup();assert.equal(helpers.sanitizeCSVCell('hello\rworld'),'"hello\rworld"');assert.equal(helpers.sanitizeCSVCell('  =1+1'),"'  =1+1");
+});
+test('Focus availability refresh attaches a replacement plugin without opening a view',async()=>{
+ const {p,helpers}=setup();await p.loadPluginData();let current=null;p.app.plugins.getPlugin=()=>current;const adapter=new helpers.CrispFocusAdapter(p);adapter.isFocusRunning();
+ const original=async()=>{};current={settings:{sessionDurationMinutes:25},completeFocusSession:original,session:{getSnapshot:()=>({status:'running'})}};
+ adapter.isFocusRunning();assert.notEqual(current.completeFocusSession,original);adapter.detach();assert.equal(current.completeFocusSession,original);
+});
+test('idle persistence refreshes the displayed daily aggregates',async()=>{
+ const {p}=setup();await p.loadPluginData();p.dirty=true;p.getOrCreateTodayRecord().contribution.wordsAdded=42;let displayed=null;
+ p.refreshViews=()=>{displayed=p.store.daily['2026-09-08'].contribution.wordsAdded;};await p.checkIdleSessions();assert.equal(displayed,42);
 });

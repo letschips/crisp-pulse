@@ -428,6 +428,11 @@ function getTodayKey() {
   return `${y}-${m}-${d}`;
 }
 
+function formatPulseMinutes(value) {
+  const minutes = Number.isFinite(value) && value > 0 ? value : 0;
+  return minutes.toLocaleString("zh-CN", { maximumFractionDigits: 1 });
+}
+
 function formatDateDisplay(dateStr) {
   if (!dateStr) return "";
   const parts = dateStr.split("-");
@@ -570,7 +575,7 @@ function filterDatesByRange(allDates, rangeKey = "year", refDate = new Date()) {
   return allDates.filter(dStr => {
     const [y, m, d] = dStr.split("-").map(Number);
     const time = new Date(y, m - 1, d).getTime();
-    return time >= minTime && time <= refTime;
+    return dateKey(new Date(time)) === dStr && time >= minTime && time <= refTime;
   });
 }
 
@@ -599,8 +604,8 @@ function generateReviewData(daily = {}, startDateStr, endDateStr, scope = "all",
     wordsAdded += (r.contribution?.wordsAdded || 0);
     rewrittenWords += (r.contribution?.rewrittenWords || 0);
     tasksCompleted += (r.contribution?.tasksCompleted || 0);
-    totalActiveMins += Math.round(r.activity?.activeMinutes || 0);
-    totalFocusMins += Math.round(r.activity?.focusMinutes || 0);
+    totalActiveMins += (r.activity?.activeMinutes || 0);
+    totalFocusMins += (r.activity?.focusMinutes || 0);
 
     for (const [fp, finfo] of Object.entries(r.files || {})) {
       // Extract top level dir
@@ -625,9 +630,13 @@ function generateReviewData(daily = {}, startDateStr, endDateStr, scope = "all",
 
   const dirBreakdown = [];
   for (const [dir, item] of dirCounts.entries()) {
-    const pct = totalDirEvents > 0 ? Math.round((item.count / totalDirEvents) * 100) : 0;
+    const pct = totalDirEvents > 0 ? Math.floor((item.count / totalDirEvents) * 100) : 0;
     dirBreakdown.push({ dir, percent: pct, count: item.count, words: item.words });
   }
+  let remainder = totalDirEvents ? 100 - dirBreakdown.reduce((sum, d) => sum + d.percent, 0) : 0;
+  const fractional = [...dirBreakdown].sort((a, b) =>
+    (b.count * 100 / totalDirEvents - b.percent) - (a.count * 100 / totalDirEvents - a.percent) || a.dir.localeCompare(b.dir));
+  for (const item of fractional) { if (remainder-- <= 0) break; item.percent++; }
   dirBreakdown.sort((a, b) => b.percent - a.percent);
 
   // Top 5 files
@@ -804,7 +813,8 @@ class CrispFocusAdapter {
 
   isAvailable() {
     const p = this.getFocusPlugin();
-    if (!p) return false;
+    if (!p) { this.detach(); return false; }
+    if (!this.plugin.settings.enableCrispFocusSync) this.detach();
     if (this.plugin.settings.enableCrispFocusSync && this.attachedPlugin !== p) {
       this.attach();
     }
@@ -812,6 +822,7 @@ class CrispFocusAdapter {
   }
 
   isFocusRunning() {
+    if (!this.isAvailable()) return false;
     const p = this.getFocusPlugin();
     if (!p || !p.session || typeof p.session.getSnapshot !== "function") return false;
     try {
@@ -907,10 +918,10 @@ class CrispFocusAdapter {
 // 1.1 CSV Generator with Anti-Injection Sanitization
 function sanitizeCSVCell(val) {
   let str = String(val ?? "");
-  if (/^[=+\-@\t\r]/.test(str)) {
+  if (/^\s*[=+\-@]|^[\t\r\n]/.test(str)) {
     str = "'" + str;
   }
-  if (str.includes(",") || str.includes("\"") || str.includes("\n")) {
+  if (str.includes(",") || str.includes("\"") || str.includes("\n") || str.includes("\r")) {
     str = `"${str.replace(/"/g, '""')}"`;
   }
   return str;
@@ -946,8 +957,8 @@ function generateDailyCSV(daily = {}) {
       sanitizeCSVCell(r.contribution?.meaningfulEdits || 0),
       sanitizeCSVCell(r.contribution?.tasksCompleted || 0),
       sanitizeCSVCell(r.contribution?.linksCreated || 0),
-      sanitizeCSVCell(Math.round(r.activity?.activeMinutes || 0)),
-      sanitizeCSVCell(Math.round(r.activity?.focusMinutes || 0)),
+      sanitizeCSVCell((r.activity?.activeMinutes || 0)),
+      sanitizeCSVCell((r.activity?.focusMinutes || 0)),
       sanitizeCSVCell(fCount)
     ];
     rows.push(row.join(","));
@@ -1098,8 +1109,8 @@ class CrispPulsePlugin extends Plugin {
       name: "复制本周工作复盘 Markdown 周报",
       callback: () => {
         const today = new Date();
-        const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
-        const data = generateReviewData(this.store.daily || {}, dateKey(start), dateKey(today));
+        const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
+        const data = this.getReviewData(dateKey(start), dateKey(today), this.settings.dataQualityScope);
         const md = generateWeeklyMarkdown(data, `知识工作周报 (${dateKey(start)} ~ ${dateKey(today)})`);
         navigator.clipboard.writeText(md).then(() => {
           new Notice("已成功复制本周工作复盘周报至剪贴板！");
@@ -1162,7 +1173,7 @@ class CrispPulsePlugin extends Plugin {
       name: "归档本周工作复盘至知识库 (ANKS Review)",
       callback: async () => {
         const today = new Date();
-        const startWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
+        const startWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
         const reviewData = this.getReviewData(dateKey(startWeek), dateKey(today), this.settings.dataQualityScope);
         await this.archiveWeeklyReviewToVault(reviewData, dateKey(startWeek), dateKey(today));
       }
@@ -1469,7 +1480,7 @@ class CrispPulsePlugin extends Plugin {
     this.refreshViews();
 
     const bonus = this.settings.includeFocusInContribution
-      ? `（+${(mins * (this.settings.weightFocusMinute || 0.05)).toFixed(1)} 贡献分）`
+      ? `（+${(mins * (this.settings.weightFocusMinute ?? 0.05)).toFixed(1)} 贡献分）`
       : "";
     new Notice(`Crisp Focus: 专注 ${mins} 分钟已计入今日知识脉冲！${bonus}`);
   }
@@ -1591,38 +1602,7 @@ class CrispPulsePlugin extends Plugin {
           return;
         }
 
-        const today = this.getOrCreateTodayRecord();
-        today.contribution.notesCreated += 1;
-        if (!today.files[file.path]) {
-          today.files[file.path] = { wordsAdded: 0, created: true, tasks: 0, links: 0 };
-        } else {
-          today.files[file.path].created = true;
-        }
-
-        try {
-          const content = await this.app.vault.read(file);
-          if (this.stopped) return;
-          const words = countWords(content);
-          this.fileSnapshots.set(file.path, {
-            words,
-            tasks: countTasks(content),
-            links: countLinks(content),
-            lineSet: getLineSet(content),
-            completedTaskSet: getCompletedTaskSet(content),
-            lastTime: Date.now()
-          });
-          if (words > 0) {
-            today.contribution.wordsAdded += words;
-            today.files[file.path].wordsAdded = words;
-          }
-        } catch (e) {
-          console.error("[Crisp Pulse] Error reading created file:", e);
-        }
-
-        this.dirty = true;
-        this.recomputeScore(today);
-        await this.savePluginData();
-        this.updateStatusBar();
+        return this.handleFileCreation(file);
       })
     );
 
@@ -1724,13 +1704,56 @@ class CrispPulsePlugin extends Plugin {
     this.registerDomEvent(window, "mousedown", recordActivity, { passive: true });
   }
 
-  async handleFileModification(file) {
+  handleFileCreation(file) {
+    return this.queueFileOperation(file, async () => {
+      if (this.fileSnapshots.has(file.path)) return;
+        const today = this.getOrCreateTodayRecord();
+        today.contribution.notesCreated += 1;
+        if (!today.files[file.path]) {
+          today.files[file.path] = { wordsAdded: 0, created: true, tasks: 0, links: 0 };
+        } else {
+          today.files[file.path].created = true;
+        }
+
+        try {
+          const content = await this.app.vault.read(file);
+          if (this.stopped) return;
+          const words = countWords(content);
+          this.fileSnapshots.set(file.path, {
+            words,
+            tasks: countTasks(content),
+            links: countLinks(content),
+            lineSet: getLineSet(content),
+            completedTaskSet: getCompletedTaskSet(content),
+            lastTime: Date.now()
+          });
+          if (words > 0) {
+            today.contribution.wordsAdded += words;
+            today.files[file.path].wordsAdded = words;
+            if (words >= 500) today.contribution.captureWords = (today.contribution.captureWords || 0) + words;
+          }
+        } catch (e) {
+          console.error("[Crisp Pulse] Error reading created file:", e);
+        }
+
+        this.dirty = true;
+        this.recomputeScore(today);
+        await this.savePluginData();
+        this.updateStatusBar();
+    });
+  }
+
+  handleFileModification(file) {
+    return this.queueFileOperation(file, () => this.processFileModification(file));
+  }
+
+  async queueFileOperation(file, operation) {
     if (this.stopped) return;
     if (!this.fileQueues) this.fileQueues = new Map();
     const queuedPath = file.path;
     const queue = (this.fileQueues.get(queuedPath) || Promise.resolve())
       .catch(() => {})
-      .then(() => { if (!this.stopped) return this.processFileModification(file); });
+      .then(() => { if (!this.stopped) return operation(); });
     this.fileQueues.set(queuedPath, queue);
     try {
       await queue;
@@ -1911,7 +1934,7 @@ class CrispPulsePlugin extends Plugin {
 
     if (modified || this.dirty) {
       await this.savePluginData();
-      this.updateStatusBar();
+      if (!this.stopped) this.refreshViews();
     }
   }
 
@@ -1989,7 +2012,9 @@ class CrispPulsePlugin extends Plugin {
   }
 
   recordMatchesScope(record, key, scope = this.settings.dataQualityScope || "reliable") {
-    if (!record || key > getTodayKey()) return false;
+    if (!record || typeof key !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(key) || key > getTodayKey()) return false;
+    const [year, month, day] = key.split("-").map(Number);
+    if (dateKey(new Date(year, month - 1, day)) !== key) return false;
     if (scope === "all") return true;
     if (record.quality !== "recorded") return false;
     if (scope === "recorded_only") return true;
@@ -2028,8 +2053,8 @@ class CrispPulsePlugin extends Plugin {
       const edits = rec.contribution.meaningfulEdits || 0;
 
       totalScore += score;
-      totalActiveMins += Math.round(rec.activity?.activeMinutes || 0);
-      totalFocusMins += Math.round(rec.activity?.focusMinutes || 0);
+      totalActiveMins += (rec.activity?.activeMinutes || 0);
+      totalFocusMins += (rec.activity?.focusMinutes || 0);
 
       const canCountActive = scope !== "reliable" || rec.quality !== "estimated";
       if (canCountActive && (score > 0 || edits >= 1)) {
@@ -2165,6 +2190,47 @@ class CrispPulsePlugin extends Plugin {
    Crisp Pulse View (ItemView)
    ========================================================================== */
 
+// Analytics uses daily aggregates only; a missing/excluded day is never invented as zero.
+function buildAnalyticsData(daily, dates, includeRecord) {
+  const fields = { score: 'contribution', wordsAdded: 'contribution', wordsRemoved: 'contribution', rewrittenWords: 'contribution', activeMinutes: 'activity', focusMinutes: 'activity' };
+  const totals = Object.fromEntries(Object.keys(fields).map(key => [key, 0]));
+  let recordedDays = 0;
+  const points = dates.map(date => {
+    const record = daily[date];
+    const status = !record ? 'missing' : !includeRecord(record, date) ? 'excluded' : 'included';
+    const point = { date, status, quality: record?.quality || null, legacy: !!record?.legacyUnverified };
+    if (status === 'included') recordedDays++;
+    for (const [field, group] of Object.entries(fields)) {
+      const value = status === 'included' ? record[group]?.[field] : null;
+      point[field] = typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+      if (point[field] !== null) totals[field] += point[field];
+    }
+    return point;
+  });
+  for (const key of Object.keys(totals)) totals[key] = Math.round(totals[key] * 100) / 100;
+  return { points, totals, recordedDays };
+}
+
+function analyticsScale(maximum) {
+  if (!(maximum > 0)) return { max: 1, ticks: [0, 0.25, 0.5, 0.75, 1] };
+  const rawStep = maximum / 4;
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+  const step = [1, 2, 2.5, 3, 4, 5, 7.5, 10].find(n => n * magnitude >= rawStep) * magnitude;
+  return { max: step * 4, ticks: [0, 1, 2, 3, 4].map(n => n * step) };
+}
+
+function analyticsLinePath(points, field, x, y) {
+  let connected = false;
+  const commands = [];
+  points.forEach((point, index) => {
+    const value = point[field];
+    if (value === null || value === undefined || !Number.isFinite(value)) { connected = false; return; }
+    commands.push(`${connected ? 'L' : 'M'}${x(index)},${y(value)}`);
+    connected = true;
+  });
+  return commands.join(' ');
+}
+
 class CrispPulseView extends ItemView {
   constructor(leaf, plugin) {
     super(leaf);
@@ -2174,6 +2240,7 @@ class CrispPulseView extends ItemView {
     this.currentScope = plugin.settings.dataQualityScope || "reliable";
     this.currentDateRange = plugin.settings.defaultDateRange || "year";
     this.showBreakdown = true;
+    this.analyticsDays = 7;
     this.activeViewTab = "dashboard"; // "dashboard" | "review"
   }
 
@@ -2191,13 +2258,33 @@ class CrispPulseView extends ItemView {
 
   async onOpen() {
     this.render();
+    const container = this.containerEl.children[1];
+    const win = container.ownerDocument.defaultView;
+    this.analyticsResizeObserver = new win.ResizeObserver(() => {
+      if (this.activeViewTab !== "analytics" || Math.abs(container.clientWidth - (this.analyticsLastWidth || 0)) < 2) return;
+      if (this.analyticsResizeFrame) win.cancelAnimationFrame(this.analyticsResizeFrame);
+      this.analyticsResizeFrame = win.requestAnimationFrame(() => {
+        this.analyticsResizeFrame = null;
+        if (container.isConnected && this.activeViewTab === "analytics") this.render();
+      });
+    });
+    this.analyticsResizeObserver.observe(container);
+  }
+
+  async onClose() {
+    this.analyticsResizeObserver?.disconnect();
+    if (this.analyticsResizeFrame) this.containerEl.ownerDocument.defaultView.cancelAnimationFrame(this.analyticsResizeFrame);
   }
 
   render() {
     const container = this.containerEl.children[1];
     const previousScroll = container?.scrollTop || 0;
     const previousHorizontal = container.querySelector(".crisp-pulse-heatmap-scroll")?.scrollLeft || 0;
-    const focusedDate = container.ownerDocument.activeElement?.dataset?.date;
+    const active = container.ownerDocument.activeElement;
+    const focusedDate = active?.dataset?.date;
+    const chartFocus = active?.dataset?.analyticsDate ? { date: active.dataset.analyticsDate, chart: active.closest("svg")?.getAttribute("aria-label") } : null;
+    const controlFocus = container.contains(active) && active.matches("button, select, [role=button]")
+      ? { tag: active.tagName, label: active.getAttribute("aria-label"), text: active.textContent } : null;
     container.empty();
     container.classList.add("crisp-pulse-view");
 
@@ -2218,6 +2305,8 @@ class CrispPulseView extends ItemView {
 
       // 5. Day Detail Card with Score Breakdown
       this.renderDayDetailCard(wrapper);
+    } else if (this.activeViewTab === "analytics") {
+      this.renderAnalytics(wrapper);
     } else {
       // Retrospective View
       this.renderRetrospectivePanel(wrapper);
@@ -2227,6 +2316,147 @@ class CrispPulseView extends ItemView {
     const heatmap = container.querySelector(".crisp-pulse-heatmap-scroll");
     if (heatmap) heatmap.scrollLeft = previousHorizontal;
     if (focusedDate) container.querySelector(`[data-date="${focusedDate}"]`)?.focus({ preventScroll: true });
+    else if (chartFocus) {
+      const chart = [...container.querySelectorAll("svg")].find(el => el.getAttribute("aria-label") === chartFocus.chart);
+      chart?.querySelector(`[data-analytics-date="${chartFocus.date}"]`)?.focus({ preventScroll: true });
+    } else if (controlFocus) {
+      [...container.querySelectorAll("button, select, [role=button]")].find(el => el.tagName === controlFocus.tag && el.getAttribute("aria-label") === controlFocus.label && (controlFocus.label || el.textContent === controlFocus.text))?.focus({ preventScroll: true });
+    }
+  }
+
+  renderAnalytics(parent) {
+    this.analyticsLastWidth = this.containerEl.children[1].clientWidth;
+    const section = parent.createDiv({ cls: 'crisp-pulse-analytics' });
+    const heading = section.createDiv({ cls: 'crisp-pulse-analytics-heading' });
+    const text = heading.createDiv();
+    text.createEl('h2', { text: '数据分析' });
+    text.createEl('p', { text: '把每天的记录连起来，看看写作与投入如何变化。' });
+    const ranges = heading.createDiv({ cls: 'crisp-pulse-analytics-segments' });
+    ranges.setAttr('aria-label', '分析时间范围');
+    for (const days of [7, 30, 90]) {
+      const button = ranges.createEl('button', { text: `${days} 天` });
+      button.setAttr('aria-pressed', String(this.analyticsDays === days));
+      button.addEventListener('click', () => {
+        this.analyticsDays = days;
+        this.render();
+        this.containerEl.querySelector(`.crisp-pulse-analytics-segments button[aria-pressed="true"]`)?.focus({ preventScroll: true });
+      });
+    }
+    const now = new Date();
+    const dates = Array.from({ length: this.analyticsDays }, (_, i) => dateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - this.analyticsDays + 1 + i)));
+    const data = buildAnalyticsData(this.plugin.store.daily || {}, dates, (record, key) => this.plugin.recordMatchesScope(record, key, this.currentScope));
+    const scopeLabel = { reliable: '可靠记录', recorded_only: '仅实测记录', all: '全部历史' }[this.currentScope];
+    section.createDiv({ cls: 'crisp-pulse-analytics-coverage', text: `${dates[0]} — ${dates.at(-1)} · ${scopeLabel} · 已纳入 ${data.recordedDays} / ${dates.length} 天。未记录或被筛选的日期留空，不视作零。` });
+    const configs = [
+      { title: '每日贡献', description: '查看记录下来的工作节奏；分数依照当前插件计分口径，不代表知识质量。', type: 'bar', unit: '分', total: 'score', totalLabel: '区间贡献', series: [{ key: 'score', label: '贡献得分', color: 'blue' }] },
+      { title: '写作变化', description: '新增与删除来自保存前后的词数变化，改写为现有算法估算。三条曲线分别展示，不相加。', type: 'line', unit: '词', total: 'wordsAdded', totalLabel: '新增词数', series: [{ key: 'wordsAdded', label: '新增', color: 'blue' }, { key: 'wordsRemoved', label: '删除', color: 'orange' }, { key: 'rewrittenWords', label: '改写估算', color: 'green' }] },
+      { title: '时间投入', description: '交互时长按操作间隔估算，专注时长来自已有 Focus 记录。两者可能重叠，不合并计算。', type: 'line', unit: '分钟', total: 'activeMinutes', totalLabel: '交互活跃', series: [{ key: 'activeMinutes', label: '交互活跃', color: 'blue' }, { key: 'focusMinutes', label: 'Focus 记录', color: 'orange' }] }
+    ];
+    for (const config of configs) this.renderAnalyticsChart(section, data, config);
+  }
+
+  renderAnalyticsChart(parent, data, config) {
+    const section = parent.createDiv({ cls: 'crisp-pulse-analytics-section' });
+    section.createEl('h3', { text: config.title });
+    section.createEl('p', { cls: 'crisp-pulse-analytics-description', text: config.description });
+    const card = section.createDiv({ cls: 'crisp-pulse-analytics-card' });
+    const summary = card.createDiv({ cls: 'crisp-pulse-analytics-summary' });
+    const number = value => Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 1 });
+    const primary = summary.createDiv();
+    primary.createDiv({ cls: 'crisp-pulse-analytics-label', text: config.totalLabel });
+    primary.createDiv({ cls: 'crisp-pulse-analytics-total', text: data.points.some(p => p[config.total] !== null) ? `${number(data.totals[config.total])} ${config.unit}` : "—" });
+    if (config.type === 'line') {
+      const details = summary.createDiv({ cls: 'crisp-pulse-analytics-subtotals' });
+      for (const series of config.series.filter(s => s.key !== config.total)) {
+        details.createDiv({ text: `${series.label} ${number(data.totals[series.key])} ${config.unit}` });
+      }
+    }
+    const hasValues = data.points.some(p => config.series.some(s => p[s.key] !== null));
+    if (!hasValues) card.createDiv({ cls: 'crisp-pulse-analytics-empty', text: '所选范围暂无可用记录。开始记录后，曲线会从真实数据出现的位置绘制。' });
+    const scroll = card.createDiv({ cls: 'crisp-pulse-analytics-chart-scroll' });
+    const doc = card.ownerDocument;
+    const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const chartWidth = Math.max(280, Math.min(960, card.clientWidth - 48));
+    svg.setAttribute('viewBox', `0 0 ${chartWidth} 270`);
+    svg.setAttribute('class', 'crisp-pulse-analytics-chart');
+    svg.setAttribute('role', 'group');
+    svg.setAttribute('aria-label', `${config.title}，单位${config.unit}。左右方向键查看日期，Enter 打开日明细。`);
+    scroll.appendChild(svg);
+    const draw = (tag, attributes, text) => {
+      const node = doc.createElementNS('http://www.w3.org/2000/svg', tag);
+      for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, String(value));
+      if (text !== undefined) node.textContent = text;
+      svg.appendChild(node);
+      return node;
+    };
+    const { points } = data;
+    const left = 62, right = chartWidth - 22, top = 18, bottom = 222;
+    const width = (right - left) / points.length;
+    const x = index => left + (index + 0.5) * width;
+    const maxValue = Math.max(0, ...points.flatMap(p => config.series.map(s => p[s.key] ?? 0)));
+    const scale = analyticsScale(maxValue);
+    const y = value => bottom - value / scale.max * (bottom - top);
+    for (const tick of scale.ticks) {
+      draw('line', { x1: left, x2: right, y1: y(tick), y2: y(tick), class: 'pulse-chart-grid' });
+      draw('text', { x: left - 13, y: y(tick) + 4, 'text-anchor': 'end', class: 'pulse-chart-axis' }, Number(tick.toPrecision(6)).toLocaleString('zh-CN', { maximumFractionDigits: 6 }));
+    }
+    const labelIndices = [...new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])];
+    for (const i of labelIndices) draw('text', { x: x(i), y: 252, 'text-anchor': i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle', class: 'pulse-chart-axis' }, points[i].date.slice(5).replace('-', '/'));
+    for (const series of config.series) {
+      if (config.type === 'bar') {
+        points.forEach((p, i) => {
+          const value = p[series.key];
+          if (value === null) return;
+          if (value === 0) draw('circle', { cx: x(i), cy: bottom, r: 2, class: `pulse-chart-fill-${series.color}` });
+          else draw('rect', { x: x(i) - width * 0.34, y: y(value), width: width * 0.68, height: bottom - y(value), rx: Math.min(5, width * 0.15), class: `pulse-chart-fill-${series.color}` });
+        });
+      } else {
+        draw('path', { d: analyticsLinePath(points, series.key, x, y), fill: 'none', class: `pulse-chart-line pulse-chart-stroke-${series.color}` });
+        points.forEach((p, i) => {
+          if (p[series.key] !== null) draw('circle', { cx: x(i), cy: y(p[series.key]), r: 3, class: `pulse-chart-fill-${series.color}` });
+        });
+      }
+    }
+    const marker = draw('line', { x1: left, x2: left, y1: top, y2: bottom, class: 'pulse-chart-cursor', visibility: 'hidden' });
+    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: '悬停或用方向键查看每日数值；点击可打开该日明细。' });
+    readout.setAttr('aria-live', 'polite');
+    const description = point => {
+      if (point.status === 'missing') return `${point.date} · 未记录`;
+      if (point.status === 'excluded') return `${point.date} · 已被当前数据范围排除`;
+      const quality = point.legacy ? '旧版未校验' : point.quality === 'estimated' ? '历史估算' : point.quality === 'mixed' ? '含估算' : '实际记录';
+      return `${point.date} · ${quality} · ` + config.series.map(s => `${s.label} ${point[s.key] === null ? '未记录' : number(point[s.key]) + ' ' + config.unit}`).join(' · ');
+    };
+    const targets = [];
+    points.forEach((point, index) => {
+      const target = draw('rect', { x: left + index * width, y: top, width, height: bottom - top, class: 'pulse-chart-target', role: 'button', tabindex: index === points.length - 1 ? 0 : -1, 'aria-label': description(point) + '，打开日明细', 'data-analytics-date': point.date });
+      targets.push(target);
+      const show = () => {
+        marker.setAttribute('x1', x(index)); marker.setAttribute('x2', x(index)); marker.setAttribute('visibility', 'visible');
+        readout.textContent = description(point);
+      };
+      target.addEventListener('pointerenter', show);
+      target.addEventListener('focus', show);
+      const open = () => {
+        this.selectedDate = point.date;
+        this.activeViewTab = 'dashboard';
+        this.render();
+        this.containerEl.querySelector('.crisp-pulse-detail-card')?.scrollIntoView({ block: 'start', behavior: 'auto' });
+      };
+      target.addEventListener('click', open);
+      target.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); return; }
+        const next = event.key === 'ArrowLeft' ? index - 1 : event.key === 'ArrowRight' ? index + 1 : event.key === 'Home' ? 0 : event.key === 'End' ? points.length - 1 : null;
+        if (next === null) return;
+        event.preventDefault();
+        if (targets[next]) { target.setAttribute('tabindex', '-1'); targets[next].setAttribute('tabindex', '0'); targets[next].focus(); }
+      });
+    });
+    const legend = card.createDiv({ cls: 'crisp-pulse-analytics-legend' });
+    for (const series of config.series) {
+      const item = legend.createSpan();
+      item.createSpan({ cls: `pulse-chart-dot pulse-chart-fill-${series.color}` });
+      item.createSpan({ text: series.label });
+    }
   }
 
   renderHeader(parent) {
@@ -2245,6 +2475,7 @@ class CrispPulseView extends ItemView {
     });
     dashBtn.addEventListener("click", () => {
       this.activeViewTab = "dashboard";
+      this.containerEl.children[1].scrollTop = 0;
       this.render();
     });
 
@@ -2254,8 +2485,16 @@ class CrispPulseView extends ItemView {
     });
     reviewBtn.addEventListener("click", () => {
       this.activeViewTab = "review";
+      this.containerEl.children[1].scrollTop = 0;
       this.render();
     });
+
+    const analyticsButton = viewSwitch.createEl("button", {
+      cls: `crisp-pulse-tab-btn ${this.activeViewTab === "analytics" ? "is-active" : ""}`,
+      text: "数据分析"
+    });
+    analyticsButton.addEventListener("click", () => { this.activeViewTab = "analytics"; this.containerEl.children[1].scrollTop = 0; this.render(); });
+    for (const [button, key] of [[dashBtn, "dashboard"], [reviewBtn, "review"], [analyticsButton, "analytics"]]) button.setAttr("aria-pressed", String(this.activeViewTab === key));
 
     const actions = header.createDiv({ cls: "crisp-pulse-actions" });
 
@@ -2266,6 +2505,7 @@ class CrispPulseView extends ItemView {
     rangeSelect.createEl("option", { text: "时间: 最近 30 天", value: "30d" });
     rangeSelect.createEl("option", { text: "时间: 本周 (7天)", value: "7d" });
     rangeSelect.createEl("option", { text: "时间: 本年 (YTD)", value: "ytd" });
+    rangeSelect.hidden = this.activeViewTab === "analytics";
     rangeSelect.value = this.currentDateRange;
     rangeSelect.addEventListener("change", () => {
       this.currentDateRange = rangeSelect.value;
@@ -2422,7 +2662,7 @@ class CrispPulseView extends ItemView {
     const monthsRow = gridWrap.createDiv({ cls: "crisp-pulse-months-row" });
     for (const ml of monthLabels) {
       const lbl = monthsRow.createDiv({ cls: "crisp-pulse-month-label", text: ml.monthName });
-      lbl.style.left = `${ml.weekIndex * 16.5}px`;
+      lbl.style.gridColumn = String(ml.weekIndex + 1);
     }
 
     const body = gridWrap.createDiv({ cls: "crisp-pulse-heatmap-body" });
@@ -2549,11 +2789,20 @@ class CrispPulseView extends ItemView {
     const breakdown = getScoreBreakdown(rec, this.plugin.settings);
 
     const scoreBox = statsGrid.createDiv({ cls: "crisp-pulse-stat-box crisp-pulse-score-clickable" });
-    scoreBox.createDiv({ cls: "crisp-pulse-stat-label", text: "贡献得分 (点击拆解)" });
+    scoreBox.setAttr("role", "button");
+    scoreBox.tabIndex = 0;
+    scoreBox.setAttr("aria-label", "贡献得分，展开或收起计分明细");
+    scoreBox.setAttr("aria-expanded", String(this.showBreakdown));
+    scoreBox.createDiv({ cls: "crisp-pulse-stat-label", text: "贡献得分" });
     scoreBox.createDiv({ cls: "crisp-pulse-stat-value", text: (rec.contribution.score || 0).toFixed(1) });
-    scoreBox.addEventListener("click", () => {
+    const toggleBreakdown = () => {
       this.showBreakdown = !this.showBreakdown;
       this.render();
+      this.containerEl.querySelector(".crisp-pulse-score-clickable")?.focus({ preventScroll: true });
+    };
+    scoreBox.addEventListener("click", toggleBreakdown);
+    scoreBox.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleBreakdown(); }
     });
 
     const statItems = [
@@ -2563,11 +2812,11 @@ class CrispPulseView extends ItemView {
       { label: "有效编辑会话", val: `${rec.contribution.meaningfulEdits || 0} 次` },
       { label: "完成任务", val: `${rec.contribution.tasksCompleted || 0} 项` },
       { label: "新建内链", val: `${rec.contribution.linksCreated || 0} 条` },
-      { label: "交互活跃时长", val: `${Math.round(rec.activity.activeMinutes || 0)} 分钟` }
+      { label: "交互活跃时长", val: `${formatPulseMinutes(rec.activity.activeMinutes)} 分钟` }
     ];
 
     if (this.plugin.settings.includeFocusInContribution || (rec.activity?.focusMinutes > 0)) {
-      statItems.push({ label: "深度专注时长", val: `${Math.round(rec.activity?.focusMinutes || 0)} 分钟` });
+      statItems.push({ label: "深度专注时长", val: `${formatPulseMinutes(rec.activity?.focusMinutes)} 分钟` });
     }
 
     for (const item of statItems) {
@@ -2599,7 +2848,7 @@ class CrispPulseView extends ItemView {
       if (this.plugin.settings.includeFocusInContribution) {
         rows.push({
           label: "深度专注加分",
-          formula: `${Math.round(rec.activity?.focusMinutes || 0)} 分钟 × ${this.plugin.settings.weightFocusMinute}分`,
+          formula: `${Math.round(rec.activity?.focusMinutes || 0)} 分钟（计分取整） × ${this.plugin.settings.weightFocusMinute}分`,
           val: `+${breakdown.focusScore.toFixed(1)}`
         });
       }
@@ -2660,7 +2909,7 @@ class CrispPulseView extends ItemView {
   // --- 1.2.0 Work Review Panel ---
   renderRetrospectivePanel(parent) {
     const today = new Date();
-    const startWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
+    const startWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
     const reviewData = this.plugin.getReviewData(dateKey(startWeek), dateKey(today), this.currentScope);
 
     const card = parent.createDiv({ cls: "crisp-pulse-review-card" });
@@ -2776,6 +3025,7 @@ class CrispPulseView extends ItemView {
     } else {
       reviewData.topFiles.forEach((file, index) => {
         const item = topList.createEl("button", { cls: "crisp-pulse-topfile-item" });
+        item.setAttr("title", file.path);
         item.type = "button";
 
         const left = item.createSpan();

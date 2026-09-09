@@ -840,3 +840,101 @@
 }
 .crisp-pulse-cell.is-outside-range:hover,
 .crisp-pulse-cell.is-outside-range:focus-visible { opacity: 0.85; }
+
+/* Analytics: quiet axes, generous spacing, and independent measured series. */
+.crisp-pulse-analytics {
+  --pulse-chart-blue: #3075ce;
+  --pulse-chart-orange: #d98a37;
+  --pulse-chart-green: #48a27c;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 12px 0 24px;
+}
+.theme-dark .crisp-pulse-analytics {
+  --pulse-chart-blue: #6b9feb;
+  --pulse-chart-orange: #edac68;
+  --pulse-chart-green: #79c4a0;
+}
+.crisp-pulse-analytics-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+.crisp-pulse-analytics-heading h2 { margin: 0 0 8px; font-size: 28px; font-weight: 550; letter-spacing: -.03em; }
+.crisp-pulse-analytics-heading p { margin: 0; color: var(--text-muted); font-size: 14px; }
+.crisp-pulse-analytics-segments { display: flex; padding: 3px; gap: 2px; background: var(--background-secondary); border-radius: 11px; }
+.crisp-pulse-analytics .crisp-pulse-analytics-segments button {
+  appearance: none; box-shadow: none; border: 1px solid transparent; border-radius: 8px;
+  background: transparent; color: var(--text-muted); padding: 6px 14px; height: auto; font-size: 13px;
+}
+.crisp-pulse-analytics .crisp-pulse-analytics-segments button[aria-pressed="true"] { background: var(--background-primary); color: var(--text-normal); border-color: var(--background-modifier-border); box-shadow: 0 1px 3px #00000008; }
+.crisp-pulse-analytics-coverage { margin-top: -14px; color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+.crisp-pulse-analytics-section h3 { font-size: 18px; font-weight: 550; margin: 0 0 7px; }
+.crisp-pulse-analytics-description { color: var(--text-muted); font-size: 13px; line-height: 1.6; margin: 0 0 16px; max-width: 76ch; }
+.crisp-pulse-analytics-card { border: 1px solid var(--background-modifier-border); background: var(--background-primary); border-radius: 18px; padding: 24px 24px 18px; box-shadow: none; min-width: 0; }
+.crisp-pulse-analytics-summary { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.crisp-pulse-analytics-label { color: var(--text-muted); font-size: 13px; margin-bottom: 5px; }
+.crisp-pulse-analytics-total { font-size: 30px; line-height: 1.2; letter-spacing: -.025em; font-variant-numeric: tabular-nums; font-weight: 500; }
+.crisp-pulse-analytics-subtotals { display: flex; gap: 8px 20px; flex-wrap: wrap; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.crisp-pulse-analytics-chart-scroll { overflow-x: auto; }
+.crisp-pulse-analytics-chart { display: block; width: 100%; min-width: 0; height: auto; overflow: visible; }
+.pulse-chart-grid { stroke: var(--background-modifier-border); stroke-opacity: .5; stroke-width: 1; }
+.pulse-chart-axis { fill: var(--text-muted); font-family: var(--font-interface); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pulse-chart-line { stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round; }
+.pulse-chart-fill-blue { fill: var(--pulse-chart-blue); background: var(--pulse-chart-blue); }
+.pulse-chart-fill-orange { fill: var(--pulse-chart-orange); background: var(--pulse-chart-orange); }
+.pulse-chart-fill-green { fill: var(--pulse-chart-green); background: var(--pulse-chart-green); }
+.pulse-chart-stroke-blue { stroke: var(--pulse-chart-blue); }
+.pulse-chart-stroke-orange { stroke: var(--pulse-chart-orange); }
+.pulse-chart-stroke-green { stroke: var(--pulse-chart-green); }
+.pulse-chart-cursor { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 4; pointer-events: none; }
+.pulse-chart-target { fill: transparent; cursor: pointer; }
+.pulse-chart-target:focus-visible { outline: none; stroke: var(--text-accent); stroke-width: 1; fill: var(--background-modifier-hover); fill-opacity: .2; }
+.crisp-pulse-analytics-readout { min-height: 36px; padding: 8px 0; color: var(--text-muted); font-size: 12px; line-height: 1.6; font-variant-numeric: tabular-nums; }
+.crisp-pulse-analytics-legend { display: flex; flex-wrap: wrap; gap: 12px 22px; color: var(--text-muted); font-size: 12px; }
+.crisp-pulse-analytics-legend > span { display: inline-flex; align-items: center; gap: 7px; }
+.pulse-chart-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.crisp-pulse-analytics-empty { padding: 10px 0 16px; color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+@container (max-width: 550px) {
+  .crisp-pulse-analytics-card { padding: 16px 12px 12px; border-radius: 14px; }
+  .crisp-pulse-analytics-total { font-size: 26px; }
+  .crisp-pulse-analytics { gap: 24px; }
+  .crisp-pulse-analytics-heading h2 { font-size: 24px; }
+}
+
+/* Share one responsive 53-column geometry between months and day cells. */
+.crisp-pulse-heatmap-grid-wrap {
+  display: flex;
+  width: 100%;
+  min-width: 903px;
+}
+.crisp-pulse-months-row {
+  display: grid;
+  grid-template-columns: repeat(53, minmax(0, 1fr));
+  column-gap: 3.5px;
+}
+.crisp-pulse-month-label { position: static; transform: none; }
+.crisp-pulse-month-label:last-child { justify-self: end; }
+.crisp-pulse-heatmap-body { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 6px; }
+.crisp-pulse-weeks-grid { display: grid; grid-template-columns: repeat(53, minmax(0, 1fr)); gap: 3.5px; min-width: 0; }
+.crisp-pulse-week-col { display: grid; grid-template-rows: repeat(7, minmax(0, 1fr)); gap: 3.5px; min-width: 0; }
+.crisp-pulse-week-col > .crisp-pulse-cell { width: 100%; height: auto; aspect-ratio: 1; min-width: 0; }
+.crisp-pulse-weekdays-col { display: grid; grid-template-rows: repeat(7, minmax(0, 1fr)); row-gap: 3.5px; height: auto; padding: 0; align-items: center; }
+.crisp-pulse-weekdays-col > :nth-child(1) { grid-row: 1; }
+.crisp-pulse-weekdays-col > :nth-child(2) { grid-row: 3; }
+.crisp-pulse-weekdays-col > :nth-child(3) { grid-row: 5; }
+.crisp-pulse-weekdays-col > :nth-child(4) { grid-row: 7; }
+/* Leave room for keyboard focus outlines on the first/last calendar cells. */
+.crisp-pulse-heatmap-scroll { padding: 3px 3px 6px; }
+
+/* Long metric values must stay inside their grid cards. */
+.crisp-pulse-stat-box { min-width: 0; }
+.crisp-pulse-stat-value { overflow-wrap: anywhere; }
+
+/* A long path in the weekly Top 5 must not expand the page. */
+.crisp-pulse-topfile-item { min-width: 0; max-width: 100%; gap: 8px; }
+.crisp-pulse-topfile-item > span:first-child { display: flex; flex: 1 1 0; min-width: 0; }
+.crisp-pulse-topfile-item > span:first-child > .crisp-pulse-kpi-sub { flex-shrink: 0; margin-right: 4px; }
+.crisp-pulse-topfile-item .crisp-pulse-file-name { display: block; min-width: 0; }
+@container (max-width: 550px) {
+  .crisp-pulse-topfile-item { flex-wrap: wrap; }
+  .crisp-pulse-topfile-item > span:first-child { flex-basis: 100%; }
+  .crisp-pulse-topfile-item > .crisp-pulse-file-meta { margin-left: 0; }
+}
