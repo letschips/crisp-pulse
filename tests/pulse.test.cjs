@@ -50,7 +50,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8') +
-    '\nmodule.exports.helpers={createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG};',
+    '\nmodule.exports.helpers={CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG};',
     context
   );
   const Pulse = context.module.exports;
@@ -986,4 +986,22 @@ test('in-flight modification after unload cannot change snapshots or counters',a
 });
 test('renaming while a file read is queued cleans up its original queue key',async()=>{
  const {p,handlers}=setup();await p.loadPluginData();p.registerVaultEvents();const file={path:'old.md',extension:'md'};let release;p.app.vault.read=()=>new Promise(r=>release=r);const pending=p.handleFileModification(file);await new Promise(r=>setImmediate(r));file.path='new.md';handlers.rename(file,'old.md');release('one');await pending;assert.equal(p.fileQueues.size,0);
+});
+
+
+test('all time filters keep 53 complete week columns with the selected interval marked',async()=>{
+  const {p,helpers}=setup();await p.loadPluginData();
+  function element(cls='') {
+    const e={cls,children:[],dataset:{},style:{},classList:{add(){}},setAttr(){},addEventListener(){}};
+    e.createDiv=options=>{const child=element(options?.cls||'');e.children.push(child);return child;};
+    e.createSpan=e.createDiv;e.createEl=(_tag,options)=>e.createDiv(options);return e;
+  }
+  function all(e){return [e,...e.children.flatMap(all)];}
+  for(const range of ['year','90d','30d','7d','ytd']){
+    const v=new helpers.CrispPulseView({},p);v.currentDateRange=range;const root=element();v.renderHeatmapCard(root);
+    assert.equal(all(root).filter(e=>e.cls==='crisp-pulse-week-col').length,53,range);
+    const days=all(root).filter(e=>e.dataset.date);
+    assert.ok(days.length>=365,range);
+    if(['90d','30d','7d'].includes(range))assert.equal(days.filter(e=>e.dataset.inRange==='true').length,parseInt(range),range);
+  }
 });

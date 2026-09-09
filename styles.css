@@ -832,3 +832,11 @@
   min-width: 0;
 }
 .crisp-pulse-header .crisp-pulse-scope-select { max-width: 100%; }
+
+/* Keep the annual calendar visible as context for every time filter. */
+.crisp-pulse-cell.is-outside-range {
+  background-color: var(--background-modifier-border-hover, var(--background-modifier-border));
+  opacity: 0.55;
+}
+.crisp-pulse-cell.is-outside-range:hover,
+.crisp-pulse-cell.is-outside-range:focus-visible { opacity: 0.85; }

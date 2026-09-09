@@ -2360,7 +2360,7 @@ class CrispPulseView extends ItemView {
       text: `年度知识活跃脉冲 (${this.getMetricLabel(this.selectedMetric)})`
     });
 
-    const stats = this.plugin.calcStats(this.currentScope, this.selectedRange);
+    const stats = this.plugin.calcStats(this.currentScope, this.currentDateRange);
     if (stats.activeDays === 0 && this.currentScope === "reliable") {
       const notice = card.createDiv({ cls: "crisp-pulse-empty-notice" });
       notice.createSpan({ cls: "crisp-pulse-empty-notice-icon", text: "💡" });
@@ -2383,11 +2383,9 @@ class CrispPulseView extends ItemView {
     const candidates = Array.from({ length: 371 }, (_, index) =>
       dateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 370 + index)));
     const visibleDates = new Set(filterDatesByRange(candidates, this.currentDateRange, now));
-    const [firstYear, firstMonth, firstDay] = [...visibleDates][0].split("-").map(Number);
-    const startDate = new Date(firstYear, firstMonth - 1, firstDay);
-    const offset = (startDate.getDay() - (weekStartsOnMonday ? 1 : 0) + 7) % 7;
-    startDate.setDate(startDate.getDate() - offset);
-    const totalWeeks = Math.ceil((Math.round((endDate - startDate) / 86400000) + 1) / 7);
+    // The annual context stays stable when the statistical interval changes.
+    const totalWeeks = 53;
+    const startDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() - 370);
 
     const { map: intensityMap } = this.plugin.calculateIntensities(this.selectedMetric, this.currentScope);
 
@@ -2451,7 +2449,7 @@ class CrispPulseView extends ItemView {
         const day = week[d];
         const cell = colEl.createDiv({ cls: "crisp-pulse-cell" });
 
-        if (day.isFuture || !visibleDates.has(day.dateKey)) {
+        if (day.isFuture) {
           cell.style.visibility = "hidden";
           continue;
         }
@@ -2461,6 +2459,9 @@ class CrispPulseView extends ItemView {
         const isEstimated = record && record.quality === "estimated";
 
         cell.dataset.level = String(info.level);
+        const inRange = visibleDates.has(day.dateKey);
+        cell.dataset.inRange = String(inRange);
+        if (!inRange) cell.classList.add("is-outside-range");
         if (isEstimated) cell.classList.add("is-estimated");
         if (day.isToday) cell.classList.add("is-today");
         if (day.dateKey === this.selectedDate) cell.classList.add("is-selected");
@@ -2471,7 +2472,7 @@ class CrispPulseView extends ItemView {
         cell.dataset.week = String(w);
         cell.dataset.day = String(d);
 
-        const tooltip = `${formatDateDisplay(day.dateKey)}\n${this.getMetricLabel(this.selectedMetric)}: ${info.value} ${info.level > 0 ? `(${info.percentile}分位)` : ""}${isEstimated ? " [估算数据]" : ""}`;
+        const tooltip = `${formatDateDisplay(day.dateKey)}${inRange ? "" : "（统计区间外，仅供参考）"}\n${this.getMetricLabel(this.selectedMetric)}: ${info.value} ${info.level > 0 ? `(${info.percentile}分位)` : ""}${isEstimated ? " [估算数据]" : ""}`;
         cell.setAttr("aria-label", tooltip);
 
         const selectCell = () => {
@@ -2503,7 +2504,8 @@ class CrispPulseView extends ItemView {
     }
 
     const footer = card.createDiv({ cls: "crisp-pulse-heatmap-footer" });
-    footer.createDiv({ text: `* 范围: ${this.currentScope === "reliable" ? "可靠记录" : this.currentScope === "recorded_only" ? "仅实测记录" : "全部历史"} · 强度基于个人近期分位数` });
+    const rangeLabel = { year: "近 53 周", "90d": "最近 90 天", "30d": "最近 30 天", "7d": "最近 7 天", ytd: "本年" }[this.currentDateRange] || "近 53 周";
+    footer.createDiv({ text: `完整 53 周 · 统计：${rangeLabel} · 区间外淡化 · 范围: ${this.currentScope === "reliable" ? "可靠记录" : this.currentScope === "recorded_only" ? "仅实测记录" : "全部历史"} · 强度基于个人近期分位数` });
 
     const legend = footer.createDiv({ cls: "crisp-pulse-legend" });
     legend.createSpan({ text: "少 " });
