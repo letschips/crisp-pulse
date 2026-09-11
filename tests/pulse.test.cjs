@@ -50,7 +50,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8') +
-    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG};',
     context
   );
   const Pulse = context.module.exports;
@@ -968,6 +968,16 @@ test('Score breakdown title renders SVG computer icon rather than emoji', () => 
   assert.ok(helpers.ICON_COMPUTER_SVG);
   assert.ok(helpers.ICON_COMPUTER_SVG.includes("viewBox=\"0 0 281.25 281.25\""));
   assert.ok(helpers.ICON_COMPUTER_SVG.includes("crisp-pulse-breakdown-icon"));
+});
+
+test('Header title renders animated blocks-wave SVG rather than lightning emoji', () => {
+  const { helpers } = setup();
+  assert.ok(helpers.ICON_BLOCKS_WAVE_SVG);
+  assert.ok(helpers.ICON_BLOCKS_WAVE_SVG.includes('viewBox="0 0 24 24"'));
+  assert.ok(helpers.ICON_BLOCKS_WAVE_SVG.includes('crisp-pulse-title-icon-svg'));
+  assert.ok(helpers.ICON_BLOCKS_WAVE_SVG.includes('<animate'));
+  assert.ok(helpers.ICON_BLOCKS_WAVE_SVG.includes('fill="currentColor"'));
+  assert.ok(!helpers.ICON_BLOCKS_WAVE_SVG.includes('fill="#000000"'));
 });
 
 test('schema validation preserves large valid daily records and their legacy warning',()=>{

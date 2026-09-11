@@ -84,6 +84,12 @@
   font-size: 14px;
 }
 
+.crisp-pulse-title-icon-svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
 .crisp-pulse-title {
   margin: 0;
   font-size: var(--font-ui-large);
