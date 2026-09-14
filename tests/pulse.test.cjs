@@ -8,8 +8,10 @@ function setup() {
   let time = new Date(2026, 8, 8, 12).getTime();
   class Clock extends Date { constructor(...args) { super(...(args.length ? args : [time])); } static now() { return time; } }
   const events = new EventTarget();
+  events.setInterval = (fn, ms) => { const t = setInterval(fn, ms); t.unref?.(); return t; };
+  events.clearInterval = clearInterval;
   const cleanup = [];
-  class Plugin { registerEvent() {} registerDomEvent(el, type, fn, options) { el.addEventListener(type, fn, options); cleanup.push(() => el.removeEventListener(type, fn, options)); } }
+  class Plugin { registerEvent() {} registerInterval() {} addCommand(cmd) { (this.commands = this.commands || []).push(cmd); } addStatusBarItem() { return { setText() {}, addClass() {}, setAttr() {}, empty() {}, appendChild() {}, classList: { add() {}, remove() {}, toggle() {} }, addEventListener() {}, removeEventListener() {} }; } registerDomEvent(el, type, fn, options) { if (el?.addEventListener) el.addEventListener(type, fn, options); cleanup.push(() => el?.removeEventListener?.(type, fn, options)); } }
   class TFile {}
   class Modal { open() {} close() {} }
   class Setting {
@@ -38,7 +40,8 @@ function setup() {
     console,
     Date: Clock,
     window: events,
-    document: { hidden: false, hasFocus: () => true },
+    document: { hidden: false, hasFocus: () => true, createElement: () => ({ setAttribute() {}, appendChild() {}, classList: { add() {}, remove() {} } }) },
+    navigator: { clipboard: { writeText: async () => {} } },
     setTimeout,
     clearTimeout,
     structuredClone,
@@ -55,6 +58,7 @@ function setup() {
   );
   const Pulse = context.module.exports;
   const p = new Pulse();
+  p.manifest = { version: '1.7.0' };
   p.loadData = async () => null;
   p.saveData = async value => { p.persisted = JSON.parse(JSON.stringify(value)); };
   p.app = {
@@ -67,7 +71,7 @@ function setup() {
       getAbstractFileByPath: () => null,
       adapter: { exists: async () => false, write: async () => {}, list: async () => ({ files: [] }) }
     },
-    workspace: { getLeavesOfType: () => [], getActiveFile: () => null, openLinkText: () => {} },
+    workspace: { getLeavesOfType: () => [], getActiveFile: () => null, openLinkText: () => {}, onLayoutReady: () => {} },
     plugins: { getPlugin: () => null }
   };
   p.focusAdapter = new Pulse.helpers.CrispFocusAdapter(p);
@@ -77,7 +81,7 @@ function setup() {
   p.lastInteractionTime = time;
   const handlers = {};
   p.app.vault.on = (name, fn) => { handlers[name] = fn; };
-  return { p, handlers, helpers: Pulse.helpers, events, advance: ms => time += ms, cleanup: () => cleanup.forEach(fn => fn()) };
+  return { p, handlers, helpers: Pulse.helpers, events, context, advance: ms => time += ms, cleanup: () => cleanup.forEach(fn => fn()) };
 }
 
 test('zero contribution weights really disable each component', async () => {
@@ -1295,3 +1299,130 @@ test('action carry-over across three periods preserves origin and ignores comple
  const third=p.getReviewModel('2026-09-09','2026-09-15','all').actions[0];assert.equal(third.originId,first.id);
  assert.equal(p.importPreviousActions('2026-09-09','2026-09-15','all'),0);
 });
+
+test('legacy action import parses numbered list checkboxes and preserves identities upon editing previous draft',async()=>{
+ const {p}=setup();await p.loadPluginData();
+ p.updateReviewDraft('2026-08-26','2026-09-01','all','next','1. [x] Completed task\n2. [ ] Pending task\n3) Another pending');
+ assert.equal(p.importPreviousActions('2026-09-02','2026-09-08','all'),2);
+ let model=p.getReviewModel('2026-09-02','2026-09-08','all');
+ assert.equal(model.actions.length,2);
+ assert.equal(model.actions[0].title,'Pending task');
+ assert.equal(model.actions[1].title,'Another pending');
+
+ const { p: p1 } = setup(); await p1.loadPluginData();
+ p1.updateReviewDraft('2026-08-26','2026-09-01','all','next','- A\n- B');
+ assert.equal(p1.importPreviousActions('2026-09-02','2026-09-08','all'),2);
+ let m1=p1.getReviewModel('2026-09-02','2026-09-08','all');
+ assert.equal(m1.actions.map(a=>a.title).join(','),'A,B');
+
+ p1.updateReviewDraft('2026-08-26','2026-09-01','all','next','- NEW\n- A\n- B');
+ assert.equal(p1.importPreviousActions('2026-09-02','2026-09-08','all'),1);
+ m1=p1.getReviewModel('2026-09-02','2026-09-08','all');
+ assert.equal(m1.actions.map(a=>a.title).join(','),'A,B,NEW');
+});
+
+test('moving file across exclusion boundaries establishes baseline and does not back-count excluded edits',async()=>{
+ const {p,handlers}=setup();await p.loadPluginData();
+ p.registerVaultEvents();
+ await p.setSystemArtifactsExcluded(true);
+
+ const file={path:'Topics/a.md',extension:'md',content:'one',stat:{mtime:100}};
+ p.app.vault.getMarkdownFiles=()=>[file];
+ p.app.vault.getAbstractFileByPath=path=>path===file.path?file:null;
+ p.app.vault.read=async f=>f.content;
+ await p.handleFileCreation(file);
+
+ const oldPath=file.path;
+ file.path='Sidecar/logs/a.md';
+ await handlers.rename(file,oldPath);
+
+ file.content='one '+'word '.repeat(99).trim();
+ await p.handleFileModification(file);
+ assert.equal(p.getOrCreateTodayRecord().contribution.wordsAdded,1);
+
+ const excludedPath=file.path;
+ file.path='Topics/a.md';
+ await handlers.rename(file,excludedPath);
+
+ file.content+=' extra';
+ await p.handleFileModification(file);
+ assert.equal(p.getOrCreateTodayRecord().contribution.wordsAdded,2);
+});
+
+test('copy and archive commands generate modern review report with reflections and actions',async()=>{
+ const {p,context}=setup();
+ p.addSettingTab=()=>{};p.registerView=()=>{};p.addRibbonIcon=()=>{};
+ await p.onload();
+
+ const today = '2026-09-08';
+ const start = '2026-09-02';
+ p.updateReviewDraft(start,today,'reliable','learning','本周新认识');
+ p.addReviewAction(start,today,'reliable','关键改动任务');
+
+ let copiedText='';
+ context.navigator.clipboard.writeText=async txt=>{copiedText=txt;};
+
+ const copyCmd=p.commands.find(c=>c.id==='copy-pulse-weekly-markdown');
+ assert.ok(copyCmd);
+ await copyCmd.callback();
+ assert.ok(copiedText.includes('## 复盘反思'));
+ assert.ok(copiedText.includes('本周新认识'));
+ assert.ok(copiedText.includes('## 行动追踪'));
+ assert.ok(copiedText.includes('关键改动任务'));
+
+ let archivedFile=null;
+ p.app.vault.create=async(path,content)=>{archivedFile={path,content};return{path};};
+ p.app.vault.getAbstractFileByPath=()=>null;
+
+ const archiveCmd=p.commands.find(c=>c.id==='archive-weekly-review');
+ assert.ok(archiveCmd);
+ await archiveCmd.callback();
+ assert.ok(archivedFile);
+ assert.ok(archivedFile.path.includes(`${start}_${today}-reliable-知识工作复盘.md`));
+ assert.ok(archivedFile.content.includes('本周新认识'));
+ assert.ok(archivedFile.content.includes('关键改动任务'));
+});
+
+test('rebuilding estimated history does not retroactively exclude historical system artifacts when excludeSystemArtifacts is enabled',async()=>{
+ const {p}=setup();await p.loadPluginData();
+ await p.setSystemArtifactsExcluded(true);
+
+ const pastDate=new Date('2026-08-01T10:00:00Z');
+ const pastKey='2026-08-01';
+ const topicFile={path:'Topics/note.md',stat:{ctime:pastDate.getTime(),mtime:pastDate.getTime()}};
+ const sidecarFile={path:'Sidecar/logs/note.md',stat:{ctime:pastDate.getTime(),mtime:pastDate.getTime()}};
+
+ p.app.vault.getMarkdownFiles=()=>[topicFile,sidecarFile];
+ await p.runHistoricalBackfill(true);
+
+ const rec=p.store.daily[pastKey];
+ assert.ok(rec);
+ assert.equal(rec.contribution.notesCreated,2);
+});
+
+test('validateAndRepairStore repairs corrupted reviewDrafts safely',async()=>{
+ const {helpers}=setup();
+ const corrupted={
+  daily:{},
+  settings:{},
+  reviewDrafts:{
+   '2026-09-02:2026-09-08:all':{
+    actions:[{id:123,title:456,status:'invalid_status'},null,{title:'valid action'}],
+    evidence:[{id:null,path:123,quote:999,capturedAt:888},{path:'Core/ok.md',quote:123,capturedAt:456}]
+   },
+   'bad_draft':'not an object'
+  }
+ };
+ const {store,repairedCount}=helpers.validateAndRepairStore(corrupted);
+ assert.ok(repairedCount>0);
+ assert.equal(typeof store.reviewDrafts['bad_draft'],'undefined');
+ const draft=store.reviewDrafts['2026-09-02:2026-09-08:all'];
+ assert.ok(draft);
+ assert.equal(draft.actions.length,1);
+ assert.equal(draft.actions[0].title,'valid action');
+ assert.equal(draft.actions[0].status,'pending');
+ assert.equal(draft.evidence.length,1);
+ assert.equal(typeof draft.evidence[0].quote,'string');
+ assert.equal(typeof draft.evidence[0].capturedAt,'string');
+});
+

@@ -734,9 +734,9 @@ function generateReviewReport(model) {
   if (!model.actions?.length) lines.push('（暂无结构化行动）');
   lines.push('', '## 洞见证据');
   for (const evidence of model.evidence || []) {
-    lines.push('', `- ${reportNoteLink(evidence.path)} · 摘录时间 ${evidence.capturedAt}`);
+    lines.push('', `- ${reportNoteLink(evidence.path)} · 摘录时间 ${typeof evidence.capturedAt === 'string' ? evidence.capturedAt : ''}`);
     if (evidence.originalPath !== evidence.path) lines.push(`  - 摘录时路径：${evidence.originalPath}`);
-    if (evidence.quote) lines.push(...evidence.quote.split('\n').map(line => `> ${line}`));
+    if (typeof evidence.quote === 'string' && evidence.quote) lines.push(...evidence.quote.split('\n').map(line => `> ${line}`));
   }
   if (!model.evidence?.length) lines.push('（暂无关联证据）');
   return lines.join('\n');
@@ -1165,6 +1165,63 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
     }
   }
 
+  if (store.reviewDrafts && typeof store.reviewDrafts === "object" && !Array.isArray(store.reviewDrafts)) {
+    for (const [draftKey, draft] of Object.entries(store.reviewDrafts)) {
+      if (!draft || typeof draft !== "object" || Array.isArray(draft)) {
+        delete store.reviewDrafts[draftKey];
+        repairedCount++;
+        continue;
+      }
+      if (Array.isArray(draft.actions)) {
+        const validActions = [];
+        for (const a of draft.actions) {
+          if (!a || typeof a !== "object" || Array.isArray(a)) {
+            repairedCount++;
+            continue;
+          }
+          let changed = false;
+          if (typeof a.id !== "string" || !a.id.trim()) { a.id = reviewEntryId(); changed = true; }
+          if (typeof a.title !== "string" || !a.title.trim()) {
+            repairedCount++;
+            continue;
+          }
+          if (typeof a.status !== "string" || !Object.hasOwn(REVIEW_ACTION_STATES, a.status)) { a.status = "pending"; changed = true; }
+          if (a.outcomePath !== undefined && (typeof a.outcomePath !== "string" || !a.outcomePath.trim())) { delete a.outcomePath; changed = true; }
+          if (a.originalOutcomePath !== undefined && (typeof a.originalOutcomePath !== "string" || !a.originalOutcomePath.trim())) { delete a.originalOutcomePath; changed = true; }
+          if (changed) repairedCount++;
+          validActions.push(a);
+        }
+        if (validActions.length !== draft.actions.length) repairedCount++;
+        draft.actions = validActions;
+      }
+      if (Array.isArray(draft.evidence)) {
+        const validEvidence = [];
+        for (const e of draft.evidence) {
+          if (!e || typeof e !== "object" || Array.isArray(e)) {
+            repairedCount++;
+            continue;
+          }
+          let changed = false;
+          if (typeof e.id !== "string" || !e.id.trim()) { e.id = reviewEntryId(); changed = true; }
+          if (typeof e.path !== "string" || !e.path.trim()) {
+            repairedCount++;
+            continue;
+          }
+          if (typeof e.originalPath !== "string" || !e.originalPath.trim()) { e.originalPath = e.path; changed = true; }
+          if (typeof e.quote !== "string") { e.quote = typeof e.quote === "number" ? String(e.quote) : ""; changed = true; }
+          if (typeof e.capturedAt !== "string") { e.capturedAt = new Date().toISOString(); changed = true; }
+          if (changed) repairedCount++;
+          validEvidence.push(e);
+        }
+        if (validEvidence.length !== draft.evidence.length) repairedCount++;
+        draft.evidence = validEvidence;
+      }
+    }
+  } else if (store.reviewDrafts !== undefined) {
+    store.reviewDrafts = {};
+    repairedCount++;
+  }
+
   if (store.trackingVersion !== 3) {
     if (!store.trackingVersion) {
       for (const record of Object.values(store.daily)) {
@@ -1211,14 +1268,18 @@ class CrispPulsePlugin extends Plugin {
     this.addCommand({
       id: "copy-pulse-weekly-markdown",
       name: "复制本周工作复盘 Markdown 周报",
-      callback: () => {
+      callback: async () => {
         const today = new Date();
         const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
-        const data = this.getReviewData(dateKey(start), dateKey(today), this.settings.dataQualityScope);
-        const md = generateWeeklyMarkdown(data, `知识工作周报 (${dateKey(start)} ~ ${dateKey(today)})`);
-        navigator.clipboard.writeText(md).then(() => {
+        const sKey = dateKey(start), eKey = dateKey(today);
+        const model = this.getReviewModel(sKey, eKey, this.settings.dataQualityScope);
+        const md = generateReviewReport(model);
+        try {
+          await navigator.clipboard.writeText(md);
           new Notice("已成功复制本周工作复盘周报至剪贴板！");
-        });
+        } catch (e) {
+          new Notice("复制失败，请检查剪贴板权限后重试。");
+        }
       }
     });
 
@@ -1278,8 +1339,16 @@ class CrispPulsePlugin extends Plugin {
       callback: async () => {
         const today = new Date();
         const startWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
-        const reviewData = this.getReviewData(dateKey(startWeek), dateKey(today), this.settings.dataQualityScope);
-        await this.archiveWeeklyReviewToVault(reviewData, dateKey(startWeek), dateKey(today));
+        const sKey = dateKey(startWeek), eKey = dateKey(today);
+        const model = this.getReviewModel(sKey, eKey, this.settings.dataQualityScope);
+        const res = await this.archiveReviewReport(model);
+        if (res.success) {
+          new Notice(`已成功归档本周工作复盘（${res.fileName}）`);
+        } else if (res.reason === 'exists') {
+          new Notice("同区间、同范围复盘报告已存在，原文已保留。");
+        } else {
+          new Notice("复盘归档失败：" + (res.reason || "未知错误"));
+        }
       }
     });
 
@@ -1738,24 +1807,57 @@ class CrispPulsePlugin extends Plugin {
     );
 
     this.registerEvent(
-      this.app.vault.on("rename", (file, oldPath) => {
+      this.app.vault.on("rename", async (file, oldPath) => {
         const isFolder = !file.extension;
         const migratePath = path => path === oldPath || (isFolder && path.startsWith(`${oldPath}/`))
           ? file.path + path.slice(oldPath.length) : path;
+
+        const filesToBaseline = [];
+        if (!isFolder && file.extension === 'md') {
+          const wasTracked = this.shouldTrackPath(oldPath);
+          const isTracked = this.shouldTrackPath(file.path);
+          if (!wasTracked && isTracked) {
+            filesToBaseline.push(file);
+          }
+        } else if (isFolder) {
+          const allMd = typeof this.app.vault.getMarkdownFiles === 'function' ? this.app.vault.getMarkdownFiles() : [];
+          for (const f of allMd) {
+            if (f.path.startsWith(`${file.path}/`)) {
+              const oldFp = oldPath + f.path.slice(file.path.length);
+              if (!this.shouldTrackPath(oldFp) && this.shouldTrackPath(f.path)) {
+                filesToBaseline.push(f);
+              }
+            }
+          }
+        }
 
         for (const [key, snap] of Array.from(this.fileSnapshots.entries())) {
           const next = migratePath(key);
           if (next !== key) {
             this.fileSnapshots.delete(key);
-            this.fileSnapshots.set(next, snap);
+            if (this.shouldTrackPath(next) && this.shouldTrackPath(key)) {
+              this.fileSnapshots.set(next, snap);
+            }
           }
         }
         for (const [key, sess] of Array.from(this.activeSessions.entries())) {
           const next = migratePath(key);
           if (next !== key) {
             this.activeSessions.delete(key);
-            this.activeSessions.set(next, sess);
+            if (this.shouldTrackPath(next) && this.shouldTrackPath(key)) {
+              this.activeSessions.set(next, sess);
+            } else if (sess.isMeaningful) {
+              const targetDate = sess.date || getTodayKey();
+              const record = this.getOrCreateRecord(targetDate);
+              record.contribution.meaningfulEdits += 1;
+              record.activity.editingSessions += 1;
+              this.recomputeScore(record);
+              this.dirty = true;
+            }
           }
+        }
+        if (filesToBaseline.length > 0) {
+          await this.initializeSnapshots(filesToBaseline);
         }
         for (const draft of Object.values(this.store.reviewDrafts || {})) {
           for (const evidence of (Array.isArray(draft?.evidence) ? draft.evidence : [])) {
@@ -2085,7 +2187,7 @@ class CrispPulsePlugin extends Plugin {
     const modifiedMap = new Map();
 
     for (const file of files) {
-      if (!this.shouldTrackPath(file.path)) {
+      if (!isPathIncluded(file.path, this.settings.includedFolders, this.settings.excludedFolders)) {
         continue;
       }
       const cDate = new Date(file.stat.ctime);
@@ -2265,8 +2367,27 @@ class CrispPulsePlugin extends Plugin {
     const period = getReviewPeriod(start, end), sourceKey = getReviewDraftKey(period.previousStart, period.previousEnd, scope);
     const previous = this.store.reviewDrafts?.[sourceKey];if (!previous) return 0;
     const structured = Array.isArray(previous.actions) && previous.actions.length > 0;
-    const candidates = structured ? previous.actions.filter(a => a && ['pending', 'deferred'].includes(a.status)) :
-      (typeof previous.next === 'string' ? previous.next : '').split(/\r?\n/).map((line, index) => ({ id: `legacy:${sourceKey}:${index}`, title: line.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)?(?:\[ \]\s*)?/, '').trim(), status: /^\s*[-*+]\s+\[[xX]\]/.test(line) ? 'done' : 'pending' })).filter(a => a.title && a.status === 'pending');
+    let candidates = [];
+    if (structured) {
+      candidates = previous.actions.filter(a => a && ['pending', 'deferred'].includes(a.status));
+    } else if (typeof previous.next === 'string' && previous.next.trim()) {
+      const counts = new Map();
+      for (const rawLine of previous.next.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        const match = line.match(/^(?:(?:[-*+]|\d+[.)])\s+)?(?:\[([ xX])\]\s+)?(.*)$/);
+        if (!match) continue;
+        const check = match[1];
+        const title = (match[2] || '').trim();
+        if (!title) continue;
+        const status = (check && check.toLowerCase() === 'x') ? 'done' : 'pending';
+        const occ = counts.get(title) || 0;
+        counts.set(title, occ + 1);
+        const id = `legacy:${sourceKey}:${title}:${occ}`;
+        candidates.push({ id, title, status });
+      }
+      candidates = candidates.filter(a => a.status === 'pending');
+    }
     if (!candidates.length) return 0;
     const draft = this.reviewDraftForWrite(start, end, scope);if (!Array.isArray(draft.actions)) draft.actions = [];
     let added = 0;
@@ -3122,7 +3243,7 @@ class CrispPulseView extends ItemView {
         { label: "有效编辑会话", formula: `${rec.contribution.meaningfulEdits || 0} 次 × ${this.plugin.settings.weightMeaningfulEdit}分`, val: `+${breakdown.meaningfulEditsScore.toFixed(1)}` },
         { label: "完成任务", formula: `${rec.contribution.tasksCompleted || 0} 项 × ${this.plugin.settings.weightTaskCompleted}分`, val: `+${breakdown.tasksCompletedScore.toFixed(1)}` },
         { label: "新建内链", formula: `${rec.contribution.linksCreated || 0} 条 × ${this.plugin.settings.weightLinkCreated}分`, val: `+${breakdown.linksCreatedScore.toFixed(1)}` },
-        { label: "字数贡献 (边际递减)", formula: `原创 ${Math.max(0, (rec.contribution.wordsAdded||0)-(rec.contribution.captureWords||0))} 词 + 改写 ${rec.contribution.rewrittenWords||0} 词`, val: `+${breakdown.wordsTotalScore.toFixed(1)}` }
+        { label: "字数贡献 (边际递减)", formula: `非捕获新增 ${Math.max(0, (rec.contribution.wordsAdded||0)-(rec.contribution.captureWords||0))} 词 + 改写 ${rec.contribution.rewrittenWords||0} 词`, val: `+${breakdown.wordsTotalScore.toFixed(1)}` }
       ];
 
       if (this.plugin.settings.includeFocusInContribution) {
@@ -3394,7 +3515,7 @@ class CrispPulseView extends ItemView {
       const remove = controls.createEl('button', { cls: 'crisp-pulse-tab-btn', text: '移除引用' });
       remove.setAttr('aria-label', `移除引用 ${evidence.id}`);
       remove.addEventListener('click', () => { this.plugin.removeReviewEvidence(model.period.start, model.period.end, model.scope, evidence.id);this.render(); });
-      item.createDiv({ cls: 'crisp-pulse-review-note', text: `摘录于 ${evidence.capturedAt?.slice(0, 10) || '未知日期'}${evidence.originalPath !== evidence.path ? ` · 原路径 ${evidence.originalPath}` : ''}` });
+      item.createDiv({ cls: 'crisp-pulse-review-note', text: `摘录于 ${typeof evidence.capturedAt === 'string' ? evidence.capturedAt.slice(0, 10) : '未知日期'}${evidence.originalPath !== evidence.path ? ` · 原路径 ${evidence.originalPath}` : ''}` });
       if (evidence.quote) item.createEl('blockquote', { text: evidence.quote, cls: 'crisp-pulse-review-quote' });
     }
   }
