@@ -944,3 +944,48 @@
   .crisp-pulse-topfile-item > span:first-child { flex-basis: 100%; }
   .crisp-pulse-topfile-item > .crisp-pulse-file-meta { margin-left: 0; }
 }
+
+/* Review workspace: local evidence, adjacent periods and editable reports. */
+.crisp-pulse-review-workspace { min-width: 0; }
+.crisp-pulse-review-workspace h2 { margin: 0 0 8px; font-size: 22px; }
+.crisp-pulse-review-workspace h3 { margin: 0 0 12px; font-size: 17px; }
+.crisp-pulse-review-section { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); }
+.crisp-pulse-review-note { color: var(--text-muted); font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
+.crisp-pulse-review-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: 12px 0; min-width: 0; }
+.crisp-pulse-review-controls label, .crisp-pulse-review-drafts label { display: flex; flex-direction: column; gap: 8px; font-size: 13px; min-width: 0; }
+.crisp-pulse-review-controls input, .crisp-pulse-review-controls select { min-width: 0; max-width: 100%; }
+.crisp-pulse-review-controls select { flex: 0 1 320px; }
+.crisp-pulse-review-comparison { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.crisp-pulse-review-files { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; }
+.crisp-pulse-review-workspace button.crisp-pulse-review-file { display: flex; flex-direction: column; align-items: stretch; text-align: left; white-space: normal; height: auto; padding: 12px; box-shadow: none; background: transparent; border: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); border-radius: 10px; gap: 4px; }
+.crisp-pulse-review-workspace button.crisp-pulse-review-file:hover { background: var(--background-modifier-hover); }
+.crisp-pulse-review-path { overflow-wrap: anywhere; font-size: 13px; }
+.crisp-pulse-review-drafts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.crisp-pulse-review-drafts textarea { width: 100%; min-height: 104px; resize: vertical; line-height: 1.6; padding: 12px; background: var(--pulse-ui-soft, var(--background-secondary)); color: var(--text-normal); }
+.crisp-pulse-review-workspace :is(button,input,select,textarea):focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+@container (max-width: 600px) {
+  .crisp-pulse-review-comparison { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .crisp-pulse-review-drafts { grid-template-columns: minmax(0, 1fr); }
+}
+@container (max-width: 340px) {
+  .crisp-pulse-review-comparison { grid-template-columns: minmax(0, 1fr); }
+}
+.crisp-pulse-view .crisp-pulse-review-workspace { display: block; }
+.crisp-pulse-review-workspace > .crisp-pulse-review-note { margin: 8px 0 16px; }
+
+/* Review follow-through and captured evidence. */
+.crisp-pulse-review-sources { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.crisp-pulse-review-action-list, .crisp-pulse-review-evidence-list { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+.crisp-pulse-review-action, .crisp-pulse-review-evidence { padding: 14px; border: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); border-radius: 12px; min-width: 0; }
+.crisp-pulse-review-action .crisp-pulse-review-controls { margin: 4px 0 8px; }
+.crisp-pulse-review-controls input[type="text"] { flex: 1 1 220px; width: 100%; }
+.crisp-pulse-review-action select { flex: 0 1 100px; }
+.crisp-pulse-view button.crisp-pulse-review-evidence-link { white-space: normal; height: auto; overflow-wrap: anywhere; max-width: 100%; text-align: left; }
+.crisp-pulse-review-quote { white-space: pre-wrap; overflow-wrap: anywhere; margin: 12px 0 0; padding: 0 12px; border-left: 2px solid var(--interactive-accent); color: var(--text-muted); }
+.crisp-pulse-evidence-modal { display: flex; flex-direction: column; gap: 12px; }
+.crisp-pulse-evidence-modal :is(input,textarea) { width: 100%; min-width: 0; }
+.crisp-pulse-evidence-modal textarea { resize: vertical; line-height: 1.6; }
+.crisp-pulse-evidence-choices { max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.crisp-pulse-evidence-choices button { white-space: normal; height: auto; text-align: left; padding: 8px; overflow-wrap: anywhere; }
+@container (max-width: 700px) { .crisp-pulse-review-sources { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 340px) { .crisp-pulse-review-sources { grid-template-columns: minmax(0, 1fr); } }

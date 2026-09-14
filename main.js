@@ -334,6 +334,7 @@ const DEFAULT_SETTINGS = {
   dataQualityScope: "reliable", // "reliable" | "all" | "recorded_only"
   includedFolders: [], // string[]: empty means all
   excludedFolders: [".obsidian", ".trash", "templates"], // string[]
+  excludeSystemArtifacts: false, // opt-in; preserve existing collection scope
   activeFolderPreset: "all", // "all" | "anks-knowledge" | "custom"
 
   // --- 1.2.0 Work Review Settings ---
@@ -584,7 +585,7 @@ function filterDatesByRange(allDates, rangeKey = "year", refDate = new Date()) {
 // 1.2 Review Data Analyzer
 function generateReviewData(daily = {}, startDateStr, endDateStr, scope = "all", filterFn = null) {
   const sortedDates = Object.keys(daily).sort();
-  const matchedDates = sortedDates.filter(d => (!startDateStr || d >= startDateStr) && (!endDateStr || d <= endDateStr));
+  const matchedDates = sortedDates.filter(d => Number.isFinite(reviewDayNumber(d)) && (!startDateStr || d >= startDateStr) && (!endDateStr || d <= endDateStr));
 
   let totalScore = 0;
   let notesCreated = 0;
@@ -594,6 +595,7 @@ function generateReviewData(daily = {}, startDateStr, endDateStr, scope = "all",
   let totalActiveMins = 0;
   let totalFocusMins = 0;
 
+  const sourceWords = { system: 0, capture: 0, unattributed: 0, historical: 0 };
   const dirCounts = new Map(); // dirName -> { count: number, words: number }
   const fileStats = new Map(); // path -> { words: number, created: boolean, tasks: number }
 
@@ -610,6 +612,10 @@ function generateReviewData(daily = {}, startDateStr, endDateStr, scope = "all",
     totalFocusMins += (r.activity?.focusMinutes || 0);
 
     for (const [fp, finfo] of Object.entries(r.files || {})) {
+      for (const source of ['system', 'capture', 'unattributed']) {
+        const amount = finfo.sourceWords?.[source];
+        if (Number.isFinite(amount) && amount > 0) sourceWords[source] += amount;
+      }
       // Extract top level dir
       const parts = fp.split("/");
       const dir = parts.length > 1 ? parts[0] : "(根目录)";
@@ -618,13 +624,21 @@ function generateReviewData(daily = {}, startDateStr, endDateStr, scope = "all",
       dc.count += 1;
       dc.words += (finfo.wordsAdded || 0);
 
-      if (!fileStats.has(fp)) fileStats.set(fp, { words: 0, created: false, tasks: 0 });
+      if (!fileStats.has(fp)) fileStats.set(fp, { words: 0, rewrittenWords: 0, days: 0, created: false, tasks: 0 });
       const fs = fileStats.get(fp);
       fs.words += (finfo.wordsAdded || 0);
+      fs.rewrittenWords += (finfo.rewrittenWords || 0);
+      fs.days++;
       if (finfo.created) fs.created = true;
       fs.tasks += (finfo.tasks || 0);
     }
   }
+
+  let unclassified = wordsAdded;
+  for (const source of ['system', 'capture', 'unattributed']) {
+    sourceWords[source] = Math.min(unclassified, sourceWords[source]);unclassified -= sourceWords[source];
+  }
+  sourceWords.historical = Math.max(0, unclassified);
 
   // Calculate dir breakdown percentages
   let totalDirEvents = 0;
@@ -644,7 +658,7 @@ function generateReviewData(daily = {}, startDateStr, endDateStr, scope = "all",
   // Top 5 files
   const topFiles = [];
   for (const [path, s] of fileStats.entries()) {
-    topFiles.push({ path, words: s.words, created: s.created, tasks: s.tasks });
+    topFiles.push({ path, ...s });
   }
   topFiles.sort((a, b) => b.words - a.words);
 
@@ -657,8 +671,103 @@ function generateReviewData(daily = {}, startDateStr, endDateStr, scope = "all",
     activeHours: (totalActiveMins / 60).toFixed(1),
     focusHours: (totalFocusMins / 60).toFixed(1),
     dirBreakdown,
+    sourceWords,
+    focusMinutes: totalFocusMins,
+    activeMinutes: totalActiveMins,
+    allFiles: topFiles,
     topFiles: topFiles.slice(0, 5)
   };
+}
+
+// Review periods use calendar dates (UTC ordinals avoid daylight-saving drift).
+function reviewDayNumber(key) {
+  if (typeof key !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(key)) return NaN;
+  const date = new Date(`${key}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === key ? date.getTime() / 86400000 : NaN;
+}
+function reviewDayKey(day) { return new Date(day * 86400000).toISOString().slice(0, 10); }
+function getReviewPeriod(start, end) {
+  const first = reviewDayNumber(start), last = reviewDayNumber(end);
+  const days = last - first + 1;
+  if (!Number.isFinite(days) || days < 1 || days > 371 || end > getTodayKey()) {
+    throw new Error('请选择有效日期：开始不晚于结束，结束不晚于今天，区间最多 371 天。');
+  }
+  return { start, end, days, previousStart: reviewDayKey(first - days), previousEnd: reviewDayKey(first - 1) };
+}
+const REVIEW_SCOPE_LABELS = { reliable: '可靠记录', recorded_only: '仅实测记录', all: '全部历史' };
+const REVIEW_DRAFT_FIELDS = { progress: '主要进展', learning: '洞见与证据', blockers: '阻塞与疑问', next: '下一步行动' };
+function getReviewDrilldown(review, folder = '', sort = 'words') {
+  const files = (review.allFiles || []).filter(file => folder === '(根目录)' ? !file.path.includes('/') : !folder || file.path.startsWith(`${folder}/`));
+  const sortKey = ['words', 'rewrittenWords', 'tasks', 'days'].includes(sort) ? sort : 'words';
+  files.sort((a, b) => b[sortKey] - a[sortKey] || a.path.localeCompare(b.path));
+  return { files, words: files.reduce((n, f) => n + f.words, 0), rewrittenWords: files.reduce((n, f) => n + f.rewrittenWords, 0), tasks: files.reduce((n, f) => n + f.tasks, 0) };
+}
+function getReviewInsight(review) {
+  if (!review.dirBreakdown?.length) return '没有文件记录，无法据此判断知识流向或产出质量。';
+  const topics = review.dirBreakdown.find(d => d.dir === 'Topics')?.percent || 0;
+  const core = review.dirBreakdown.find(d => d.dir === 'Core')?.percent || 0;
+  const basis = '占比按文件×日期记录数计算，不代表工时或知识质量。';
+  if (topics >= 60) return `ANKS 知识沉淀建议：Topics 占比 ${topics}%。可回看相关笔记中的证据与可复用经验；进入 Core 前仍需人工或策略批准。${basis}`;
+  if (core >= 40) return `ANKS 底层建设反馈：Core 占比 ${core}%。可检查这些笔记是否已被实际问题引用和验证。${basis}`;
+  return `目录记录分布：Core 占比 ${core}%，Topics 占比 ${topics}%。请结合实际笔记复盘。${basis}`;
+}
+function generateReviewReport(model) {
+  const { period, current, previous, comparison, scope, draft } = model;
+  const lines = [generateWeeklyMarkdown(current, `知识工作复盘 (${period.start} ~ ${period.end})`), '', '## 数据口径',
+    `- 筛选：${REVIEW_SCOPE_LABELS[scope]}`,
+    `- 当前区间：${period.start} ~ ${period.end}；纳入 ${current.coverage.recorded}/${period.days} 天，未记录 ${current.coverage.missing} 天，筛除 ${current.coverage.filtered} 天。`,
+    `- 对比区间：${period.previousStart} ~ ${period.previousEnd}；纳入 ${previous.coverage.recorded}/${period.days} 天，未记录 ${previous.coverage.missing} 天，筛除 ${previous.coverage.filtered} 天。`,
+    '- 未记录不等于零；覆盖不足时，变化只代表已纳入的记录。改写量为估算，贡献分不代表知识质量。',
+    '- 目录占比按文件×日期记录数计算，不是编辑次数或工时。', '', '## 前后周期对比',
+    '| 指标 | 当前 | 前期 | 变化 |', '| --- | ---: | ---: | --- |'];
+  for (const row of comparison) lines.push(`| ${row.label} | ${formatPulseMinutes(row.current)} ${row.unit} | ${formatPulseMinutes(row.previous)} ${row.unit} | ${row.changeLabel} |`);
+  lines.push('', '## 复盘反思');
+  for (const [key, label] of Object.entries(REVIEW_DRAFT_FIELDS)) lines.push('', `### ${label}`, draft[key] || '（待补充）');
+  lines.push('', '## 新增词数来源', '系统目录仅按路径识别，大段捕获为估算；其他新增不能据此归为人工写作。升级前记录保留为历史未分类。');
+  for (const [key, label] of Object.entries(REVIEW_SOURCE_LABELS)) lines.push(`- ${label}：${current.sourceWords?.[key] || 0} 词`);
+  lines.push('', '## 行动追踪');
+  for (const action of model.actions || []) {
+    lines.push(`- ${action.status === 'done' ? '[x]' : '[ ]'} ${action.title || '（待填写行动）'} · ${REVIEW_ACTION_STATES[action.status] || '待办'}`);
+    if (action.sourcePeriod) lines.push(`  - 继承自：${action.sourcePeriod}`);
+    if (action.outcomePath) lines.push(`  - 结果笔记：${reportNoteLink(action.outcomePath)}`);
+  }
+  if (!model.actions?.length) lines.push('（暂无结构化行动）');
+  lines.push('', '## 洞见证据');
+  for (const evidence of model.evidence || []) {
+    lines.push('', `- ${reportNoteLink(evidence.path)} · 摘录时间 ${evidence.capturedAt}`);
+    if (evidence.originalPath !== evidence.path) lines.push(`  - 摘录时路径：${evidence.originalPath}`);
+    if (evidence.quote) lines.push(...evidence.quote.split('\n').map(line => `> ${line}`));
+  }
+  if (!model.evidence?.length) lines.push('（暂无关联证据）');
+  return lines.join('\n');
+}
+
+const SYSTEM_ARTIFACT_FOLDERS = ['Sidecar/logs', 'Sidecar/backups', 'Sidecar/manifests'];
+const REVIEW_SOURCE_LABELS = { system: '系统目录新增', capture: '大段捕获（估算）', unattributed: '其他新增（来源未确认）', historical: '历史未分类' };
+const REVIEW_ACTION_STATES = { pending: '待办', done: '完成', deferred: '延期', cancelled: '取消' };
+function isSystemArtifact(path) {
+  return typeof path === 'string' && SYSTEM_ARTIFACT_FOLDERS.some(folder => path === folder || path.startsWith(`${folder}/`));
+}
+function recordSourceWords(fileRecord, path, words, capture) {
+  if (!(words > 0)) return;
+  if (!fileRecord.sourceWords || typeof fileRecord.sourceWords !== 'object' || Array.isArray(fileRecord.sourceWords)) fileRecord.sourceWords = {};
+  const source = isSystemArtifact(path) ? 'system' : capture ? 'capture' : 'unattributed';
+  fileRecord.sourceWords[source] = (Number.isFinite(fileRecord.sourceWords[source]) ? fileRecord.sourceWords[source] : 0) + words;
+}
+function reviewEntryId() {
+  return typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+function getReviewDraftKey(start, end, scope) {
+  getReviewPeriod(start, end);
+  if (!Object.hasOwn(REVIEW_SCOPE_LABELS, scope)) throw new Error('未知的数据筛选范围');
+  return `${start}:${end}:${scope}`;
+}
+function reviewSafePath(path) {
+  return typeof path === 'string' && path.endsWith('.md') && !path.startsWith('/') && !path.includes('\\') && !/(?:^|\/)\.\.(?:\/|$)/.test(path) && !/[\r\n\0]/.test(path);
+}
+function reportNoteLink(path) {
+  // Use encoded Markdown links for filenames that cannot safely be represented as wikilinks.
+  return /[\[\]|#]/.test(path) ? `[笔记](${path.split('/').map(part => encodeURIComponent(part).replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16))).join('/')})` : `[[${path}]]`;
 }
 
 // 1.2 Weekly Markdown Generator
@@ -668,7 +777,7 @@ function generateWeeklyMarkdown(reviewData, weekTitle = "知识工作周报 (Wee
   const lines = [
     `# ${weekTitle}`,
     "",
-    "## 📊 本周总览",
+    "## 📊 区间总览",
     `- **总贡献得分**: ${totalScore} 分`,
     `- **新建笔记**: ${notesCreated} 篇`,
     `- **沉淀文字量**: +${wordsAdded} 词${rewrittenWords > 0 ? ` (深度改写/润色: +${rewrittenWords} 词)` : ""}`,
@@ -684,17 +793,17 @@ function generateWeeklyMarkdown(reviewData, weekTitle = "知识工作周报 (Wee
   lines.push("## 🗂️ 核心目录分布");
 
   if (dirBreakdown.length === 0) {
-    lines.push("- *本周无明确目录变动*");
+    lines.push("- *区间内没有文件记录*");
   } else {
     for (const d of dirBreakdown) {
-      lines.push(`- \`${d.dir}\`: ${d.percent}% (变动 ${d.count} 次 / +${d.words} 词)`);
+      lines.push(`- \`${d.dir}\`: ${d.percent}% (文件×日期记录 ${d.count} 条 / +${d.words} 词)`);
     }
   }
 
   lines.push("");
-  lines.push("## 📝 深度推进笔记 Top 5");
+  lines.push("## 📝 新增词数 Top 5");
   if (topFiles.length === 0) {
-    lines.push("- *无重点笔记记录*");
+    lines.push("- *区间内没有笔记记录*");
   } else {
     topFiles.forEach((f, i) => {
       const tags = [];
@@ -728,14 +837,7 @@ function generateAnksWeeklyReviewFileContent(reviewData, weekTitle = "知识工�
   const corePct = coreItem ? coreItem.percent : 0;
   const topicsPct = topicsItem ? topicsItem.percent : 0;
 
-  let anksInsight = "";
-  if (topicsPct >= 60) {
-    anksInsight = `> [!TIP] **ANKS 知识沉淀建议**\n> 本周精力主要集中在业务/前线实践（Topics 占比 ${topicsPct}%）。建议周复盘时回看是否有高频验证、具有跨项目复用价值的概念、方法或框架，及时提炼萃取至 \`Core/\` 目录。`;
-  } else if (corePct >= 40) {
-    anksInsight = `> [!NOTE] **ANKS 底层建设反馈**\n> 本周深度投入了底层核心体系建设（Core 占比 ${corePct}%），基础心智与方法论沉淀扎实。后续可结合业务课题在 Topics 中开展实证。`;
-  } else {
-    anksInsight = `> [!NOTE] **ANKS 均衡度反馈**\n> 本周底层体系（Core: ${corePct}%）与业务实践（Topics: ${topicsPct}%）节奏均衡，保持了良好的输入-沉淀-输出节奏。`;
-  }
+  const anksInsight = `> [!NOTE] ${getReviewInsight(reviewData)}`;
 
   const lines = [
     "---",
@@ -765,20 +867,20 @@ function generateAnksWeeklyReviewFileContent(reviewData, weekTitle = "知识工�
     lines.push(`- **深度专注时长**: ${reviewData.focusHours} 小时`);
   }
 
-  lines.push("", "## 🗂️ 核心知识目录精力分布", anksInsight, "");
+  lines.push("", "## 🗂️ 核心知识目录记录分布", anksInsight, "");
 
   if (!reviewData.dirBreakdown || reviewData.dirBreakdown.length === 0) {
-    lines.push("- *本周无明确目录变动*");
+    lines.push("- *区间内没有文件记录*");
   } else {
     for (const d of reviewData.dirBreakdown) {
-      lines.push(`- \`${d.dir}\`: **${d.percent}%** (变动 ${d.count} 次 / 沉淀 +${d.words} 词)`);
+      lines.push(`- \`${d.dir}\`: **${d.percent}%** (文件×日期记录 ${d.count} 条 / 沉淀 +${d.words} 词)`);
     }
   }
 
   lines.push("");
-  lines.push("## 📝 深度推进笔记 Top 5");
+  lines.push("## 📝 新增词数 Top 5");
   if (!reviewData.topFiles || reviewData.topFiles.length === 0) {
-    lines.push("- *无重点笔记记录*");
+    lines.push("- *区间内没有笔记记录*");
   } else {
     reviewData.topFiles.forEach((f, i) => {
       const tags = [];
@@ -1488,14 +1590,14 @@ class CrispPulsePlugin extends Plugin {
   }
 
   // 1.3.0 ANKS Vault: Archive Weekly Review note
-  async archiveWeeklyReviewToVault(reviewData, startKey, endKey) {
+  async archiveWeeklyReviewToVault(reviewData, startKey, endKey, report = null) {
     const rawFolder = (this.settings.reviewArchiveFolder || "Topics/self-media/outputs/reviews").trim();
     if (/(?:^|\/)\.\.(?:\/|$)/.test(rawFolder) || rawFolder.startsWith("/") || rawFolder.includes("\\")) {
       return { success: false, reason: "invalid_path", error: new Error("Invalid archive path escaping vault") };
     }
     const targetFolder = rawFolder.replace(/^\/+|\/+$/g, "");
     const isoWeek = getIsoWeekString(new Date());
-    const fileName = `${isoWeek}-知识工作周报.md`;
+    const fileName = report?.fileName || `${isoWeek}-知识工作周报.md`;
     const fullPath = targetFolder ? `${targetFolder}/${fileName}` : fileName;
 
     if (targetFolder && this.app?.vault?.adapter) {
@@ -1515,7 +1617,7 @@ class CrispPulsePlugin extends Plugin {
     }
 
     const title = `${isoWeek} 知识工作周报 (${startKey} ~ ${endKey})`;
-    const content = generateAnksWeeklyReviewFileContent(reviewData, title, `${startKey} ~ ${endKey}`);
+    const content = report?.content || generateAnksWeeklyReviewFileContent(reviewData, title, `${startKey} ~ ${endKey}`);
 
     try {
       const fileExists = this.app?.vault?.adapter?.exists ? await this.app.vault.adapter.exists(fullPath) : false;
@@ -1566,14 +1668,13 @@ class CrispPulsePlugin extends Plugin {
     }
   }
 
-  async initializeSnapshots() {
-    const files = this.app.vault.getMarkdownFiles();
+  async initializeSnapshots(files = this.app.vault.getMarkdownFiles()) {
     const concurrency = 16;
     let index = 0;
     const worker = async () => {
       while (index < files.length && !this.stopped) {
         const file = files[index++];
-        if (!isPathIncluded(file.path, this.settings.includedFolders, this.settings.excludedFolders)) {
+        if (!this.shouldTrackPath(file.path)) {
           continue;
         }
         try {
@@ -1600,7 +1701,7 @@ class CrispPulsePlugin extends Plugin {
     this.registerEvent(
       this.app.vault.on("create", async (file) => {
         if (!(file instanceof TFile) || file.extension !== "md") return;
-        if (!isPathIncluded(file.path, this.settings.includedFolders, this.settings.excludedFolders)) {
+        if (!this.shouldTrackPath(file.path)) {
           return;
         }
 
@@ -1611,7 +1712,7 @@ class CrispPulsePlugin extends Plugin {
     this.registerEvent(
       this.app.vault.on("modify", async (file) => {
         if (!(file instanceof TFile) || file.extension !== "md") return;
-        if (!isPathIncluded(file.path, this.settings.includedFolders, this.settings.excludedFolders)) {
+        if (!this.shouldTrackPath(file.path)) {
           return;
         }
         await this.handleFileModification(file);
@@ -1654,6 +1755,18 @@ class CrispPulsePlugin extends Plugin {
           if (next !== key) {
             this.activeSessions.delete(key);
             this.activeSessions.set(next, sess);
+          }
+        }
+        for (const draft of Object.values(this.store.reviewDrafts || {})) {
+          for (const evidence of (Array.isArray(draft?.evidence) ? draft.evidence : [])) {
+            if (typeof evidence?.path !== 'string') continue;
+            const next = migratePath(evidence.path);
+            if (next !== evidence.path) { evidence.originalPath ||= evidence.path;evidence.path = next;this.dirty = true; }
+          }
+          for (const action of (Array.isArray(draft?.actions) ? draft.actions : [])) {
+            if (typeof action?.outcomePath !== 'string') continue;
+            const next = migratePath(action.outcomePath);
+            if (next !== action.outcomePath) { action.originalOutcomePath ||= action.outcomePath;action.outcomePath = next;this.dirty = true; }
           }
         }
         for (const record of Object.values(this.store.daily)) {
@@ -1707,6 +1820,7 @@ class CrispPulsePlugin extends Plugin {
   }
 
   handleFileCreation(file) {
+    if (!this.shouldTrackPath(file.path)) return Promise.resolve();
     return this.queueFileOperation(file, async () => {
       if (this.fileSnapshots.has(file.path)) return;
         const today = this.getOrCreateTodayRecord();
@@ -1731,7 +1845,8 @@ class CrispPulsePlugin extends Plugin {
           });
           if (words > 0) {
             today.contribution.wordsAdded += words;
-            today.files[file.path].wordsAdded = words;
+            today.files[file.path].wordsAdded += words;
+            recordSourceWords(today.files[file.path], file.path, words, words >= 500);
             if (words >= 500) today.contribution.captureWords = (today.contribution.captureWords || 0) + words;
           }
         } catch (e) {
@@ -1750,7 +1865,7 @@ class CrispPulsePlugin extends Plugin {
   }
 
   async queueFileOperation(file, operation) {
-    if (this.stopped) return;
+    if (this.stopped || (this.sourceFilterChanging && isSystemArtifact(file.path))) return;
     if (!this.fileQueues) this.fileQueues = new Map();
     const queuedPath = file.path;
     const queue = (this.fileQueues.get(queuedPath) || Promise.resolve())
@@ -1765,7 +1880,7 @@ class CrispPulsePlugin extends Plugin {
   }
 
   async processFileModification(file) {
-    if (this.stopped) return;
+    if (this.stopped || !this.shouldTrackPath(file.path)) return;
     try {
       const content = await this.app.vault.read(file);
       if (this.stopped) return;
@@ -1852,6 +1967,7 @@ class CrispPulsePlugin extends Plugin {
       if (wordsDelta > 0) {
         today.contribution.wordsAdded += wordsDelta;
         fileRecord.wordsAdded += wordsDelta;
+        recordSourceWords(fileRecord, file.path, wordsDelta, wordsDelta >= 500 && timeDeltaMs < 2000);
       } else if (wordsDelta < 0) {
         today.contribution.wordsRemoved += Math.abs(wordsDelta);
       }
@@ -1969,7 +2085,7 @@ class CrispPulsePlugin extends Plugin {
     const modifiedMap = new Map();
 
     for (const file of files) {
-      if (!isPathIncluded(file.path, this.settings.includedFolders, this.settings.excludedFolders)) {
+      if (!this.shouldTrackPath(file.path)) {
         continue;
       }
       const cDate = new Date(file.stat.ctime);
@@ -2032,6 +2148,158 @@ class CrispPulsePlugin extends Plugin {
       (record, key) => this.recordMatchesScope(record, key, scope)
     );
   }
+
+  getReviewModel(start, end, scope = this.settings.dataQualityScope || 'reliable') {
+    const period = getReviewPeriod(start, end);
+    if (!Object.hasOwn(REVIEW_SCOPE_LABELS, scope)) throw new Error('未知的数据筛选范围');
+    const summarize = (a, b) => {
+      const review = this.getReviewData(a, b, scope);
+      const coverage = { recorded: 0, missing: 0, filtered: 0 };
+      for (let day = reviewDayNumber(a); day <= reviewDayNumber(b); day++) {
+        const key = reviewDayKey(day), record = this.store.daily[key];
+        if (!record) coverage.missing++;
+        else if (this.recordMatchesScope(record, key, scope)) coverage.recorded++;
+        else coverage.filtered++;
+      }
+      return { ...review, coverage };
+    };
+    const current = summarize(start, end), previous = summarize(period.previousStart, period.previousEnd);
+    const fields = [['totalScore', '贡献得分', '分'], ['wordsAdded', '新增词数', '词'], ['rewrittenWords', '改写估算', '词'], ['notesCreated', '新建笔记', '篇'], ['tasksCompleted', '完成任务', '项'], ['focusMinutes', '专注记录', '分钟']];
+    const comparison = fields.map(([key, label, unit]) => {
+      const now = current[key], before = previous[key];
+      const percent = previous.coverage.recorded && current.coverage.recorded && before > 0 ? Math.round((now - before) / before * 1000) / 10 : null;
+      const changeLabel = !current.coverage.recorded ? '当前无可用记录' : !previous.coverage.recorded ? '前期无可用记录' : before === 0 ? (now === 0 ? '均为零' : '前期为零') : `${percent > 0 ? '+' : ''}${percent}%`;
+      return { key, label, unit, current: now, previous: before, percent, changeLabel };
+    });
+    const saved = this.store.reviewDrafts?.[`${start}:${end}:${scope}`];
+    const draft = Object.fromEntries(Object.keys(REVIEW_DRAFT_FIELDS).map(key => [key, typeof saved?.[key] === 'string' ? saved[key] : '']));
+    const actions = Array.isArray(saved?.actions) ? saved.actions.filter(a => a && typeof a.id === 'string' && typeof a.title === 'string').map(a => ({ ...a })) : [];
+    const evidence = Array.isArray(saved?.evidence) ? saved.evidence.filter(e => e && typeof e.id === 'string' && typeof e.path === 'string').map(e => ({ ...e })) : [];
+    return { period, scope, current, previous, comparison, draft, actions, evidence };
+  }
+
+  updateReviewDraft(start, end, scope, field, value) {
+    getReviewPeriod(start, end);
+    if (!Object.hasOwn(REVIEW_DRAFT_FIELDS, field) || !Object.hasOwn(REVIEW_SCOPE_LABELS, scope) || typeof value !== 'string') return;
+    if (!this.store.reviewDrafts || typeof this.store.reviewDrafts !== 'object' || Array.isArray(this.store.reviewDrafts)) this.store.reviewDrafts = {};
+    const key = `${start}:${end}:${scope}`;
+    const old = this.store.reviewDrafts[key];
+    this.store.reviewDrafts[key] = { ...(old && typeof old === 'object' ? old : {}), [field]: value, updatedAt: new Date().toISOString() };
+    this.dirty = true;
+  }
+
+  async archiveReviewReport(model) {
+    // Use the existing no-overwrite archive path, with a period/scope-specific name.
+    const { start, end } = getReviewPeriod(model.period.start, model.period.end);
+    const folder = (this.settings.reviewArchiveFolder || 'Topics/self-media/outputs/reviews').trim();
+    if (/(?:^|\/)\.\.(?:\/|$)/.test(folder) || folder.startsWith('/') || folder.includes('\\') || folder.includes('\0')) {
+      new Notice('归档目录无效，请在设置中使用库内相对路径。');
+      return { success: false, reason: 'invalid_path' };
+    }
+    if (!Object.hasOwn(REVIEW_SCOPE_LABELS, model.scope)) return { success: false, reason: 'invalid_scope' };
+    const topic = /^Topics\/([^/]+)(?:\/|$)/.exec(folder)?.[1];
+    const frontmatter = ['---', 'type: review', 'review_type: content-data', ...(topic ? [`topic: ${JSON.stringify(topic)}`] : []),
+      `created: ${getTodayKey()}`, `period_start: ${start}`, `period_end: ${end}`, `data_quality_scope: ${model.scope}`, 'generator: crisp-pulse', '---', ''];
+    return this.archiveWeeklyReviewToVault(model.current, start, end, {
+      fileName: `${start}_${end}-${model.scope}-知识工作复盘.md`,
+      content: frontmatter.join('\n') + '\n' + generateReviewReport(model)
+    });
+  }
+
+
+  shouldTrackPath(path) {
+    return isPathIncluded(path, this.settings.includedFolders, this.settings.excludedFolders) && !(this.settings.excludeSystemArtifacts && isSystemArtifact(path));
+  }
+
+  async setSystemArtifactsExcluded(enabled) {
+    if (this.sourceFilterChanging) return false;
+    this.sourceFilterChanging = true;
+    const previous = !!this.settings.excludeSystemArtifacts;
+    try {
+      await Promise.allSettled([...(this.fileQueues?.values() || [])]);
+      this.settings.excludeSystemArtifacts = !!enabled;
+      await this.savePluginData({ throwOnError: true });
+      for (const path of [...this.fileSnapshots.keys()]) if (isSystemArtifact(path)) this.fileSnapshots.delete(path);
+      // Baseline before resuming collection so excluded edits are never back-counted.
+      if (!enabled) await this.initializeSnapshots(this.app.vault.getMarkdownFiles().filter(file => isSystemArtifact(file.path)));
+      this.refreshViews();
+      return true;
+    } catch (error) {
+      this.settings.excludeSystemArtifacts = previous;this.dirty = true;
+      throw error;
+    } finally { this.sourceFilterChanging = false; }
+  }
+
+  reviewDraftForWrite(start, end, scope) {
+    const key = getReviewDraftKey(start, end, scope);
+    if (!this.store.reviewDrafts || typeof this.store.reviewDrafts !== 'object' || Array.isArray(this.store.reviewDrafts)) this.store.reviewDrafts = {};
+    if (!this.store.reviewDrafts[key] || typeof this.store.reviewDrafts[key] !== 'object' || Array.isArray(this.store.reviewDrafts[key])) this.store.reviewDrafts[key] = {};
+    return this.store.reviewDrafts[key];
+  }
+
+  markReviewDraftChanged(draft) { draft.updatedAt = new Date().toISOString();this.dirty = true; }
+
+  addReviewAction(start, end, scope, title) {
+    if (typeof title !== 'string' || !title.trim() || title.length > 500) throw new Error('请填写 1–500 字的行动。');
+    const draft = this.reviewDraftForWrite(start, end, scope);
+    if (!Array.isArray(draft.actions)) draft.actions = [];
+    const action = { id: reviewEntryId(), title: title.trim(), status: 'pending', createdAt: new Date().toISOString() };
+    draft.actions.push(action);this.markReviewDraftChanged(draft);return action.id;
+  }
+
+  updateReviewAction(start, end, scope, id, patch) {
+    if (patch.status !== undefined && !Object.hasOwn(REVIEW_ACTION_STATES, patch.status)) throw new Error('行动状态无效。');
+    if (patch.title !== undefined && (typeof patch.title !== 'string' || patch.title.length > 500)) throw new Error('行动文字最多 500 字。');
+    if (patch.outcomePath) {
+      const file = this.app.vault.getAbstractFileByPath(patch.outcomePath);
+      if (!reviewSafePath(patch.outcomePath) || !file || file.extension !== 'md') throw new Error('结果笔记不存在，请填写已有 Markdown 笔记的完整路径。');
+    }
+    const draft = this.reviewDraftForWrite(start, end, scope);
+    const action = draft.actions?.find(item => item?.id === id);if (!action) throw new Error('行动已不存在。');
+    for (const key of ['title', 'status', 'outcomePath']) if (patch[key] !== undefined) action[key] = patch[key];
+    if (patch.outcomePath && !action.originalOutcomePath) action.originalOutcomePath = patch.outcomePath;
+    this.markReviewDraftChanged(draft);
+  }
+
+  importPreviousActions(start, end, scope) {
+    const period = getReviewPeriod(start, end), sourceKey = getReviewDraftKey(period.previousStart, period.previousEnd, scope);
+    const previous = this.store.reviewDrafts?.[sourceKey];if (!previous) return 0;
+    const structured = Array.isArray(previous.actions) && previous.actions.length > 0;
+    const candidates = structured ? previous.actions.filter(a => a && ['pending', 'deferred'].includes(a.status)) :
+      (typeof previous.next === 'string' ? previous.next : '').split(/\r?\n/).map((line, index) => ({ id: `legacy:${sourceKey}:${index}`, title: line.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)?(?:\[ \]\s*)?/, '').trim(), status: /^\s*[-*+]\s+\[[xX]\]/.test(line) ? 'done' : 'pending' })).filter(a => a.title && a.status === 'pending');
+    if (!candidates.length) return 0;
+    const draft = this.reviewDraftForWrite(start, end, scope);if (!Array.isArray(draft.actions)) draft.actions = [];
+    let added = 0;
+    for (const candidate of candidates) {
+      const originId = candidate.originId || candidate.id;
+      if (!candidate.title || draft.actions.some(a => a?.originId === originId || a?.id === originId)) continue;
+      draft.actions.push({ id: reviewEntryId(), originId, title: candidate.title, status: 'pending', sourcePeriod: sourceKey, createdAt: new Date().toISOString() });added++;
+    }
+    if (added) this.markReviewDraftChanged(draft);return added;
+  }
+
+  async addReviewEvidence(start, end, scope, path, quote = '') {
+    const model = this.getReviewModel(start, end, scope);
+    if (!reviewSafePath(path) || !model.current.allFiles.some(file => file.path === path)) throw new Error('请选择当前区间与范围内的笔记。');
+    if (typeof quote !== 'string' || quote.length > 2000) throw new Error('单条摘录最多 2000 字。');
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!file || file.extension !== 'md') throw new Error('原笔记已不存在。');
+    const originalPath = path;
+    const content = await this.app.vault.read(file);
+    if (this.stopped) throw new Error('插件已停止，请重试。');
+    quote = quote.replace(/\r\n/g, '\n');
+    if (quote && !content.replace(/\r\n/g, '\n').includes(quote)) throw new Error('摘录与当前原文不一致，请重新选择原文。');
+    const draft = this.reviewDraftForWrite(start, end, scope);if (!Array.isArray(draft.evidence)) draft.evidence = [];
+    if (draft.evidence.some(item => item?.path === file.path && item.quote === quote)) return false;
+    draft.evidence.push({ id: reviewEntryId(), path: file.path, originalPath, quote, capturedAt: new Date().toISOString() });
+    this.markReviewDraftChanged(draft);return true;
+  }
+
+  removeReviewEvidence(start, end, scope, id) {
+    const draft = this.reviewDraftForWrite(start, end, scope);
+    if (Array.isArray(draft.evidence)) { draft.evidence = draft.evidence.filter(item => item?.id !== id);this.markReviewDraftChanged(draft); }
+  }
+
 
   // --- Statistics & Streaks with Scope & DateRange Filtering ---
   calcStats(scope = this.settings.dataQualityScope || "reliable", dateRange = "year") {
@@ -2280,9 +2548,12 @@ class CrispPulseView extends ItemView {
 
   render() {
     const container = this.containerEl.children[1];
+    if (this.reviewComposing && container.contains(container.ownerDocument.activeElement)) return;
     const previousScroll = container?.scrollTop || 0;
     const previousHorizontal = container.querySelector(".crisp-pulse-heatmap-scroll")?.scrollLeft || 0;
     const active = container.ownerDocument.activeElement;
+    const formFocus = container.contains(active) && active.dataset?.reviewField
+      ? { field: active.dataset.reviewField, start: active.selectionStart, end: active.selectionEnd, scroll: active.scrollTop } : null;
     const focusedDate = active?.dataset?.date;
     const chartFocus = active?.dataset?.analyticsDate ? { date: active.dataset.analyticsDate, chart: active.closest("svg")?.getAttribute("aria-label") } : null;
     const controlFocus = container.contains(active) && active.matches("button, select, [role=button]")
@@ -2317,7 +2588,14 @@ class CrispPulseView extends ItemView {
     container.scrollTop = previousScroll;
     const heatmap = container.querySelector(".crisp-pulse-heatmap-scroll");
     if (heatmap) heatmap.scrollLeft = previousHorizontal;
-    if (focusedDate) container.querySelector(`[data-date="${focusedDate}"]`)?.focus({ preventScroll: true });
+    if (formFocus) {
+      const input = [...container.querySelectorAll('[data-review-field]')].find(el => el.dataset.reviewField === formFocus.field);
+      input?.focus({ preventScroll: true });
+      if ((input?.tagName === 'TEXTAREA' || input?.type === 'text' || input?.type === 'search') && formFocus.start !== null) {
+        input.setSelectionRange(formFocus.start, formFocus.end); input.scrollTop = formFocus.scroll;
+      }
+    }
+    else if (focusedDate) container.querySelector(`[data-date="${focusedDate}"]`)?.focus({ preventScroll: true });
     else if (chartFocus) {
       const chart = [...container.querySelectorAll("svg")].find(el => el.getAttribute("aria-label") === chartFocus.chart);
       chart?.querySelector(`[data-analytics-date="${chartFocus.date}"]`)?.focus({ preventScroll: true });
@@ -2483,7 +2761,7 @@ class CrispPulseView extends ItemView {
 
     const reviewBtn = viewSwitch.createEl("button", {
       cls: `crisp-pulse-tab-btn ${this.activeViewTab === "review" ? "is-active" : ""}`,
-      text: "工作周复盘"
+      text: "知识复盘"
     });
     reviewBtn.addEventListener("click", () => {
       this.activeViewTab = "review";
@@ -2505,9 +2783,9 @@ class CrispPulseView extends ItemView {
     rangeSelect.createEl("option", { text: "时间: 近 53 周", value: "year" });
     rangeSelect.createEl("option", { text: "时间: 最近 90 天", value: "90d" });
     rangeSelect.createEl("option", { text: "时间: 最近 30 天", value: "30d" });
-    rangeSelect.createEl("option", { text: "时间: 本周 (7天)", value: "7d" });
+    rangeSelect.createEl("option", { text: "时间: 最近 7 天", value: "7d" });
     rangeSelect.createEl("option", { text: "时间: 本年 (YTD)", value: "ytd" });
-    rangeSelect.hidden = this.activeViewTab === "analytics";
+    rangeSelect.hidden = this.activeViewTab !== "dashboard";
     rangeSelect.value = this.currentDateRange;
     rangeSelect.addEventListener("change", () => {
       this.currentDateRange = rangeSelect.value;
@@ -2528,7 +2806,7 @@ class CrispPulseView extends ItemView {
     // Export Button
     const exportBtn = actions.createEl("button", {
       cls: "crisp-pulse-tab-btn",
-      text: "导出 CSV"
+      text: "导出全量 CSV"
     });
     exportBtn.addEventListener("click", () => {
       this.plugin.exportCSVFile();
@@ -2910,146 +3188,259 @@ class CrispPulseView extends ItemView {
 
   // --- 1.2.0 Work Review Panel ---
   renderRetrospectivePanel(parent) {
-    const today = new Date();
-    const startWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
-    const reviewData = this.plugin.getReviewData(dateKey(startWeek), dateKey(today), this.currentScope);
+    const now = new Date();
+    const end = this.reviewEnd || dateKey(now);
+    const start = this.reviewStart || dateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
+    this.reviewStart = start;this.reviewEnd = end;
+    const model = this.plugin.getReviewModel(start, end, this.currentScope);
+    const card = parent.createDiv({ cls: 'crisp-pulse-review-card crisp-pulse-review-workspace' });
+    card.createEl('h2', { text: '知识复盘与报告' });
+    card.createEl('p', { cls: 'crisp-pulse-review-note', text: '先看发生了什么，再把证据、洞见和下一步写下来。报告包含整个区间，目录筛选只用于查看笔记。' });
+    const periodControls = card.createDiv({ cls: 'crisp-pulse-review-controls' });
+    const applyPeriod = (a, b) => {
+      try {
+        getReviewPeriod(a, b);
+        this.reviewStart = a; this.reviewEnd = b;
+        this.reviewRangeInputs = { start: a, end: b };
+        this.reviewFileLimit = 20;
+        this.render();
+      } catch (error) { new Notice(error.message); }
+    };
+    const pending = this.reviewRangeInputs || { start, end };
+    for (const [field, label] of [['start', '开始日期'], ['end', '结束日期']]) {
+      const wrap = periodControls.createEl('label', { text: label });
+      const input = wrap.createEl('input', { type: 'date' });
+      input.value = pending[field]; input.max = getTodayKey(); input.setAttr('aria-label', label);
+      input.dataset.reviewField = `period-${field}`;
+      input.addEventListener('input', () => { this.reviewRangeInputs = { ...(this.reviewRangeInputs || { start, end }), [field]: input.value }; });
+    }
+    const apply = periodControls.createEl('button', { cls: 'crisp-pulse-tab-btn', text: '应用日期' });
+    apply.addEventListener('click', () => { const range = this.reviewRangeInputs || { start, end }; applyPeriod(range.start, range.end); });
+    const quick = card.createDiv({ cls: 'crisp-pulse-review-controls' });
+    for (const days of [7, 30, 90]) {
+      const button = quick.createEl('button', { cls: 'crisp-pulse-tab-btn', text: `最近 ${days} 天` });
+      button.addEventListener('click', () => applyPeriod(reviewDayKey(reviewDayNumber(getTodayKey()) - days + 1), getTodayKey()));
+    }
+    const previous = quick.createEl('button', { cls: 'crisp-pulse-tab-btn', text: '前一个周期' });
+    previous.addEventListener('click', () => applyPeriod(model.period.previousStart, model.period.previousEnd));
+    const next = quick.createEl('button', { cls: 'crisp-pulse-tab-btn', text: '后一个周期' });
+    const nextEnd = reviewDayKey(reviewDayNumber(end) + model.period.days);
+    next.disabled = nextEnd > getTodayKey();
+    next.addEventListener('click', () => applyPeriod(reviewDayKey(reviewDayNumber(end) + 1), nextEnd));
+    card.createEl('p', { cls: 'crisp-pulse-review-note', text: `${start} — ${end} · ${REVIEW_SCOPE_LABELS[this.currentScope]} · 纳入 ${model.current.coverage.recorded}/${model.period.days} 天，未记录 ${model.current.coverage.missing} 天，筛除 ${model.current.coverage.filtered} 天。未记录不等于零。` });
 
-    const card = parent.createDiv({ cls: "crisp-pulse-review-card" });
+    const comparison = card.createDiv({ cls: 'crisp-pulse-review-section' });
+    comparison.createEl('h3', { text: '前后周期对比' });
+    comparison.createEl('p', { cls: 'crisp-pulse-review-note', text: `前期 ${model.period.previousStart} — ${model.period.previousEnd}，纳入 ${model.previous.coverage.recorded}/${model.period.days} 天。覆盖不足时，变化只代表已纳入记录；贡献分不代表知识质量。` });
+    const stats = comparison.createDiv({ cls: 'crisp-pulse-review-comparison' });
+    for (const row of model.comparison) {
+      const box = stats.createDiv({ cls: 'crisp-pulse-stat-box' });
+      box.createDiv({ cls: 'crisp-pulse-stat-label', text: row.label });
+      box.createDiv({ cls: 'crisp-pulse-stat-value', text: `${formatPulseMinutes(row.current)} ${row.unit}` });
+      box.createDiv({ cls: 'crisp-pulse-review-note', text: `前期 ${formatPulseMinutes(row.previous)} ${row.unit} · ${row.changeLabel}` });
+    }
+    this.renderReviewSources(card, model);
+    this.renderReviewDrilldown(card, model.current);
+    this.renderReviewActions(card, model);
+    this.renderReviewEvidence(card, model);
+    this.renderReviewDraft(card, model);
+  }
 
-    const header = card.createDiv({ cls: "crisp-pulse-review-header" });
-    header.createDiv({ cls: "crisp-pulse-review-title", text: `🗓️ 本周工作复盘 (${dateKey(startWeek)} ~ ${dateKey(today)})` });
+  renderReviewDrilldown(parent, review) {
+    const section = parent.createDiv({ cls: 'crisp-pulse-review-section' });
+    section.createEl('h3', { text: '目录与笔记钻取' });
+    section.createEl('p', { cls: 'crisp-pulse-review-note', text: '按文件记录查看新增、改写估算与任务。记录天数表示文件在多少天出现过，不代表编辑次数；历史路径随重命名更新。' });
+    const controls = section.createDiv({ cls: 'crisp-pulse-review-controls' });
+    const folders = new Set();
+    for (const file of review.allFiles) {
+      const parts = file.path.split('/');
+      if (parts.length === 1) folders.add('(根目录)');
+      for (let i = 1; i < parts.length; i++) folders.add(parts.slice(0, i).join('/'));
+    }
+    const folder = controls.createEl('select', { cls: 'crisp-pulse-scope-select' });
+    folder.setAttr('aria-label', '复盘目录');
+    folder.createEl('option', { text: '全部目录', value: '' });
+    for (const path of [...folders].sort()) folder.createEl('option', { text: path, value: path });
+    if (this.reviewFolder && !folders.has(this.reviewFolder)) this.reviewFolder = '';
+    folder.value = this.reviewFolder || '';
+    folder.addEventListener('change', () => { this.reviewFolder = folder.value; this.reviewFileLimit = 20; this.render(); });
+    const sort = controls.createEl('select', { cls: 'crisp-pulse-scope-select' });
+    sort.setAttr('aria-label', '笔记排序');
+    for (const [key, label] of [['words', '按新增词数'], ['rewrittenWords', '按改写估算'], ['tasks', '按完成任务'], ['days', '按记录天数']]) sort.createEl('option', { text: label, value: key });
+    sort.value = this.reviewSort || 'words';
+    sort.addEventListener('change', () => { this.reviewSort = sort.value; this.reviewFileLimit = 20; this.render(); });
+    const drill = getReviewDrilldown(review, folder.value, sort.value);
+    section.createDiv({ cls: 'crisp-pulse-review-note', text: `${drill.files.length} 篇笔记 · 新增 ${formatPulseMinutes(drill.words)} 词 · 改写估算 ${formatPulseMinutes(drill.rewrittenWords)} 词 · ${formatPulseMinutes(drill.tasks)} 项任务` });
+    const list = section.createDiv({ cls: 'crisp-pulse-review-files' });
+    const limit = this.reviewFileLimit || 20;
+    for (const file of drill.files.slice(0, limit)) {
+      const button = list.createEl('button', { cls: 'crisp-pulse-review-file' });
+      button.createSpan({ text: file.path, cls: 'crisp-pulse-review-path' });
+      button.createSpan({ text: `新增 ${formatPulseMinutes(file.words)} · 改写 ${formatPulseMinutes(file.rewrittenWords)} · 任务 ${formatPulseMinutes(file.tasks)} · ${file.days} 天`, cls: 'crisp-pulse-review-note' });
+      button.addEventListener('click', () => {
+        const target = this.app.vault.getAbstractFileByPath(file.path);
+        if (target instanceof TFile) this.app.workspace.getLeaf('tab').openFile(target);
+        else new Notice('该笔记已不存在，统计记录仍保留。');
+      });
+    }
+    if (!drill.files.length) list.createDiv({ cls: 'crisp-pulse-review-note', text: '这个区间和筛选范围没有文件记录。' });
+    if (drill.files.length > limit) {
+      const more = section.createEl('button', { cls: 'crisp-pulse-tab-btn', text: `再显示 20 篇（已显示 ${limit}/${drill.files.length}）` });
+      more.setAttr('aria-label', '显示更多复盘笔记');
+      more.addEventListener('click', () => { this.reviewFileLimit = limit + 20; this.render(); });
+    }
+  }
 
-    const actions = header.createDiv({ cls: "crisp-pulse-actions" });
+  renderReviewSources(parent, model) {
+    const section = parent.createDiv({ cls: 'crisp-pulse-review-section' });
+    section.createEl('h3', { text: '新增词数来源' });
+    section.createEl('p', { cls: 'crisp-pulse-review-note', text: '系统目录按路径识别；大段捕获为估算，其他新增来源未确认。历史记录保持未分类，无法据此区分人工与 AI 写作。' });
+    const grid = section.createDiv({ cls: 'crisp-pulse-review-sources' });
+    for (const [key, label] of Object.entries(REVIEW_SOURCE_LABELS)) {
+      const box = grid.createDiv({ cls: 'crisp-pulse-stat-box' });
+      box.createDiv({ cls: 'crisp-pulse-stat-label', text: label });
+      box.createDiv({ cls: 'crisp-pulse-stat-value', text: `${formatPulseMinutes(model.current.sourceWords[key])} 词` });
+    }
+    const row = section.createDiv({ cls: 'crisp-pulse-review-controls' });
+    const toggle = row.createEl('button', { cls: 'crisp-pulse-tab-btn', text: this.plugin.settings.excludeSystemArtifacts ? '系统产物已排除' : '排除后续系统产物' });
+    toggle.setAttr('aria-pressed', String(!!this.plugin.settings.excludeSystemArtifacts));
+    toggle.addEventListener('click', async () => {
+      toggle.disabled = true;
+      try { await this.plugin.setSystemArtifactsExcluded(!this.plugin.settings.excludeSystemArtifacts);this.render(); }
+      catch (error) { new Notice(`设置未保存：${error.message}`);toggle.disabled = false; }
+    });
+    row.createSpan({ cls: 'crisp-pulse-review-note', text: '仅作用于 Sidecar/logs、Sidecar/backups、Sidecar/manifests。历史保留，现有目录黑白名单继续生效。' });
+  }
 
+  renderReviewActions(parent, model) {
+    const section = parent.createDiv({ cls: 'crisp-pulse-review-section' });
+    section.createEl('h3', { text: '跨期行动' });
+    section.createEl('p', { cls: 'crisp-pulse-review-note', text: '跟进上一期的承诺，记录状态与实际交付。导入只读取同一数据范围的前一个等长周期，不修改上一期记录。' });
+    const args = [model.period.start, model.period.end, model.scope];
+    const controls = section.createDiv({ cls: 'crisp-pulse-review-controls' });
+    const inherit = controls.createEl('button', { cls: 'crisp-pulse-tab-btn', text: '带入上一期未完成行动' });
+    inherit.addEventListener('click', () => {
+      const count = this.plugin.importPreviousActions(...args);new Notice(count ? `已带入 ${count} 项行动。` : '没有新的未完成行动可带入。');this.render();
+    });
+    const title = controls.createEl('input', { type: 'text', placeholder: '新增一项可执行的行动' });
+    title.maxLength = 500;title.setAttr('aria-label', '新行动');title.dataset.reviewField = 'new-action';const newActionKey = getReviewDraftKey(...args);this.reviewNewActions ||= {};title.value = this.reviewNewActions[newActionKey] || '';
+    this.trackReviewComposition(title);
+    title.addEventListener('input', () => { this.reviewNewActions[newActionKey] = title.value; });
+    const add = controls.createEl('button', { cls: 'crisp-pulse-tab-btn', text: '添加行动' });
+    const submit = () => {
+      try { this.plugin.addReviewAction(...args, title.value);delete this.reviewNewActions[newActionKey];this.render(); }
+      catch (error) { new Notice(error.message); }
+    };
+    add.addEventListener('click', submit);title.addEventListener('keydown', event => { if (event.key === 'Enter' && !event.isComposing) { event.preventDefault();submit(); } });
+    const list = section.createDiv({ cls: 'crisp-pulse-review-action-list' });
+    if (!model.actions.length) list.createDiv({ cls: 'crisp-pulse-review-note', text: '还没有行动。可以新增，或将上一期“下一步行动”逐行带入。' });
+    for (const action of model.actions) {
+      const item = list.createDiv({ cls: 'crisp-pulse-review-action' });
+      const row = item.createDiv({ cls: 'crisp-pulse-review-controls' });
+      const input = row.createEl('input', { type: 'text' });input.value = action.title;input.maxLength = Math.max(500, action.title.length);
+      input.dataset.reviewField = `action-${action.id}`;input.setAttr('aria-label', '行动内容');this.trackReviewComposition(input);
+      input.addEventListener('input', () => {
+        try { this.plugin.updateReviewAction(...args, action.id, { title: input.value }); }
+        catch (error) { new Notice(error.message); }
+      });
+      const state = row.createEl('select', { cls: 'crisp-pulse-scope-select' });state.setAttr('aria-label', `行动状态 ${action.id}`);
+      for (const [key, label] of Object.entries(REVIEW_ACTION_STATES)) state.createEl('option', { value: key, text: label });
+      state.value = action.status;
+      state.addEventListener('change', () => { this.plugin.updateReviewAction(...args, action.id, { status: state.value }); });
+      if (action.sourcePeriod) item.createDiv({ cls: 'crisp-pulse-review-note', text: `继承自 ${action.sourcePeriod.split(':').slice(0, 2).join(' — ')}` });
+      const outcome = item.createDiv({ cls: 'crisp-pulse-review-controls' });
+      const path = outcome.createEl('input', { type: 'text', placeholder: '结果笔记完整路径，例如 Topics/项目/交付.md' });
+      path.setAttr('aria-label', `结果笔记 ${action.id}`);path.dataset.reviewField = `outcome-${action.id}`;
+      this.reviewOutcomeInputs ||= {};path.value = this.reviewOutcomeInputs[action.id] ?? action.outcomePath ?? '';
+      this.trackReviewComposition(path);path.addEventListener('input', () => { this.reviewOutcomeInputs[action.id] = path.value; });
+      const link = outcome.createEl('button', { cls: 'crisp-pulse-tab-btn', text: '关联结果' });
+      link.setAttr('aria-label', `关联结果 ${action.id}`);
+      link.addEventListener('click', () => {
+        try { this.plugin.updateReviewAction(...args, action.id, { outcomePath: path.value.trim() });delete this.reviewOutcomeInputs[action.id];new Notice(path.value.trim() ? '结果笔记已关联。' : '结果关联已清除。');this.render(); }
+        catch (error) { new Notice(error.message); }
+      });
+      if (action.outcomePath) {
+        const open = outcome.createEl('button', { cls: 'crisp-pulse-tab-btn', text: '打开结果笔记' });
+        open.addEventListener('click', () => this.openReviewNote(action.outcomePath));
+      }
+    }
+  }
+
+  trackReviewComposition(input) {
+    input.addEventListener('compositionstart', () => { this.reviewComposing = true; });
+    input.addEventListener('compositionend', () => { this.reviewComposing = false; });
+  }
+
+  openReviewNote(path) {
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (file instanceof TFile) this.app.workspace.getLeaf('tab').openFile(file);
+    else new Notice('原笔记已不存在，保留的证据摘录仍可查阅。');
+  }
+
+  renderReviewEvidence(parent, model) {
+    const section = parent.createDiv({ cls: 'crisp-pulse-review-section' });
+    section.createEl('h3', { text: '洞见证据' });
+    section.createEl('p', { cls: 'crisp-pulse-review-note', text: '从本期笔记中关联来源，可保留原文摘录。摘录保存后不会随原文修改，仍可追溯采集时间和原始路径。' });
+    const add = section.createEl('button', { cls: 'crisp-pulse-tab-btn', text: '从本期笔记添加证据' });
+    add.disabled = !model.current.allFiles.length;
+    add.addEventListener('click', () => new CrispPulseEvidenceModal(this.app, this.plugin, model, () => this.render()).open());
+    const list = section.createDiv({ cls: 'crisp-pulse-review-evidence-list' });
+    if (!model.evidence.length) list.createDiv({ cls: 'crisp-pulse-review-note', text: '尚未关联证据。保存后的报告会包含来源链接与摘录。' });
+    for (const evidence of model.evidence) {
+      const item = list.createDiv({ cls: 'crisp-pulse-review-evidence' });
+      const controls = item.createDiv({ cls: 'crisp-pulse-review-controls' });
+      const open = controls.createEl('button', { cls: 'crisp-pulse-tab-btn crisp-pulse-review-evidence-link', text: evidence.path });
+      open.addEventListener('click', () => this.openReviewNote(evidence.path));
+      const remove = controls.createEl('button', { cls: 'crisp-pulse-tab-btn', text: '移除引用' });
+      remove.setAttr('aria-label', `移除引用 ${evidence.id}`);
+      remove.addEventListener('click', () => { this.plugin.removeReviewEvidence(model.period.start, model.period.end, model.scope, evidence.id);this.render(); });
+      item.createDiv({ cls: 'crisp-pulse-review-note', text: `摘录于 ${evidence.capturedAt?.slice(0, 10) || '未知日期'}${evidence.originalPath !== evidence.path ? ` · 原路径 ${evidence.originalPath}` : ''}` });
+      if (evidence.quote) item.createEl('blockquote', { text: evidence.quote, cls: 'crisp-pulse-review-quote' });
+    }
+  }
+
+  renderReviewDraft(parent, model) {
+    const section = parent.createDiv({ cls: 'crisp-pulse-review-section' });
+    section.createEl('h3', { text: '复盘报告' });
+    section.createEl('p', { cls: 'crisp-pulse-review-note', text: '草稿按日期区间和数据范围分别保存。后台定期保存，也可点击立即保存；复制和归档会包含最新输入。' });
+    const fields = section.createDiv({ cls: 'crisp-pulse-review-drafts' });
+    for (const [key, label] of Object.entries(REVIEW_DRAFT_FIELDS)) {
+      const wrap = fields.createEl('label', { text: label });
+      const input = wrap.createEl('textarea');
+      input.value = model.draft[key]; input.rows = 4;
+      input.setAttr('aria-label', label); input.dataset.reviewField = key;
+      input.placeholder = { progress: '完成了什么？对应哪些笔记或交付？', learning: '哪些认识发生了变化？保留原始证据链接。', blockers: '还有什么未解决、需要验证？', next: '写下下一步可执行的动作。' }[key];
+      input.addEventListener('compositionstart', () => { this.reviewComposing = true; });
+      input.addEventListener('compositionend', () => { this.reviewComposing = false; });
+      input.addEventListener('input', () => this.plugin.updateReviewDraft(model.period.start, model.period.end, model.scope, key, input.value));
+    }
+    const actions = section.createDiv({ cls: 'crisp-pulse-review-controls' });
+    const status = section.createDiv({ cls: 'crisp-pulse-review-note' });
+    status.setAttr('role', 'status');
+    const fresh = () => this.plugin.getReviewModel(model.period.start, model.period.end, model.scope);
+    const save = actions.createEl('button', { cls: 'crisp-pulse-tab-btn', text: '立即保存草稿' });
+    save.addEventListener('click', async () => {
+      save.disabled = true;
+      const result = await this.plugin.savePluginData();
+      save.disabled = false; status.setText(result.success ? '草稿已保存到本地。' : '保存失败，草稿仍在内存中，请重试。');
+    });
+    const copy = actions.createEl('button', { cls: 'crisp-pulse-tab-btn', text: '复制 Markdown 报告' });
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(generateReviewReport(fresh())); status.setText('报告已复制。'); }
+      catch (error) { status.setText('复制失败，请检查剪贴板权限后重试。'); }
+    });
+    const archive = actions.createEl('button', { cls: 'crisp-pulse-tab-btn is-active', text: '归档至知识库' });
+    archive.addEventListener('click', async () => {
+      archive.disabled = true;
+      try {
+        const result = await this.plugin.archiveReviewReport(fresh());
+        status.setText(result.success ? `已归档：${result.path}` : result.reason === 'exists' ? '同区间、同范围报告已存在，原文已保留。' : '归档失败，请检查目录或控制台后重试。');
+      } catch (error) { status.setText(`归档失败：${error.message}`); }
+      finally { archive.disabled = false; }
+    });
     if (this.plugin.focusAdapter?.isAvailable()) {
-      const focusBtn = actions.createEl("button", {
-        cls: "crisp-pulse-tab-btn",
-        text: "🎯 开启 25m 专注"
-      });
-      focusBtn.addEventListener("click", async () => {
-        await this.plugin.focusAdapter.startFocusSession(25);
-      });
-    }
-
-    const copyBtn = actions.createEl("button", {
-      cls: "crisp-pulse-tab-btn",
-      text: "📋 复制 Markdown 周报"
-    });
-    copyBtn.addEventListener("click", () => {
-      const md = generateWeeklyMarkdown(reviewData, `知识工作周报 (${dateKey(startWeek)} ~ ${dateKey(today)})`);
-      navigator.clipboard.writeText(md).then(() => {
-        new Notice("已成功复制本周工作复盘周报！");
-      });
-    });
-
-    const archiveBtn = actions.createEl("button", {
-      cls: "crisp-pulse-tab-btn is-active",
-      text: "📁 归档至知识库"
-    });
-    archiveBtn.addEventListener("click", async () => {
-      archiveBtn.setDisabled(true);
-      archiveBtn.setText("正在归档...");
-      await this.plugin.archiveWeeklyReviewToVault(reviewData, dateKey(startWeek), dateKey(today));
-      archiveBtn.setDisabled(false);
-      archiveBtn.setText("📁 归档至知识库");
-    });
-
-    // Summary Matrix
-    const statsGrid = card.createDiv({ cls: "crisp-pulse-stats-grid" });
-    const items = [
-      { label: "本周总得分", val: `${reviewData.totalScore} 分` },
-      { label: "新建笔记", val: `${reviewData.notesCreated} 篇` },
-      { label: "沉淀文字量", val: `+${reviewData.wordsAdded} 词` },
-      { label: "深度改写润色", val: `+${reviewData.rewrittenWords} 词` },
-      { label: "完成关键任务", val: `${reviewData.tasksCompleted} 项` },
-      { label: "交互活跃时长", val: `${reviewData.activeHours} 小时` }
-    ];
-
-    if (reviewData.focusHours && Number(reviewData.focusHours) > 0) {
-      items.push({ label: "深度专注时长", val: `${reviewData.focusHours} 小时` });
-    }
-    for (const it of items) {
-      const box = statsGrid.createDiv({ cls: "crisp-pulse-stat-box" });
-      box.createDiv({ cls: "crisp-pulse-stat-label", text: it.label });
-      box.createDiv({ cls: "crisp-pulse-stat-value", text: it.val });
-    }
-
-    // Directory Distribution Bar
-    const distWrap = card.createDiv({ cls: "crisp-pulse-distribution-bar-wrap" });
-    distWrap.createDiv({ cls: "crisp-pulse-file-list-title", text: "🗂️ 核心知识目录精力分布" });
-
-    if (reviewData.dirBreakdown.length === 0) {
-      distWrap.createDiv({ cls: "crisp-pulse-empty-files", text: "本周尚无文件变动记录。" });
-    } else {
-      const bar = distWrap.createDiv({ cls: "crisp-pulse-distribution-bar" });
-      const palette = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#64748b"];
-
-      reviewData.dirBreakdown.forEach((item, idx) => {
-        const seg = bar.createDiv({ cls: "crisp-pulse-bar-segment" });
-        seg.style.width = `${item.percent}%`;
-        seg.style.backgroundColor = palette[idx % palette.length];
-      });
-
-      const legend = distWrap.createDiv({ cls: "crisp-pulse-distribution-legend" });
-      reviewData.dirBreakdown.forEach((item, idx) => {
-        const legItem = legend.createDiv({ cls: "crisp-pulse-dist-item" });
-        const dot = legItem.createDiv({ cls: "crisp-pulse-dist-dot" });
-        dot.style.backgroundColor = palette[idx % palette.length];
-        legItem.createSpan({ text: `${item.dir}: ${item.percent}% (${item.count}次变动)` });
-      });
-    }
-
-    // 1.3.0 ANKS Knowledge Stream Insight Card
-    const coreItem = (reviewData.dirBreakdown || []).find(d => d.dir === "Core");
-    const topicsItem = (reviewData.dirBreakdown || []).find(d => d.dir === "Topics");
-    const corePct = coreItem ? coreItem.percent : 0;
-    const topicsPct = topicsItem ? topicsItem.percent : 0;
-
-    let insightText = "";
-    if (topicsPct >= 60) {
-      insightText = `💡 知识沉淀建议：本周精力高度集中于业务实践（Topics 占比 ${topicsPct}%）。复盘时可筛选已有初步验证的高频经验与方法，提炼沉淀至 Core 基础知识体系。`;
-    } else if (corePct >= 40) {
-      insightText = `💡 底层体系反馈：本周深度投入了底层核心体系建设（Core 占比 ${corePct}%），基础沉淀扎实。后续可结合业务课题在 Topics 中落地转化。`;
-    } else {
-      insightText = `💡 知识流向反馈：本周底层知识架构与业务实践节奏均衡（Core ${corePct}% / Topics ${topicsPct}%），知识流向畅通。`;
-    }
-
-    const insightCard = card.createDiv({ cls: "crisp-pulse-anks-insight" });
-    insightCard.createDiv({ cls: "crisp-pulse-anks-insight-text", text: insightText });
-
-    // Top 5 Deeply Focused Files
-    const topWrap = card.createDiv({ cls: "crisp-pulse-file-list-wrap" });
-    topWrap.createDiv({ cls: "crisp-pulse-file-list-title", text: "📝 本周深度推进笔记 Top 5" });
-
-    const topList = topWrap.createDiv({ cls: "crisp-pulse-topfiles-list" });
-    if (reviewData.topFiles.length === 0) {
-      topList.createDiv({ cls: "crisp-pulse-empty-files", text: "本周尚无笔记改动。" });
-    } else {
-      reviewData.topFiles.forEach((file, index) => {
-        const item = topList.createEl("button", { cls: "crisp-pulse-topfile-item" });
-        item.setAttr("title", file.path);
-        item.type = "button";
-
-        const left = item.createSpan();
-        left.createSpan({ text: `${index + 1}. `, cls: "crisp-pulse-kpi-sub" });
-        left.createSpan({ text: file.path, cls: "crisp-pulse-file-name" });
-
-        const right = item.createSpan({ cls: "crisp-pulse-file-meta" });
-        const tags = [];
-        if (file.created) tags.push("新建");
-        if (file.words > 0) tags.push(`+${file.words}词`);
-        if (file.tasks > 0) tags.push(`${file.tasks}任务`);
-        right.textContent = tags.join(" · ") || "已编辑";
-
-        item.addEventListener("click", () => {
-          const f = this.app.vault.getAbstractFileByPath(file.path);
-          if (f instanceof TFile) {
-            this.app.workspace.openLinkText(file.path, "");
-          } else {
-            new Notice(`无法打开：文件 "${file.path}" 已不存在。`);
-          }
-        });
-      });
+      const focus = actions.createEl('button', { cls: 'crisp-pulse-tab-btn', text: '开启 25 分钟专注' });
+      focus.addEventListener('click', () => this.plugin.focusAdapter.startFocusSession(25));
     }
   }
 
@@ -3075,6 +3466,59 @@ class CrispPulseView extends ItemView {
 /* ==========================================================================
    Settings Tab (v1.3.0)
    ========================================================================== */
+
+class CrispPulseEvidenceModal extends Modal {
+  constructor(app, plugin, model, onAdded) { super(app);this.plugin = plugin;this.model = model;this.onAdded = onAdded;this.readVersion = 0; }
+  onOpen() {
+    const root = this.contentEl;root.empty();root.addClass('crisp-pulse-evidence-modal');
+    root.createEl('h2', { text: '关联洞见证据' });
+    root.createEl('p', { text: '搜索本期笔记。选中原文可添加摘录，也可只保留来源链接。', cls: 'crisp-pulse-review-note' });
+    const search = root.createEl('input', { type: 'search', placeholder: '按笔记路径搜索' });search.setAttr('aria-label', '搜索证据笔记');
+    const choices = root.createDiv({ cls: 'crisp-pulse-evidence-choices' });
+    const chosen = root.createDiv({ cls: 'crisp-pulse-review-note', text: '尚未选择笔记' });
+    const preview = root.createEl('textarea');preview.readOnly = true;preview.rows = 7;preview.setAttr('aria-label', '证据原文预览');
+    const quote = root.createEl('textarea');quote.rows = 3;quote.maxLength = 2000;quote.placeholder = '原文摘录（可留空，最多 2000 字）';quote.setAttr('aria-label', '保留的原文摘录');
+    const status = root.createDiv({ cls: 'crisp-pulse-review-note' });status.setAttr('role', 'status');
+    const actions = root.createDiv({ cls: 'crisp-pulse-review-controls' });
+    const use = actions.createEl('button', { text: '使用选中文本' });
+    use.addEventListener('click', () => {
+      const selected = preview.value.slice(preview.selectionStart, preview.selectionEnd);
+      if (!selected) { status.setText('请先在原文预览中选择文字。');return; }
+      if (selected.length > 2000) { status.setText('选中文字超过 2000 字，请缩小范围。');return; }
+      quote.value = selected;status.setText('已填入选中的原文。');
+    });
+    const save = actions.createEl('button', { text: '保存证据' });save.disabled = true;
+    const select = async path => {
+      const token = ++this.readVersion;this.selectedPath = null;save.disabled = true;preview.value = '';quote.value = '';chosen.setText(`读取：${path}`);
+      try {
+        const file = this.app.vault.getAbstractFileByPath(path);if (!file || file.extension !== 'md') throw new Error('原笔记已不存在。');
+        const content = await this.app.vault.read(file);if (token !== this.readVersion) return;
+        this.selectedPath = file.path;preview.value = content.slice(0, 12000);chosen.setText(file.path);save.disabled = false;
+        status.setText(content.length > 12000 ? '预览前 12000 字；保存时会核对完整原文。' : '可选择原文，或直接保存来源链接。');
+      } catch (error) { if (token === this.readVersion) { chosen.setText(path);status.setText(error.message); } }
+    };
+    const renderChoices = () => {
+      choices.empty();const query = search.value.trim().toLocaleLowerCase();
+      const files = this.model.current.allFiles.filter(file => file.path.toLocaleLowerCase().includes(query));
+      for (const file of files.slice(0, 20)) { const button = choices.createEl('button', { text: file.path });button.addEventListener('click', () => select(file.path)); }
+      if (files.length > 20) choices.createDiv({ cls: 'crisp-pulse-review-note', text: `匹配 ${files.length} 篇，仅显示前 20 篇，请继续缩小搜索。` });
+      if (!files.length) choices.createDiv({ cls: 'crisp-pulse-review-note', text: '没有匹配的本期笔记。' });
+    };
+    search.addEventListener('input', renderChoices);renderChoices();
+    save.addEventListener('click', async () => {
+      if (!this.selectedPath) return;save.disabled = true;
+      try {
+        const added = await this.plugin.addReviewEvidence(this.model.period.start, this.model.period.end, this.model.scope, this.selectedPath, quote.value);
+        const result = await this.plugin.savePluginData();
+        if (!result.success) { status.setText('证据已保留在内存，但保存失败，请重试。');return; }
+        this.onAdded();this.close();new Notice(added ? '证据已关联。' : '相同证据已存在。');
+      } catch (error) { status.setText(error.message); }
+      finally { save.disabled = !this.selectedPath; }
+    });
+    search.focus();
+  }
+  onClose() { this.readVersion++;this.contentEl.empty(); }
+}
 
 class CrispPulseSettingTab extends PluginSettingTab {
   constructor(app, plugin) {
@@ -3252,6 +3696,14 @@ class CrispPulseSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           })
       );
+
+    new Setting(containerEl)
+      .setName("排除后续系统产物")
+      .setDesc("排除 Sidecar/logs、Sidecar/backups、Sidecar/manifests 的后续文件采集；不改历史记录和目录黑白名单。")
+      .addToggle(toggle => toggle.setValue(!!this.plugin.settings.excludeSystemArtifacts).onChange(async value => {
+        try { await this.plugin.setSystemArtifactsExcluded(value); }
+        catch (error) { new Notice(`设置未保存：${error.message}`);this.display(); }
+      }));
 
     // 3. Basic Settings
     containerEl.createEl("h3", { text: "常规偏好" });
@@ -3552,3 +4004,8 @@ module.exports.renderAboutCard = renderAboutCard;
 module.exports.ICON_COMPUTER_SVG = ICON_COMPUTER_SVG;
 module.exports.ICON_BLOCKS_WAVE_SVG = ICON_BLOCKS_WAVE_SVG;
 
+
+module.exports.getReviewDrilldown = getReviewDrilldown;
+module.exports.generateReviewReport = generateReviewReport;
+
+module.exports.CrispPulseEvidenceModal = CrispPulseEvidenceModal;

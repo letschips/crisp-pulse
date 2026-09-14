@@ -1078,3 +1078,220 @@ test('idle persistence refreshes the displayed daily aggregates',async()=>{
  const {p}=setup();await p.loadPluginData();p.dirty=true;p.getOrCreateTodayRecord().contribution.wordsAdded=42;let displayed=null;
  p.refreshViews=()=>{displayed=p.store.daily['2026-09-08'].contribution.wordsAdded;};await p.checkIdleSessions();assert.equal(displayed,42);
 });
+
+test('empty review does not claim balanced knowledge work or proven knowledge quality', () => {
+ const {helpers}=setup();const review=helpers.generateReviewData({});
+ const md=helpers.generateAnksWeeklyReviewFileContent(review);
+ assert.ok(!md.includes('节奏均衡'));assert.ok(md.includes('没有文件记录'));
+});
+
+test('review drilldown retains all files including rewrite-only notes and separates path boundaries', async () => {
+ const {p,helpers}=setup();await p.loadPluginData();const r=helpers.createEmptyDailyRecord('2026-09-08');
+ for(let i=0;i<7;i++)r.files[`Topics/a/${i}.md`]={wordsAdded:100-i,tasks:0};
+ r.files['Topics/ab/other.md']={wordsAdded:500};r.files['Topics/a/rewrite.md']={wordsAdded:0,rewrittenWords:800,tasks:2};
+ p.store.daily[r.date]=r;const before=JSON.stringify(p.store.daily);const review=p.getReviewData(r.date,r.date);
+ assert.equal(review.allFiles.length,9);
+ const drill=p.constructor.getReviewDrilldown(review,'Topics/a','rewrittenWords');
+ assert.equal(drill.files.length,8);assert.equal(drill.files[0].path,'Topics/a/rewrite.md');
+ assert.equal(drill.files[0].rewrittenWords,800);assert.equal(JSON.stringify(p.store.daily),before);
+});
+
+test('comparison uses adjacent equal calendar periods and preserves missing versus zero baseline', async () => {
+ const {p,helpers}=setup();await p.loadPluginData();
+ let model=p.getReviewModel('2026-09-02','2026-09-08','all');
+ assert.equal(model.period.days,7);assert.equal(model.period.previousStart,'2026-08-26');assert.equal(model.period.previousEnd,'2026-09-01');
+ assert.equal(model.comparison[0].percent,null);assert.equal(model.current.coverage.recorded,0);
+ for(const date of ['2026-09-01','2026-09-08'])p.store.daily[date]=helpers.createEmptyDailyRecord(date);
+ p.store.daily['2026-09-08'].contribution.score=10;
+ model=p.getReviewModel('2026-09-02','2026-09-08','all');
+ assert.equal(model.comparison[0].percent,null);assert.equal(model.comparison[0].changeLabel,'前期为零');
+ p.store.daily['2026-09-01'].contribution.score=5;
+ assert.equal(p.getReviewModel('2026-09-02','2026-09-08','all').comparison[0].percent,100);
+});
+
+test('review range rejects invalid, reversed, future and oversized ranges', async () => {
+ const {p}=setup();await p.loadPluginData();
+ for(const [a,b] of [['2026-02-31','2026-09-08'],['2026-09-08','2026-09-01'],['2026-09-01','2026-09-09'],['2020-01-01','2026-09-08']])assert.throws(()=>p.getReviewModel(a,b,'all'));
+ assert.equal(p.getReviewModel('2024-02-28','2024-03-01','all').period.days,3);
+});
+
+test('comparison scope consistently excludes legacy and estimated records with explicit coverage', async () => {
+ const {p,helpers}=setup();await p.loadPluginData();
+ const record=helpers.createEmptyDailyRecord('2026-09-08');record.contribution.score=10;
+ const prior=helpers.createEmptyDailyRecord('2026-09-01','estimated');prior.contribution.score=100;
+ p.store.daily={[record.date]:record,[prior.date]:prior};
+ const model=p.getReviewModel('2026-09-02','2026-09-08','reliable');
+ assert.equal(model.current.totalScore,10);assert.equal(model.previous.totalScore,0);
+ assert.equal(model.previous.coverage.filtered,1);assert.equal(model.previous.coverage.missing,6);
+ assert.equal(model.comparison[0].changeLabel,'前期无可用记录');
+});
+
+test('review drafts persist verbatim, stay isolated by period and scope and do not change scores', async () => {
+ const {p}=setup();await p.loadPluginData();const before=JSON.stringify(p.store.daily);
+ p.updateReviewDraft('2026-09-02','2026-09-08','all','learning','发现 A\n[[Notes/B]]');
+ await p.savePluginData();assert.equal(p.persisted.reviewDrafts['2026-09-02:2026-09-08:all'].learning,'发现 A\n[[Notes/B]]');
+ assert.equal(p.getReviewModel('2026-09-02','2026-09-08','reliable').draft.learning,'');
+ assert.equal(JSON.stringify(p.store.daily),before);
+ const report=p.constructor.generateReviewReport(p.getReviewModel('2026-09-02','2026-09-08','all'));
+ assert.ok(report.includes('发现 A\n[[Notes/B]]'));assert.ok(report.includes('2026-08-26'));assert.ok(report.includes('文件×日期'));
+ assert.ok(!report.includes('licenseCode'));
+});
+
+test('range report archive preserves existing files and embeds correct dates and draft', async () => {
+ const {p}=setup();await p.loadPluginData();const written=new Map();
+ p.app.vault.adapter.exists=async path=>written.has(path);
+ p.app.vault.create=async(path,content)=>{written.set(path,content);return {path};};
+ p.updateReviewDraft('2026-09-02','2026-09-08','all','next','复查证据');
+ const model=p.getReviewModel('2026-09-02','2026-09-08','all');
+ const result=await p.archiveReviewReport(model);assert.equal(result.success,true);
+ assert.ok(result.path.includes('2026-09-02_2026-09-08'));assert.ok(written.get(result.path).includes('复查证据'));
+ assert.ok(written.get(result.path).includes('topic: "self-media"'));
+ assert.equal((await p.archiveReviewReport(model)).reason,'exists');assert.equal(written.size,1);
+});
+
+test('review comparisons retain fractional focus minutes until display',async()=>{
+ const {p,helpers}=setup();await p.loadPluginData();
+ for(const [date,minutes] of [['2026-09-08',0.4],['2026-09-01',0.2]]){const r=helpers.createEmptyDailyRecord(date);r.activity.focusMinutes=minutes;p.store.daily[date]=r;}
+ const metric=p.getReviewModel('2026-09-02','2026-09-08','all').comparison.find(m=>m.key==='focusMinutes');
+ assert.equal(metric.current,0.4);assert.equal(metric.percent,100);
+});
+
+test('range reports keep quality scopes separate in filenames and reject escaping archive paths',async()=>{
+ const {p}=setup();await p.loadPluginData();const paths=[];
+ p.app.vault.create=async(path)=>{paths.push(path);return {path};};
+ for(const scope of ['all','reliable'])assert.equal((await p.archiveReviewReport(p.getReviewModel('2026-09-02','2026-09-08',scope))).success,true);
+ assert.equal(new Set(paths).size,2);p.settings.reviewArchiveFolder='../outside';
+ assert.equal((await p.archiveReviewReport(p.getReviewModel('2026-09-02','2026-09-08','all'))).reason,'invalid_path');assert.equal(paths.length,2);
+});
+
+test('period navigation and draft input are wired to the live review model', async()=>{
+ const {p,helpers}=setup();await p.loadPluginData();
+ function element(tag='div',options={}){
+  const el={tag,options,children:[],dataset:{},attrs:{},handlers:{},value:'',setAttr(k,v){this.attrs[k]=v;},addEventListener(k,v){this.handlers[k]=v;},setText(v){this.text=v;}};
+  el.createEl=(t,o={})=>{const child=element(t,o);el.children.push(child);return child;};
+  el.createDiv=o=>el.createEl('div',o);el.createSpan=o=>el.createEl('span',o);return el;
+ }
+ const all=e=>[e,...e.children.flatMap(all)];const view=new helpers.CrispPulseView({},p);view.app=p.app;let renders=0;view.render=()=>renders++;
+ let root=element();view.renderRetrospectivePanel(root);
+ const fields=all(root);const progress=fields.find(e=>e.dataset.reviewField==='progress');
+ progress.value='A verified finding';progress.handlers.input();
+ assert.equal(p.getReviewModel('2026-09-02','2026-09-08','reliable').draft.progress,'A verified finding');
+ progress.handlers.compositionstart();assert.equal(view.reviewComposing,true);progress.handlers.compositionend();assert.equal(view.reviewComposing,false);
+ fields.find(e=>e.options.text==='前一个周期').handlers.click();assert.equal(view.reviewStart,'2026-08-26');assert.equal(view.reviewEnd,'2026-09-01');assert.equal(renders,1);
+ root=element();view.renderRetrospectivePanel(root);assert.equal(all(root).find(e=>e.dataset.reviewField==='progress').value,'');
+ const input=all(root).find(e=>e.dataset.reviewField==='period-start');input.value='2026-08-20';input.handlers.input();all(root).find(e=>e.options.text==='应用日期').handlers.click();assert.equal(view.reviewStart,'2026-08-20');
+});
+
+// 1.7: source provenance, cross-period actions, cited review evidence.
+test('system artifact exclusions respect path boundaries and preserve the existing folder filters',async()=>{
+ const {p}=setup();await p.loadPluginData();
+ assert.equal(p.shouldTrackPath('Sidecar/logs/backup.md'),true);
+ p.settings.excludeSystemArtifacts=true;
+ for(const path of ['Sidecar/logs/backup.md','Sidecar/manifests/a.md','Sidecar/backups/a.md'])assert.equal(p.shouldTrackPath(path),false,path);
+ for(const path of ['Sidecar/logs-notes/a.md','Topics/Sidecar/logs/a.md','Sidecar/tools/guide.md'])assert.equal(p.shouldTrackPath(path),true,path);
+ p.settings.includedFolders=['Core'];assert.equal(p.shouldTrackPath('Topics/a.md'),false);
+});
+
+test('new source attribution does not relabel old words or infer human authorship',async()=>{
+ const {p,helpers}=setup();await p.loadPluginData();
+ const old=helpers.createEmptyDailyRecord('2026-09-07');old.contribution.wordsAdded=10;old.files['old.md']={wordsAdded:10};p.store.daily[old.date]=old;
+ await p.handleFileCreation({path:'Sidecar/logs/run.md',content:'one two three'});
+ await p.handleFileCreation({path:'capture.md',content:'word '.repeat(600)});
+ await p.handleFileCreation({path:'other.md',content:'one two'});
+ const sources=p.getReviewModel('2026-09-02','2026-09-08','all').current.sourceWords;
+ assert.equal(sources.system,3);assert.equal(sources.capture,600);assert.equal(sources.unattributed,2);assert.equal(sources.historical,10);
+ assert.equal(old.files['old.md'].sourceWords,undefined);
+});
+
+test('source attribution adds only newly observed words to a partially historical file',async()=>{
+ const {p,helpers}=setup();await p.loadPluginData();const file={path:'a.md',content:'one two three'};
+ const r=helpers.createEmptyDailyRecord('2026-09-08');r.files['a.md']={wordsAdded:10};r.contribution.wordsAdded=10;p.store.daily[r.date]=r;
+ p.fileSnapshots.set(file.path,{words:1,tasks:0,links:0,lastTime:0});await p.handleFileModification(file);
+ const source=p.getReviewModel(r.date,r.date,'all').current.sourceWords;assert.equal(source.historical,10);assert.equal(source.unattributed,2);
+});
+
+test('previous period actions import once, preserve history and keep source lineage across periods',async()=>{
+ const {p}=setup();await p.loadPluginData();
+ p.updateReviewDraft('2026-08-26','2026-09-01','all','next','- 核对证据\n- 完成报告');
+ assert.equal(p.importPreviousActions('2026-09-02','2026-09-08','all'),2);
+ assert.equal(p.importPreviousActions('2026-09-02','2026-09-08','all'),0);
+ let model=p.getReviewModel('2026-09-02','2026-09-08','all');assert.equal(model.actions.length,2);assert.equal(model.actions[0].status,'pending');
+ p.updateReviewAction('2026-09-02','2026-09-08','all',model.actions[0].id,{status:'done'});
+ assert.ok(p.getReviewModel('2026-08-26','2026-09-01','all').draft.next.includes('核对证据'));
+ assert.equal(p.importPreviousActions('2026-09-02','2026-09-08','reliable'),0);
+ p.addReviewAction('2026-08-26','2026-09-01','reliable','已完成');
+ const action=p.getReviewModel('2026-08-26','2026-09-01','reliable').actions[0];
+ p.updateReviewAction('2026-08-26','2026-09-01','reliable',action.id,{status:'done'});
+ assert.equal(p.importPreviousActions('2026-09-02','2026-09-08','reliable'),0);
+});
+
+test('action updates reject invalid states and report exports include action status',async()=>{
+ const {p}=setup();await p.loadPluginData();p.addReviewAction('2026-09-02','2026-09-08','all','验证改动');
+ const model=p.getReviewModel('2026-09-02','2026-09-08','all');
+ assert.throws(()=>p.updateReviewAction('2026-09-02','2026-09-08','all',model.actions[0].id,{status:'invented'}));
+ p.updateReviewAction('2026-09-02','2026-09-08','all',model.actions[0].id,{status:'deferred'});
+ const report=p.constructor.generateReviewReport(p.getReviewModel('2026-09-02','2026-09-08','all'));
+ assert.ok(report.includes('延期'));assert.ok(report.includes('验证改动'));
+});
+
+test('evidence stores an exact checked quote and rejects invented or out-of-period sources',async()=>{
+ const {p,helpers}=setup();await p.loadPluginData();const r=helpers.createEmptyDailyRecord('2026-09-08');r.files['Core/a.md']={wordsAdded:20};p.store.daily[r.date]=r;
+ const file={path:'Core/a.md',extension:'md',content:'原始证据\n真实的一段话'};p.app.vault.getAbstractFileByPath=path=>path===file.path?file:null;
+ await p.addReviewEvidence('2026-09-02','2026-09-08','all',file.path,'真实的一段话');
+ const model=p.getReviewModel('2026-09-02','2026-09-08','all');assert.equal(model.evidence[0].quote,'真实的一段话');
+ await assert.rejects(()=>p.addReviewEvidence('2026-09-02','2026-09-08','all',file.path,'编造引文'));
+ await assert.rejects(()=>p.addReviewEvidence('2026-08-26','2026-09-01','all',file.path,'原始证据'));
+ assert.equal(p.getReviewModel('2026-09-02','2026-09-08','all').evidence.length,1);
+ const report=p.constructor.generateReviewReport(model);assert.ok(report.includes('[[Core/a.md]]'));assert.ok(report.includes('> 真实的一段话'));
+});
+
+test('renaming a cited note keeps its original evidence path and updates the working link',async()=>{
+ const {p,helpers,handlers}=setup();await p.loadPluginData();p.registerVaultEvents();
+ const r=helpers.createEmptyDailyRecord('2026-09-08');r.files['Core/a.md']={wordsAdded:1};p.store.daily[r.date]=r;
+ const file={path:'Core/a.md',extension:'md',content:'证据'};p.app.vault.getAbstractFileByPath=()=>file;
+ await p.addReviewEvidence(r.date,r.date,'all',file.path,'证据');file.path='Core/b.md';handlers.rename(file,'Core/a.md');
+ const evidence=p.getReviewModel(r.date,r.date,'all').evidence[0];assert.equal(evidence.path,'Core/b.md');assert.equal(evidence.originalPath,'Core/a.md');assert.equal(evidence.quote,'证据');
+});
+
+test('system exclusion changes do not back-count skipped edits when re-enabled',async()=>{
+ const {p,helpers}=setup();await p.loadPluginData();const file={path:'Sidecar/logs/a.md',extension:'md',content:'one two',stat:{mtime:0}};
+ p.app.vault.getMarkdownFiles=()=>[file];p.fileSnapshots.set(file.path,{words:1,tasks:0,links:0,lastTime:0});
+ const before=JSON.stringify(p.store.daily);await p.setSystemArtifactsExcluded(true);file.content='one two three four';await p.handleFileModification(file);assert.equal(JSON.stringify(p.store.daily),before);
+ await p.setSystemArtifactsExcluded(false);await p.handleFileModification(file);assert.equal(JSON.stringify(p.store.daily),before);
+ file.content+=' five';await p.handleFileModification(file);assert.equal(p.getOrCreateTodayRecord().contribution.wordsAdded,1);
+});
+
+test('system exclusion save failure restores the previous preference',async()=>{
+ const {p}=setup();await p.loadPluginData();p.saveData=async()=>{throw new Error('disk full')};
+ await assert.rejects(()=>p.setSystemArtifactsExcluded(true));assert.equal(p.settings.excludeSystemArtifacts,false);assert.equal(p.sourceFilterChanging,false);
+});
+
+test('recreated file preserves same-day word totals and source attribution',async()=>{
+ const {p}=setup();await p.loadPluginData();const file={path:'a.md',content:'one two'};
+ await p.handleFileCreation(file);p.fileSnapshots.delete(file.path);file.content='three four five';await p.handleFileCreation(file);
+ const record=p.getOrCreateTodayRecord();assert.equal(record.files[file.path].wordsAdded,5);assert.equal(record.files[file.path].sourceWords.unattributed,5);
+});
+
+test('evidence accepts CRLF source selections and de-duplicates normalized quotes',async()=>{
+ const {p,helpers}=setup();await p.loadPluginData();const r=helpers.createEmptyDailyRecord('2026-09-08');r.files['a.md']={wordsAdded:2};p.store.daily[r.date]=r;
+ const file={path:'a.md',extension:'md',content:'第一行\r\n第二行'};p.app.vault.getAbstractFileByPath=()=>file;
+ assert.equal(await p.addReviewEvidence(r.date,r.date,'all',file.path,'第一行\n第二行'),true);
+ assert.equal(await p.addReviewEvidence(r.date,r.date,'all',file.path,'第一行\r\n第二行'),false);
+});
+
+test('removing evidence leaves source notes and reflection text intact',async()=>{
+ const {p,helpers}=setup();await p.loadPluginData();const r=helpers.createEmptyDailyRecord('2026-09-08');r.files['a.md']={wordsAdded:1};p.store.daily[r.date]=r;
+ const file={path:'a.md',extension:'md',content:'证据'};p.app.vault.getAbstractFileByPath=()=>file;
+ p.updateReviewDraft(r.date,r.date,'all','learning','我的认识');await p.addReviewEvidence(r.date,r.date,'all',file.path,'证据');
+ const e=p.getReviewModel(r.date,r.date,'all').evidence[0];p.removeReviewEvidence(r.date,r.date,'all',e.id);
+ assert.equal(p.getReviewModel(r.date,r.date,'all').evidence.length,0);assert.equal(file.content,'证据');assert.equal(p.getReviewModel(r.date,r.date,'all').draft.learning,'我的认识');
+});
+
+test('action carry-over across three periods preserves origin and ignores completed work',async()=>{
+ const {p,advance}=setup();await p.loadPluginData();advance(7*86400000);
+ p.addReviewAction('2026-08-26','2026-09-01','all','验证证据');p.importPreviousActions('2026-09-02','2026-09-08','all');
+ const first=p.getReviewModel('2026-08-26','2026-09-01','all').actions[0];
+ assert.equal(p.importPreviousActions('2026-09-09','2026-09-15','all'),1);
+ const third=p.getReviewModel('2026-09-09','2026-09-15','all').actions[0];assert.equal(third.originId,first.id);
+ assert.equal(p.importPreviousActions('2026-09-09','2026-09-15','all'),0);
+});
