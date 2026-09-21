@@ -989,3 +989,74 @@
 .crisp-pulse-evidence-choices button { white-space: normal; height: auto; text-align: left; padding: 8px; overflow-wrap: anywhere; }
 @container (max-width: 700px) { .crisp-pulse-review-sources { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (max-width: 340px) { .crisp-pulse-review-sources { grid-template-columns: minmax(0, 1fr); } }
+
+/* Mobile (iPhone / iPad) Responsive Adaptations */
+.crisp-pulse-heatmap-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+@media (max-width: 600px) {
+  .crisp-pulse-view {
+    padding: 16px 12px;
+  }
+
+  .crisp-pulse-wrapper {
+    gap: 14px;
+  }
+
+  .crisp-pulse-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .crisp-pulse-title-group {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .crisp-pulse-header > .crisp-pulse-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .crisp-pulse-title-group > .crisp-pulse-actions {
+    width: 100%;
+    display: flex;
+    gap: 6px;
+  }
+
+  .crisp-pulse-title-group > .crisp-pulse-actions .crisp-pulse-tab-btn {
+    flex: 1;
+    text-align: center;
+    padding: 8px 4px;
+  }
+
+  .crisp-pulse-heatmap-card,
+  .crisp-pulse-detail-card {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .crisp-pulse-heatmap-footer {
+    font-size: 11px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .crisp-pulse-legend {
+    align-self: flex-end;
+  }
+}
+
+.is-mobile .crisp-pulse-cell {
+  touch-action: manipulation;
+}
+
+.is-mobile .crisp-pulse-tab-btn,
+.is-mobile .crisp-pulse-view button {
+  min-height: 38px;
+  touch-action: manipulation;
+}

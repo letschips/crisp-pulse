@@ -11,6 +11,8 @@ function setup() {
   events.setInterval = (fn, ms) => { const t = setInterval(fn, ms); t.unref?.(); return t; };
   events.clearInterval = clearInterval;
   const cleanup = [];
+  const registeredIcons = new Map();
+  function addIcon(id, svg) { registeredIcons.set(id, svg); }
   class Plugin { registerEvent() {} registerInterval() {} addCommand(cmd) { (this.commands = this.commands || []).push(cmd); } addStatusBarItem() { return { setText() {}, addClass() {}, setAttr() {}, empty() {}, appendChild() {}, classList: { add() {}, remove() {}, toggle() {} }, addEventListener() {}, removeEventListener() {} }; } registerDomEvent(el, type, fn, options) { if (el?.addEventListener) el.addEventListener(type, fn, options); cleanup.push(() => el?.removeEventListener?.(type, fn, options)); } }
   class TFile {}
   class Modal { open() {} close() {} }
@@ -34,7 +36,7 @@ function setup() {
       if (mod === "util") return require("util");
       if (mod === "fs") return require("fs");
       if (mod === "path") return require("path");
-      return { Plugin, TFile, Setting, ItemView: class {}, PluginSettingTab: class {}, Notice: class {}, Modal };
+      return { Plugin, TFile, Setting, ItemView: class {}, PluginSettingTab: class {}, Notice: class {}, Modal, addIcon };
     },
     module: { exports: {} },
     console,
@@ -53,7 +55,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8') +
-    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined};',
     context
   );
   const Pulse = context.module.exports;
@@ -81,7 +83,7 @@ function setup() {
   p.lastInteractionTime = time;
   const handlers = {};
   p.app.vault.on = (name, fn) => { handlers[name] = fn; };
-  return { p, handlers, helpers: Pulse.helpers, events, context, advance: ms => time += ms, cleanup: () => cleanup.forEach(fn => fn()) };
+  return { p, handlers, helpers: Pulse.helpers, events, context, registeredIcons, advance: ms => time += ms, cleanup: () => cleanup.forEach(fn => fn()) };
 }
 
 test('zero contribution weights really disable each component', async () => {
@@ -984,6 +986,15 @@ test('Header title renders animated blocks-wave SVG rather than lightning emoji'
   assert.ok(!helpers.ICON_BLOCKS_WAVE_SVG.includes('fill="#000000"'));
 });
 
+test('Custom animated blocks-wave icon is registered and used by tab header and ribbon', async () => {
+  const { p, helpers, registeredIcons } = setup();
+  await p.loadPluginData();
+  assert.equal(helpers.CRISP_PULSE_ICON_ID, "crisp-pulse");
+  assert.equal(registeredIcons.get(helpers.CRISP_PULSE_ICON_ID), helpers.ICON_BLOCKS_WAVE_SVG);
+  const view = new helpers.CrispPulseView({}, p);
+  assert.equal(view.getIcon(), helpers.CRISP_PULSE_ICON_ID);
+});
+
 test('schema validation preserves large valid daily records and their legacy warning',()=>{
  const {helpers}=setup();const r=helpers.createEmptyDailyRecord('2026-09-08');r.legacyUnverified=true;r.contribution.wordsAdded=150000;r.contribution.notesCreated=1;r.contribution.score=35;r.files['Research.md']={wordsAdded:150000,created:true,tasks:0,links:0};
  const before=JSON.stringify(r);const {store}=helpers.validateAndRepairStore({trackingVersion:3,daily:{[r.date]:r}});assert.equal(JSON.stringify(store.daily[r.date]),before);
@@ -1426,3 +1437,19 @@ test('validateAndRepairStore repairs corrupted reviewDrafts safely',async()=>{
  assert.equal(typeof draft.evidence[0].capturedAt,'string');
 });
 
+test('mobile responsive rules only target classes rendered by the plugin',()=>{
+ const styles=fs.readFileSync(path.join(__dirname,'../styles.css'),'utf8');
+ const markup=fs.readFileSync(path.join(__dirname,'../main.js'),'utf8');
+ const start=styles.indexOf('/* Mobile (iPhone / iPad) Responsive Adaptations */');
+ assert.ok(start>=0,'mobile responsive block should exist');
+ const block=styles.slice(start);
+ const classes=[...new Set([...block.matchAll(/\.([a-z0-9_-]+)/gi)].map(match=>match[1]))];
+ for(const className of classes){
+  if(className==='is-mobile') continue; // Obsidian adds this to <body> on mobile.
+  assert.ok(markup.includes(className),`mobile CSS targets missing class: ${className}`);
+ }
+ assert.match(block,/\.crisp-pulse-title-group > \.crisp-pulse-actions/);
+ assert.match(block,/\.crisp-pulse-header > \.crisp-pulse-actions/);
+ assert.doesNotMatch(block,/\.crisp-pulse-header-controls/);
+ assert.doesNotMatch(block,/\.crisp-pulse-tabs\b/);
+});

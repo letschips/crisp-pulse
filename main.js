@@ -3,7 +3,7 @@
    Crafted for the Crisp Plugin Suite (v1.4.0)
    ========================================================================== */
 
-const { Plugin, ItemView, Setting, PluginSettingTab, Notice, TFile, Modal } = require("obsidian");
+const { Plugin, ItemView, Setting, PluginSettingTab, Notice, TFile, Modal, addIcon = (() => {}) } = require("obsidian");
 
 const VIEW_TYPE_PULSE = "crisp-pulse-view";
 
@@ -313,6 +313,19 @@ function renderAboutCard(container, pluginName, description) {
 const ICON_COMPUTER_SVG = `<svg viewBox="0 0 281.25 281.25" class="crisp-pulse-breakdown-icon" aria-hidden="true"><g transform="translate(6402.3564,-4296.9987)"><path d="m -6251.0783,4337.2868 a 4.6879687,4.6879687 0 0 0 -4.6875,4.6875 v 128.7945 a 4.6879687,4.6879687 0 0 0 0.9814,2.8674 l 19.4129,25.0965 a 4.6879687,4.6879687 0 0 0 7.4157,0 l 19.4147,-25.0965 a 4.6879687,4.6879687 0 0 0 0.9778,-2.8674 v -128.7945 a 4.6879687,4.6879687 0 0 0 -4.6875,-4.6875 z m 4.6875,9.375 h 29.4525 v 122.5067 l -14.7235,19.0338 -14.729,-19.0357 z m -109.3323,64.0191 a 4.6879687,4.6879687 0 0 0 -4.6875,4.6875 v 117.9053 a 4.6879687,4.6879687 0 0 0 4.6875,4.6875 h 187.9834 a 4.6879687,4.6879687 0 0 0 4.6875,-4.6875 v -117.9053 a 4.6879687,4.6879687 0 0 0 -4.6875,-4.6875 h -21.308 a 4.6875,4.6875 0 0 0 -4.6875,4.6875 4.6875,4.6875 0 0 0 4.6875,4.6875 h 16.6205 v 108.5303 h -178.6084 v -108.5303 h 74.3884 a 4.6875,4.6875 0 0 0 4.6875,-4.6875 4.6875,4.6875 0 0 0 -4.6875,-4.6875 z m 25.0964,78.1293 a 4.6875,4.6875 0 0 0 -4.6875,4.6875 4.6875,4.6875 0 0 0 4.6875,4.6875 h 50.6653 a 4.6875,4.6875 0 0 0 4.6875,-4.6875 4.6875,4.6875 0 0 0 -4.6875,-4.6875 z" fill="currentColor"/></g></svg>`;
 
 const ICON_BLOCKS_WAVE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="crisp-pulse-title-icon-svg" aria-hidden="true"><rect width="7.33" height="7.33" x="1" y="1" fill="currentColor"><animate id="SVGzjrPLenI" attributeName="x" begin="0;SVGXAURnSRI.end+0.2s" dur="0.6s" values="1;4;1"/><animate attributeName="y" begin="0;SVGXAURnSRI.end+0.2s" dur="0.6s" values="1;4;1"/><animate attributeName="width" begin="0;SVGXAURnSRI.end+0.2s" dur="0.6s" values="7.33;1.33;7.33"/><animate attributeName="height" begin="0;SVGXAURnSRI.end+0.2s" dur="0.6s" values="7.33;1.33;7.33"/></rect><rect width="7.33" height="7.33" x="8.33" y="1" fill="currentColor"><animate attributeName="x" begin="SVGzjrPLenI.begin+0.1s" dur="0.6s" values="8.33;11.33;8.33"/><animate attributeName="y" begin="SVGzjrPLenI.begin+0.1s" dur="0.6s" values="1;4;1"/><animate attributeName="width" begin="SVGzjrPLenI.begin+0.1s" dur="0.6s" values="7.33;1.33;7.33"/><animate attributeName="height" begin="SVGzjrPLenI.begin+0.1s" dur="0.6s" values="7.33;1.33;7.33"/></rect><rect width="7.33" height="7.33" x="1" y="8.33" fill="currentColor"><animate attributeName="x" begin="SVGzjrPLenI.begin+0.1s" dur="0.6s" values="1;4;1"/><animate attributeName="y" begin="SVGzjrPLenI.begin+0.1s" dur="0.6s" values="8.33;11.33;8.33"/><animate attributeName="width" begin="SVGzjrPLenI.begin+0.1s" dur="0.6s" values="7.33;1.33;7.33"/><animate attributeName="height" begin="SVGzjrPLenI.begin+0.1s" dur="0.6s" values="7.33;1.33;7.33"/></rect><rect width="7.33" height="7.33" x="15.66" y="1" fill="currentColor"><animate attributeName="x" begin="SVGzjrPLenI.begin+0.2s" dur="0.6s" values="15.66;18.66;15.66"/><animate attributeName="y" begin="SVGzjrPLenI.begin+0.2s" dur="0.6s" values="1;4;1"/><animate attributeName="width" begin="SVGzjrPLenI.begin+0.2s" dur="0.6s" values="7.33;1.33;7.33"/><animate attributeName="height" begin="SVGzjrPLenI.begin+0.2s" dur="0.6s" values="7.33;1.33;7.33"/></rect><rect width="7.33" height="7.33" x="8.33" y="8.33" fill="currentColor"><animate attributeName="x" begin="SVGzjrPLenI.begin+0.2s" dur="0.6s" values="8.33;11.33;8.33"/><animate attributeName="y" begin="SVGzjrPLenI.begin+0.2s" dur="0.6s" values="8.33;11.33;8.33"/><animate attributeName="width" begin="SVGzjrPLenI.begin+0.2s" dur="0.6s" values="7.33;1.33;7.33"/><animate attributeName="height" begin="SVGzjrPLenI.begin+0.2s" dur="0.6s" values="7.33;1.33;7.33"/></rect><rect width="7.33" height="7.33" x="1" y="15.66" fill="currentColor"><animate attributeName="x" begin="SVGzjrPLenI.begin+0.2s" dur="0.6s" values="1;4;1"/><animate attributeName="y" begin="SVGzjrPLenI.begin+0.2s" dur="0.6s" values="15.66;18.66;15.66"/><animate attributeName="width" begin="SVGzjrPLenI.begin+0.2s" dur="0.6s" values="7.33;1.33;7.33"/><animate attributeName="height" begin="SVGzjrPLenI.begin+0.2s" dur="0.6s" values="7.33;1.33;7.33"/></rect><rect width="7.33" height="7.33" x="15.66" y="8.33" fill="currentColor"><animate attributeName="x" begin="SVGzjrPLenI.begin+0.3s" dur="0.6s" values="15.66;18.66;15.66"/><animate attributeName="y" begin="SVGzjrPLenI.begin+0.3s" dur="0.6s" values="8.33;11.33;8.33"/><animate attributeName="width" begin="SVGzjrPLenI.begin+0.3s" dur="0.6s" values="7.33;1.33;7.33"/><animate attributeName="height" begin="SVGzjrPLenI.begin+0.3s" dur="0.6s" values="7.33;1.33;7.33"/></rect><rect width="7.33" height="7.33" x="8.33" y="15.66" fill="currentColor"><animate attributeName="x" begin="SVGzjrPLenI.begin+0.3s" dur="0.6s" values="8.33;11.33;8.33"/><animate attributeName="y" begin="SVGzjrPLenI.begin+0.3s" dur="0.6s" values="15.66;18.66;15.66"/><animate attributeName="width" begin="SVGzjrPLenI.begin+0.3s" dur="0.6s" values="7.33;1.33;7.33"/><animate attributeName="height" begin="SVGzjrPLenI.begin+0.3s" dur="0.6s" values="7.33;1.33;7.33"/></rect><rect width="7.33" height="7.33" x="15.66" y="15.66" fill="currentColor"><animate id="SVGXAURnSRI" attributeName="x" begin="SVGzjrPLenI.begin+0.4s" dur="0.6s" values="15.66;18.66;15.66"/><animate attributeName="y" begin="SVGzjrPLenI.begin+0.4s" dur="0.6s" values="15.66;18.66;15.66"/><animate attributeName="width" begin="SVGzjrPLenI.begin+0.4s" dur="0.6s" values="7.33;1.33;7.33"/><animate attributeName="height" begin="SVGzjrPLenI.begin+0.4s" dur="0.6s" values="7.33;1.33;7.33"/></rect></svg>`;
+
+const CRISP_PULSE_ICON_ID = "crisp-pulse";
+
+function crispPulseRegisterIcons() {
+  try {
+    if (typeof addIcon === "function") {
+      addIcon(CRISP_PULSE_ICON_ID, ICON_BLOCKS_WAVE_SVG);
+    }
+  } catch (e) {
+    console.warn("[Crisp Pulse] Failed to register custom icon:", e);
+  }
+}
+crispPulseRegisterIcons();
 
 const DEFAULT_SETTINGS = {
   weekStartsOn: "sunday", // "sunday" | "monday"
@@ -1254,8 +1267,8 @@ class CrispPulsePlugin extends Plugin {
     }
 
     this.registerView(VIEW_TYPE_PULSE, (leaf) => new CrispPulseView(leaf, this));
-
-    this.addRibbonIcon("activity", "打开 Crisp Pulse 年度知识看板", () => {
+    crispPulseRegisterIcons();
+    this.addRibbonIcon(CRISP_PULSE_ICON_ID, "打开 Crisp Pulse 年度知识看板", () => {
       this.activatePulseView();
     });
 
@@ -2626,10 +2639,10 @@ class CrispPulseView extends ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.plugin = plugin;
-    this.selectedMetric = plugin.settings.defaultMetric || "contribution";
+    this.selectedMetric = plugin?.settings?.defaultMetric || "contribution";
     this.selectedDate = getTodayKey();
-    this.currentScope = plugin.settings.dataQualityScope || "reliable";
-    this.currentDateRange = plugin.settings.defaultDateRange || "year";
+    this.currentScope = plugin?.settings?.dataQualityScope || "reliable";
+    this.currentDateRange = plugin?.settings?.defaultDateRange || "year";
     this.showBreakdown = true;
     this.analyticsDays = 7;
     this.activeViewTab = "dashboard"; // "dashboard" | "review"
@@ -2644,7 +2657,7 @@ class CrispPulseView extends ItemView {
   }
 
   getIcon() {
-    return "activity";
+    return CRISP_PULSE_ICON_ID;
   }
 
   async onOpen() {
@@ -2708,7 +2721,13 @@ class CrispPulseView extends ItemView {
 
     container.scrollTop = previousScroll;
     const heatmap = container.querySelector(".crisp-pulse-heatmap-scroll");
-    if (heatmap) heatmap.scrollLeft = previousHorizontal;
+    if (heatmap) {
+      if (previousHorizontal > 0) {
+        heatmap.scrollLeft = previousHorizontal;
+      } else {
+        heatmap.scrollLeft = heatmap.scrollWidth;
+      }
+    }
     if (formFocus) {
       const input = [...container.querySelectorAll('[data-review-field]')].find(el => el.dataset.reviewField === formFocus.field);
       input?.focus({ preventScroll: true });
@@ -4124,7 +4143,8 @@ module.exports.discoverVaultCrispLicense = discoverVaultCrispLicense;
 module.exports.renderAboutCard = renderAboutCard;
 module.exports.ICON_COMPUTER_SVG = ICON_COMPUTER_SVG;
 module.exports.ICON_BLOCKS_WAVE_SVG = ICON_BLOCKS_WAVE_SVG;
-
+module.exports.CRISP_PULSE_ICON_ID = CRISP_PULSE_ICON_ID;
+module.exports.CrispPulseView = CrispPulseView;
 
 module.exports.getReviewDrilldown = getReviewDrilldown;
 module.exports.generateReviewReport = generateReviewReport;
