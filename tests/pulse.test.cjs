@@ -55,7 +55,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8') +
-    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined};',
     context
   );
   const Pulse = context.module.exports;
@@ -986,11 +986,16 @@ test('Header title renders animated blocks-wave SVG rather than lightning emoji'
   assert.ok(!helpers.ICON_BLOCKS_WAVE_SVG.includes('fill="#000000"'));
 });
 
-test('Custom animated blocks-wave icon is registered and used by tab header and ribbon', async () => {
+test('Animated blocks-wave icon is registered for tab header and ribbon without duplicate IDs', async () => {
   const { p, helpers, registeredIcons } = setup();
   await p.loadPluginData();
   assert.equal(helpers.CRISP_PULSE_ICON_ID, "crisp-pulse");
-  assert.equal(registeredIcons.get(helpers.CRISP_PULSE_ICON_ID), helpers.ICON_BLOCKS_WAVE_SVG);
+  assert.equal(registeredIcons.get(helpers.CRISP_PULSE_ICON_ID), helpers.ICON_BLOCKS_WAVE_REGISTERED_SVG);
+  assert.ok(helpers.ICON_BLOCKS_WAVE_REGISTERED_SVG.includes('<animate'));
+  assert.equal((helpers.ICON_BLOCKS_WAVE_REGISTERED_SVG.match(/<animate/g) || []).length, 36);
+  assert.ok(!helpers.ICON_BLOCKS_WAVE_REGISTERED_SVG.includes(' id="'));
+  assert.ok(!helpers.ICON_BLOCKS_WAVE_REGISTERED_SVG.includes('begin="SVG'));
+  assert.ok(!helpers.ICON_BLOCKS_WAVE_REGISTERED_SVG.includes('crisp-pulse-title-icon-svg'));
   const view = new helpers.CrispPulseView({}, p);
   assert.equal(view.getIcon(), helpers.CRISP_PULSE_ICON_ID);
 });
