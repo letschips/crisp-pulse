@@ -1458,3 +1458,37 @@ test('mobile responsive rules only target classes rendered by the plugin',()=>{
  assert.doesNotMatch(block,/\.crisp-pulse-header-controls/);
  assert.doesNotMatch(block,/\.crisp-pulse-tabs\b/);
 });
+
+test('rename into a deleted historical path preserves both file records through save and reload', async () => {
+  const { p, handlers } = setup();
+  await p.loadPluginData();p.registerVaultEvents();
+  await p.handleFileCreation({ path: 'target.md', content: 'one two', extension: 'md' });
+  await handlers.delete({ path: 'target.md' });
+  const file = { path: 'source.md', content: 'three four five', extension: 'md' };
+  await p.handleFileCreation(file);
+  const record = p.getOrCreateTodayRecord();
+  Object.assign(record.files['target.md'], { tasks: 2, links: 3, rewrittenWords: 7 });
+  Object.assign(record.files['source.md'], { tasks: 1, links: 2, rewrittenWords: 4 });
+  file.path = 'target.md';await handlers.rename(file, 'source.md');
+  await p.savePluginData();p.loadData = async () => p.persisted;await p.loadPluginData();
+  const merged = p.getOrCreateTodayRecord().files['target.md'];
+  assert.equal(merged.wordsAdded, 5);
+  assert.equal(merged.tasks, 3);assert.equal(merged.links, 5);assert.equal(merged.rewrittenWords, 11);
+  assert.equal(merged.sourceWords.unattributed, 5);
+  assert.equal(p.getOrCreateTodayRecord().contribution.wordsAdded, 5);
+  assert.equal(p.getReviewModel('2026-09-08','2026-09-08','all').current.allFiles[0].words, 5);
+});
+
+test('malformed array containers cannot silently discard collected data on save and reload', async () => {
+  for (const raw of [[], { daily: [] }, { daily: { '2026-09-08': [] } },
+    { daily: { '2026-09-08': { activity: [], contribution: [], files: [] } } }]) {
+    const { p } = setup();p.loadData = async () => structuredClone(raw);await p.loadPluginData();
+    await p.handleFileCreation({ path: 'new.md', extension: 'md', content: 'one two three' });
+    await p.handleFocusSessionCompleted(5);
+    p.loadData = async () => p.persisted;await p.loadPluginData();
+    const record = p.getOrCreateTodayRecord();
+    assert.equal(record.contribution.wordsAdded, 3);
+    assert.equal(record.files['new.md'].wordsAdded, 3);
+    assert.equal(record.activity.focusMinutes, 5);
+  }
+});

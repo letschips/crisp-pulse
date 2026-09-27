@@ -1115,7 +1115,7 @@ function generateDailyCSV(daily = {}) {
 
 // Version 3 Schema Validation & Deep Auto-Repair
 function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
-  if (!store || typeof store !== "object") store = {};
+  if (!store || typeof store !== "object" || Array.isArray(store)) store = {};
   if (!store.settings || typeof store.settings !== "object" || Array.isArray(store.settings)) store.settings = {};
   for (const [key, fallback] of Object.entries(defaultSettings)) {
     if (store.settings[key] === undefined) store.settings[key] = Array.isArray(fallback) ? [...fallback] : fallback;
@@ -1134,11 +1134,11 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
   store.settings.focusIdleTimeoutMinutes = Math.max(1, Math.min(30, store.settings.focusIdleTimeoutMinutes ?? 5));
   store.settings.captureMultiplier = Math.max(0, Math.min(1, store.settings.captureMultiplier ?? 0.2));
 
-  if (!store.daily || typeof store.daily !== "object") store.daily = {};
+  if (!store.daily || typeof store.daily !== "object" || Array.isArray(store.daily)) store.daily = {};
 
   let repairedCount = 0;
   for (const [dKey, rec] of Object.entries(store.daily)) {
-    if (!rec || typeof rec !== "object") {
+    if (!rec || typeof rec !== "object" || Array.isArray(rec)) {
       store.daily[dKey] = createEmptyDailyRecord(dKey, "recorded");
       repairedCount++;
       continue;
@@ -1150,7 +1150,7 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
       repairedCount++;
     }
 
-    if (!rec.activity || typeof rec.activity !== "object") {
+    if (!rec.activity || typeof rec.activity !== "object" || Array.isArray(rec.activity)) {
       rec.activity = { activeMinutes: 0, focusMinutes: 0, editingSessions: 0, notesOpened: 0, notesEdited: 0 };
       repairedCount++;
     } else {
@@ -1163,7 +1163,7 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
       }
     }
 
-    if (!rec.contribution || typeof rec.contribution !== "object") {
+    if (!rec.contribution || typeof rec.contribution !== "object" || Array.isArray(rec.contribution)) {
       rec.contribution = {
         score: 0,
         meaningfulEdits: 0,
@@ -1186,12 +1186,12 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
       }
     }
 
-    if (!rec.files || typeof rec.files !== "object") {
+    if (!rec.files || typeof rec.files !== "object" || Array.isArray(rec.files)) {
       rec.files = {};
       repairedCount++;
     } else {
       for (const [fp, fileMeta] of Object.entries(rec.files)) {
-        if (!fileMeta || typeof fileMeta !== "object") {
+        if (!fileMeta || typeof fileMeta !== "object" || Array.isArray(fileMeta)) {
           rec.files[fp] = { wordsAdded: 0, created: false, tasks: 0, links: 0 };
           repairedCount++;
         } else {
@@ -1919,7 +1919,25 @@ class CrispPulsePlugin extends Plugin {
           for (const key of Object.keys(record.files)) {
             const next = migratePath(key);
             if (next !== key) {
-              record.files[next] = record.files[key];
+              const source = record.files[key];
+              const target = record.files[next];
+              if (target) {
+                // A deleted note can leave history at the destination path.
+                // Merge file detail only: daily totals already include both notes.
+                const merged = { ...target, ...source, created: !!(target.created || source.created) };
+                for (const field of ['wordsAdded', 'tasks', 'links', 'rewrittenWords']) {
+                  merged[field] = (target[field] || 0) + (source[field] || 0);
+                }
+                if (target.sourceWords || source.sourceWords) {
+                  merged.sourceWords = {};
+                  for (const field of ['system', 'capture', 'unattributed']) {
+                    merged.sourceWords[field] = (target.sourceWords?.[field] || 0) + (source.sourceWords?.[field] || 0);
+                  }
+                }
+                record.files[next] = merged;
+              } else {
+                record.files[next] = source;
+              }
               delete record.files[key];
               this.dirty = true;
             }
