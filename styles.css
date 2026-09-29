@@ -302,7 +302,7 @@
   opacity: 0.85;
 }
 
-/* Color Levels — using theme color accent */
+/* Color Levels — every level derives from the theme accent (Obsidian has no --color-accent-rgb) */
 .crisp-pulse-cell[data-level="0"] {
   background-color: var(--background-modifier-border, #e5e7eb);
   opacity: 0.4;
@@ -314,19 +314,19 @@
 }
 
 .crisp-pulse-cell[data-level="1"] {
-  background-color: rgba(var(--color-accent-rgb, 80, 130, 230), 0.25);
+  background-color: color-mix(in srgb, var(--color-accent, #3b82f6) 25%, transparent);
 }
 
 .crisp-pulse-cell[data-level="2"] {
-  background-color: rgba(var(--color-accent-rgb, 80, 130, 230), 0.45);
+  background-color: color-mix(in srgb, var(--color-accent, #3b82f6) 45%, transparent);
 }
 
 .crisp-pulse-cell[data-level="3"] {
-  background-color: rgba(var(--color-accent-rgb, 80, 130, 230), 0.65);
+  background-color: color-mix(in srgb, var(--color-accent, #3b82f6) 65%, transparent);
 }
 
 .crisp-pulse-cell[data-level="4"] {
-  background-color: rgba(var(--color-accent-rgb, 80, 130, 230), 0.85);
+  background-color: color-mix(in srgb, var(--color-accent, #3b82f6) 85%, transparent);
 }
 
 .crisp-pulse-cell[data-level="5"] {
@@ -734,7 +734,7 @@
 
 @keyframes crispPulseBreathing {
   0% { opacity: 0.82; transform: scale(0.99); }
-  50% { opacity: 1; transform: scale(1.01); filter: drop-shadow(0 0 4px rgba(var(--color-accent-rgb, 59, 130, 246), 0.35)); }
+  50% { opacity: 1; transform: scale(1.01); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-accent, #3b82f6) 35%, transparent)); }
   100% { opacity: 0.82; transform: scale(0.99); }
 }
 
