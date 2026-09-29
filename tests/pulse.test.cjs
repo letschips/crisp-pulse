@@ -1492,3 +1492,59 @@ test('malformed array containers cannot silently discard collected data on save 
     assert.equal(record.activity.focusMinutes, 5);
   }
 });
+
+const baseline = content => ({ words: content.split(/\s+/).filter(Boolean).length, tasks: 0, links: 0, lineSet: new Set(content.split('\n').map(l => l.trim()).filter(Boolean)), completedTaskSet: new Set(), lastTime: 0 });
+
+test('re-including an excluded folder does not back-count edits made while excluded', async () => {
+  const { p } = setup();await p.loadPluginData();
+  const file = { path: 'Drafts/a.md', extension: 'md', content: 'one' };
+  p.app.vault.getMarkdownFiles = () => [file];
+  p.fileSnapshots.set(file.path, baseline(file.content));
+  p.settings.excludedFolders = ['Drafts'];await p.syncSnapshotsToTrackingRules();
+  assert.equal(p.fileSnapshots.has(file.path), false);
+  file.content = 'one ' + 'word '.repeat(50);await p.handleFileModification(file);
+  p.settings.excludedFolders = [];await p.syncSnapshotsToTrackingRules();
+  await p.handleFileModification(file);
+  assert.equal(p.store.daily['2026-09-08']?.contribution.wordsAdded || 0, 0);
+  file.content += ' more';await p.handleFileModification(file);
+  assert.equal(p.getOrCreateTodayRecord().contribution.wordsAdded, 1);
+});
+
+test('a large paste into an idle existing note is classified as capture', async () => {
+  const { p } = setup();await p.loadPluginData();
+  const file = { path: 'a.md', extension: 'md', content: 'one' };
+  p.fileSnapshots.set(file.path, baseline(file.content));
+  file.content = 'one\n' + 'word '.repeat(600);await p.handleFileModification(file);
+  const record = p.getOrCreateTodayRecord();
+  assert.equal(record.contribution.captureWords, 600);
+  assert.equal(record.files['a.md'].sourceWords.capture, 600);
+});
+
+test('deleting a folder clears child snapshots and closes their sessions', async () => {
+  const { p, handlers } = setup();await p.loadPluginData();p.registerVaultEvents();
+  p.fileSnapshots.set('Dir/a.md', baseline('old text'));p.fileSnapshots.set('Other/b.md', baseline('keep'));
+  p.activeSessions.set('Dir/a.md', { date: '2026-09-08', lastEventTime: Date.now(), isMeaningful: true, wordsDeltaTotal: 20 });
+  handlers.delete({ path: 'Dir' });
+  assert.equal(p.fileSnapshots.has('Dir/a.md'), false);assert.equal(p.fileSnapshots.has('Other/b.md'), true);
+  assert.equal(p.activeSessions.size, 0);assert.equal(p.getOrCreateTodayRecord().contribution.meaningfulEdits, 1);
+  await p.handleFileCreation({ path: 'Dir/a.md', extension: 'md', content: 'fresh' });
+  assert.equal(p.getOrCreateTodayRecord().contribution.notesCreated, 1);
+});
+
+test('pointer taps count as interaction so mobile activity is recorded', async () => {
+  const { p, events, advance } = setup();await p.loadPluginData();p.registerActivityListeners();
+  events.dispatchEvent(new Event('pointerdown'));advance(60000);events.dispatchEvent(new Event('pointerdown'));
+  assert.ok(p.getOrCreateTodayRecord().activity.activeMinutes >= 1);
+});
+
+test('report top files use safe links for names that break wikilinks', () => {
+  const { helpers } = setup();
+  const md = helpers.generateWeeklyMarkdown({ totalScore: 0, notesCreated: 0, wordsAdded: 1, rewrittenWords: 0, tasksCompleted: 0, activeHours: '0', dirBreakdown: [], topFiles: [{ path: 'A/x|y.md', words: 1 }, { path: 'A/plain.md', words: 1 }] });
+  assert.match(md, /\[笔记\]\(A\/x%7Cy\.md\)/);assert.match(md, /\[\[A\/plain\.md\]\]/);
+});
+
+test('archiving returns the created file name', async () => {
+  const { p } = setup();await p.loadPluginData();
+  const res = await p.archiveWeeklyReviewToVault({ dirBreakdown: [], topFiles: [] }, '2026-09-02', '2026-09-08', { fileName: 'r.md', content: 'x' });
+  assert.equal(res.success, true);assert.equal(res.fileName, 'r.md');
+});
