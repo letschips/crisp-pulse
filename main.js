@@ -1602,7 +1602,9 @@ class CrispPulsePlugin extends Plugin {
   }
 
   async exportJSONFile() {
-    const res = await this.saveExportFile(`crisp-pulse-backup-${getTodayKey()}.json`, JSON.stringify(this.store, null, 2), "application/json;charset=utf-8;");
+    // Backups can land inside a synced vault on mobile; keep the license code out of them.
+    const { licenseCode, licenseLastOnlineAt, ...settings } = this.store.settings || {};
+    const res = await this.saveExportFile(`crisp-pulse-backup-${getTodayKey()}.json`, JSON.stringify({ ...this.store, settings }, null, 2), "application/json;charset=utf-8;");
     if (res.success && !res.path) new Notice("已导出 JSON 备份");
   }
 

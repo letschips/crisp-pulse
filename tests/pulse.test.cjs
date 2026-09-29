@@ -1548,3 +1548,13 @@ test('archiving returns the created file name', async () => {
   const res = await p.archiveWeeklyReviewToVault({ dirBreakdown: [], topFiles: [] }, '2026-09-02', '2026-09-08', { fileName: 'r.md', content: 'x' });
   assert.equal(res.success, true);assert.equal(res.fileName, 'r.md');
 });
+
+test('JSON backup never carries the license code', async () => {
+  const { p } = setup();await p.loadPluginData();
+  p.settings.licenseCode = 'secret.payload.sig';p.settings.licenseLastOnlineAt = 123;
+  let saved;p.saveExportFile = async (name, content) => { saved = content; return { success: true }; };
+  await p.exportJSONFile();
+  assert.doesNotMatch(saved, /secret\.payload\.sig|licenseLastOnlineAt/);
+  assert.equal(JSON.parse(saved).settings.dataQualityScope, p.settings.dataQualityScope);
+  assert.equal(p.settings.licenseCode, 'secret.payload.sig');
+});
