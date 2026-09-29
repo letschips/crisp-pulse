@@ -1,9 +1,9 @@
 /* ==========================================================================
    Crisp Pulse — Knowledge Work Analytics Plugin for Obsidian
-   Crafted for the Crisp Plugin Suite (v1.4.0)
+   Crafted for the Crisp Plugin Suite
    ========================================================================== */
 
-const { Plugin, ItemView, Setting, PluginSettingTab, Notice, TFile, Modal, addIcon = (() => {}) } = require("obsidian");
+const { Plugin, ItemView, Setting, PluginSettingTab, Notice, TFile, Modal, Platform = {}, addIcon = (() => {}) } = require("obsidian");
 
 const VIEW_TYPE_PULSE = "crisp-pulse-view";
 
@@ -853,7 +853,7 @@ function generateWeeklyMarkdown(reviewData, weekTitle = "知识工作周报 (Wee
       if (f.created) tags.push("新建");
       if (f.words > 0) tags.push(`+${f.words}词`);
       if (f.tasks > 0) tags.push(`${f.tasks}任务`);
-      lines.push(`${i + 1}. [[${f.path}]] (${tags.join(" · ") || "已编辑"})`);
+      lines.push(`${i + 1}. ${reportNoteLink(f.path)} (${tags.join(" · ") || "已编辑"})`);
     });
   }
 
@@ -930,7 +930,7 @@ function generateAnksWeeklyReviewFileContent(reviewData, weekTitle = "知识工�
       if (f.created) tags.push("新建");
       if (f.words > 0) tags.push(`+${f.words}词`);
       if (f.tasks > 0) tags.push(`${f.tasks}任务`);
-      lines.push(`${i + 1}. [[${f.path}]] (${tags.join(" · ") || "已编辑"})`);
+      lines.push(`${i + 1}. ${reportNoteLink(f.path)} (${tags.join(" · ") || "已编辑"})`);
     });
   }
 
@@ -1384,14 +1384,8 @@ class CrispPulsePlugin extends Plugin {
         const startWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
         const sKey = dateKey(startWeek), eKey = dateKey(today);
         const model = this.getReviewModel(sKey, eKey, this.settings.dataQualityScope);
-        const res = await this.archiveReviewReport(model);
-        if (res.success) {
-          new Notice(`已成功归档本周工作复盘（${res.fileName}）`);
-        } else if (res.reason === 'exists') {
-          new Notice("同区间、同范围复盘报告已存在，原文已保留。");
-        } else {
-          new Notice("复盘归档失败：" + (res.reason || "未知错误"));
-        }
+        // archiveReviewReport already reports success, existing files and failures.
+        await this.archiveReviewReport(model);
       }
     });
 
@@ -1440,9 +1434,9 @@ class CrispPulsePlugin extends Plugin {
   onunload() {
     console.log("[Crisp Pulse] Unloading plugin...");
     this.stopped = true;
+    if (this.snapshotSyncTimer) clearTimeout(this.snapshotSyncTimer);
     this.focusAdapter?.detach();
     this.flushAllSessions();
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_PULSE);
   }
 
   async loadPluginData() {
@@ -1576,28 +1570,40 @@ class CrispPulsePlugin extends Plugin {
     }
   }
 
-  exportCSVFile() {
-    const csv = generateDailyCSV(this.store.daily || {});
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
+  async saveExportFile(fileName, content, type) {
+    if (Platform.isMobile) {
+      // Mobile webviews ignore download links; write next to the vault root instead.
+      try {
+        const dot = fileName.lastIndexOf(".");
+        let path = fileName;
+        for (let i = 2; await this.app.vault.adapter.exists(path); i++) path = `${fileName.slice(0, dot)}-${i}${fileName.slice(dot)}`;
+        await this.app.vault.create(path, content);
+        new Notice(`已导出到库根目录：${path}`);
+        return { success: true, path };
+      } catch (error) {
+        console.error("[Crisp Pulse] Export failed:", error);
+        new Notice("导出失败：" + (error?.message || error));
+        return { success: false, error };
+      }
+    }
+    const url = URL.createObjectURL(new Blob([content], { type }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `crisp-pulse-export-${getTodayKey()}.csv`;
+    a.download = fileName;
     a.click();
-    URL.revokeObjectURL(url);
-    new Notice("已导出 CSV 数据");
+    // Revoking synchronously can cancel the download before it starts.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { success: true };
   }
 
-  exportJSONFile() {
-    const json = JSON.stringify(this.store, null, 2);
-    const blob = new Blob([json], { type: "application/json;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `crisp-pulse-backup-${getTodayKey()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    new Notice("已导出 JSON 备份");
+  async exportCSVFile() {
+    const res = await this.saveExportFile(`crisp-pulse-export-${getTodayKey()}.csv`, generateDailyCSV(this.store.daily || {}), "text/csv;charset=utf-8;");
+    if (res.success && !res.path) new Notice("已导出 CSV 数据");
+  }
+
+  async exportJSONFile() {
+    const res = await this.saveExportFile(`crisp-pulse-backup-${getTodayKey()}.json`, JSON.stringify(this.store, null, 2), "application/json;charset=utf-8;");
+    if (res.success && !res.path) new Notice("已导出 JSON 备份");
   }
 
   getOrCreateTodayRecord() {
@@ -1670,7 +1676,7 @@ class CrispPulsePlugin extends Plugin {
       this.statusBarEl.appendChild(warnSpan);
     }
 
-    let tooltip = `Crisp Pulse 今日知识脉冲\n今日贡献: ${score.toFixed(1)} 分\n连续活跃: ${streak} 天 (范围: ${this.settings.dataQualityScope})\n新建笔记: ${todayRecord.contribution.notesCreated} 篇\n新增字数: ${todayRecord.contribution.wordsAdded} 词`;
+    let tooltip = `Crisp Pulse 今日知识脉冲\n今日贡献: ${score.toFixed(1)} 分\n连续活跃: ${streak} 天 (范围: ${REVIEW_SCOPE_LABELS[this.settings.dataQualityScope] || this.settings.dataQualityScope})\n新建笔记: ${todayRecord.contribution.notesCreated} 篇\n新增字数: ${todayRecord.contribution.wordsAdded} 词`;
     if (isFocusing) {
       const remainingMs = this.focusAdapter.getFocusRemainingMs();
       const mins = Math.ceil(remainingMs / 60000);
@@ -1745,7 +1751,7 @@ class CrispPulsePlugin extends Plugin {
       if (targetFile) {
         this.app.workspace.openLinkText(targetFile.path, "");
       }
-      return { success: true, path: fullPath };
+      return { success: true, path: fullPath, fileName };
     } catch (err) {
       console.error("[Crisp Pulse] Archive weekly review failed:", err);
       new Notice("周报归档失败：" + (err?.message || err));
@@ -1833,18 +1839,13 @@ class CrispPulsePlugin extends Plugin {
 
     this.registerEvent(
       this.app.vault.on("delete", (file) => {
-        this.fileSnapshots.delete(file.path);
-        const session = this.activeSessions.get(file.path);
-        if (session) {
-          if (session.isMeaningful) {
-            const targetDate = session.date || getTodayKey();
-            const record = this.getOrCreateRecord(targetDate);
-            record.contribution.meaningfulEdits += 1;
-            record.activity.editingSessions += 1;
-            this.recomputeScore(record);
-            this.dirty = true;
-          }
-          this.activeSessions.delete(file.path);
+        // A deleted folder takes its notes with it; stale snapshots would hide a later re-creation.
+        const isGone = path => path === file.path || path.startsWith(`${file.path}/`);
+        for (const path of [...this.fileSnapshots.keys()]) if (isGone(path)) this.fileSnapshots.delete(path);
+        for (const [path, session] of [...this.activeSessions.entries()]) {
+          if (!isGone(path)) continue;
+          this.closeSession(session);
+          this.activeSessions.delete(path);
         }
       })
     );
@@ -1979,7 +1980,7 @@ class CrispPulsePlugin extends Plugin {
 
     this.registerDomEvent(window, "blur", () => { this.lastInteractionTime = null; });
     this.registerDomEvent(window, "keydown", recordActivity, { passive: true });
-    this.registerDomEvent(window, "mousedown", recordActivity, { passive: true });
+    this.registerDomEvent(window, "pointerdown", recordActivity, { passive: true });
   }
 
   handleFileCreation(file) {
@@ -2070,7 +2071,6 @@ class CrispPulsePlugin extends Plugin {
 
       const wordsDelta = newWords - snapshot.words;
       const linksDelta = Math.max(0, newLinks - (snapshot.links || 0));
-      const timeDeltaMs = now - snapshot.lastTime;
 
       // 1.2 Task Lifecycle Tracking: calculate net real tasks added and removed
       let realTasksAdded = 0;
@@ -2123,14 +2123,16 @@ class CrispPulsePlugin extends Plugin {
       }
       const fileRecord = today.files[file.path];
 
-      if (wordsDelta >= 500 && timeDeltaMs < 2000) {
+      // One save adding 500+ words is a paste or import, however long the note sat idle before it.
+      const isCapture = wordsDelta >= 500;
+      if (isCapture) {
         today.contribution.captureWords = (today.contribution.captureWords || 0) + wordsDelta;
       }
 
       if (wordsDelta > 0) {
         today.contribution.wordsAdded += wordsDelta;
         fileRecord.wordsAdded += wordsDelta;
-        recordSourceWords(fileRecord, file.path, wordsDelta, wordsDelta >= 500 && timeDeltaMs < 2000);
+        recordSourceWords(fileRecord, file.path, wordsDelta, isCapture);
       } else if (wordsDelta < 0) {
         today.contribution.wordsRemoved += Math.abs(wordsDelta);
       }
@@ -2231,6 +2233,44 @@ class CrispPulsePlugin extends Plugin {
     }
     this.activeSessions.clear();
     await this.savePluginData();
+  }
+
+  closeSession(session) {
+    if (!session?.isMeaningful) return;
+    const record = this.getOrCreateRecord(session.date || getTodayKey());
+    record.contribution.meaningfulEdits += 1;
+    record.activity.editingSessions += 1;
+    this.recomputeScore(record);
+    this.dirty = true;
+  }
+
+  // Folder rules changed: drop snapshots that are no longer tracked and baseline newly tracked notes,
+  // so edits made while a folder was excluded are never back-counted after it is included again.
+  async syncSnapshotsToTrackingRules() {
+    if (this.snapshotSyncing) { this.snapshotSyncPending = true; return; }
+    this.snapshotSyncing = true;
+    try {
+      do {
+        this.snapshotSyncPending = false;
+        await Promise.allSettled([...(this.fileQueues?.values() || [])]);
+        for (const path of [...this.fileSnapshots.keys()]) if (!this.shouldTrackPath(path)) this.fileSnapshots.delete(path);
+        for (const [path, session] of [...this.activeSessions.entries()]) {
+          if (this.shouldTrackPath(path)) continue;
+          this.closeSession(session);
+          this.activeSessions.delete(path);
+        }
+        const files = typeof this.app.vault.getMarkdownFiles === "function" ? this.app.vault.getMarkdownFiles() : [];
+        await this.initializeSnapshots(files.filter(file => this.shouldTrackPath(file.path) && !this.fileSnapshots.has(file.path)));
+      } while (this.snapshotSyncPending && !this.stopped);
+    } finally { this.snapshotSyncing = false; }
+  }
+
+  scheduleSnapshotSync(delayMs = 1500) {
+    if (this.snapshotSyncTimer) clearTimeout(this.snapshotSyncTimer);
+    this.snapshotSyncTimer = setTimeout(() => {
+      this.snapshotSyncTimer = null;
+      if (!this.stopped) this.syncSnapshotsToTrackingRules().catch(err => console.error("[Crisp Pulse] Snapshot sync failed:", err));
+    }, delayMs);
   }
 
   recomputeScore(dayRecord) {
@@ -3180,7 +3220,7 @@ class CrispPulseView extends ItemView {
         cell.dataset.week = String(w);
         cell.dataset.day = String(d);
 
-        const tooltip = `${formatDateDisplay(day.dateKey)}${inRange ? "" : "（统计区间外，仅供参考）"}\n${this.getMetricLabel(this.selectedMetric)}: ${info.value} ${info.level > 0 ? `(${info.percentile}分位)` : ""}${isEstimated ? " [估算数据]" : ""}`;
+        const tooltip = `${formatDateDisplay(day.dateKey)}${inRange ? "" : "（统计区间外，仅供参考）"}\n${this.getMetricLabel(this.selectedMetric)}: ${formatPulseMinutes(info.value)} ${info.level > 0 ? `(${info.percentile}分位)` : ""}${isEstimated ? " [估算数据]" : ""}`;
         cell.setAttr("aria-label", tooltip);
 
         const selectCell = () => {
@@ -3241,6 +3281,8 @@ class CrispPulseView extends ItemView {
       badges.createDiv({ cls: "crisp-pulse-badge crisp-pulse-badge-recorded", text: "真实记录 (Recorded)" });
     } else if (isEstimated) {
       badges.createDiv({ cls: "crisp-pulse-badge crisp-pulse-badge-estimated", text: "历史估算 (Estimated)" });
+    } else if (rec.quality === "mixed") {
+      badges.createDiv({ cls: "crisp-pulse-badge crisp-pulse-badge-estimated", text: "含估算 (Mixed)" });
     }
     if (rec.legacyUnverified) {
       badges.createDiv({ cls: "crisp-pulse-badge", text: "旧版未校验" });
@@ -3718,7 +3760,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Crisp Pulse 知识脉冲设置 (v1.4.0)" });
+    containerEl.createEl("h2", { text: `Crisp Pulse 知识脉冲设置${this.plugin.manifest?.version ? ` (v${this.plugin.manifest.version})` : ""}` });
 
     // 0. Software License & Activation
     containerEl.createEl("h3", { text: "软件授权" });
@@ -3855,6 +3897,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
               this.plugin.settings.excludedFolders = [".obsidian", ".trash", "templates"];
             }
             await this.plugin.saveSettings();
+            this.plugin.scheduleSnapshotSync(0);
             this.display();
           })
       );
@@ -3869,6 +3912,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
             this.plugin.settings.excludedFolders = val.split(",").map((s) => s.trim()).filter(Boolean);
             this.plugin.settings.activeFolderPreset = "custom";
             await this.plugin.saveSettings();
+            this.plugin.scheduleSnapshotSync();
           })
       );
 
@@ -3882,6 +3926,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
             this.plugin.settings.includedFolders = val.split(",").map((s) => s.trim()).filter(Boolean);
             this.plugin.settings.activeFolderPreset = "custom";
             await this.plugin.saveSettings();
+            this.plugin.scheduleSnapshotSync();
           })
       );
 
