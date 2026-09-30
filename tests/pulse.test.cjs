@@ -1448,9 +1448,11 @@ test('mobile responsive rules only target classes rendered by the plugin',()=>{
  const start=styles.indexOf('/* Mobile (iPhone / iPad) Responsive Adaptations */');
  assert.ok(start>=0,'mobile responsive block should exist');
  const block=styles.slice(start);
- const classes=[...new Set([...block.matchAll(/\.([a-z0-9_-]+)/gi)].map(match=>match[1]))];
+ // A class starts with a letter; "-.025em" and similar values are not selectors.
+ const classes=[...new Set([...block.matchAll(/\.(-?[a-z_][a-z0-9_-]*)/gi)].map(match=>match[1]))];
+ const obsidianBodyClasses=new Set(['is-mobile','theme-dark','theme-light','is-translucent','is-popout-window','is-popout-modal']);
  for(const className of classes){
-  if(className==='is-mobile') continue; // Obsidian adds this to <body> on mobile.
+  if(obsidianBodyClasses.has(className)) continue; // Obsidian adds these to <body>, not the plugin.
   assert.ok(markup.includes(className),`mobile CSS targets missing class: ${className}`);
  }
  assert.match(block,/\.crisp-pulse-title-group > \.crisp-pulse-actions/);

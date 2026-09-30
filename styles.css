@@ -1264,12 +1264,12 @@
 .crisp-pulse-view .crisp-pulse-breakdown-card { background: var(--pulse-ui-surface); border: 1px solid var(--pulse-ui-border); border-radius: 12px; box-shadow: none; }
 .crisp-pulse-view .crisp-pulse-breakdown-row { padding: 10px 0; font-weight: 400; }
 .crisp-pulse-view .crisp-pulse-breakdown-formula { color: var(--text-muted); }
-.crisp-pulse-view :is(button.crisp-pulse-file-item,button.crisp-pulse-topfile-item) {
+.crisp-pulse-view :is(button.crisp-pulse-file-item) {
   background: transparent !important; color: var(--text-normal) !important;
   box-shadow: none !important; border: 1px solid transparent !important; border-radius: 8px !important;
   padding: 9px 10px; min-height: 36px; height: auto; font-weight: 400;
 }
-.crisp-pulse-view :is(button.crisp-pulse-file-item,button.crisp-pulse-topfile-item):hover { background: var(--background-modifier-hover) !important; border-color: var(--pulse-ui-border) !important; }
+.crisp-pulse-view :is(button.crisp-pulse-file-item):hover { background: var(--background-modifier-hover) !important; border-color: var(--pulse-ui-border) !important; }
 .crisp-pulse-view .crisp-pulse-analytics { gap: 32px; padding-top: 4px; }
 .crisp-pulse-view .crisp-pulse-analytics-heading h2 { font-size: 28px; font-weight: 550; }
 .crisp-pulse-view .crisp-pulse-analytics-card { padding: 24px; }
@@ -1343,7 +1343,6 @@
 .crisp-pulse-view .crisp-pulse-breakdown-val { white-space: nowrap; flex-shrink: 0; }
 @container (max-width: 550px) {
   .crisp-pulse-view .crisp-pulse-breakdown-formula { display: block; margin: 4px 0 0; }
-  .crisp-pulse-view .crisp-pulse-review-header { flex-wrap: wrap; gap: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .crisp-pulse-view .crisp-pulse-score-clickable { transition: none; }
