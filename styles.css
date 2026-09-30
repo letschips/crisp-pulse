@@ -584,16 +584,6 @@
 }
 
 /* --- 1.2.0 Retrospective & Date Range Styles --- */
-.crisp-pulse-review-card {
-  background-color: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-m);
-  padding: 18px 22px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
-}
 
 .crisp-pulse-review-header {
   display: flex;
@@ -837,8 +827,6 @@
 }
 .crisp-pulse-analytics .crisp-pulse-analytics-segments button[aria-pressed="true"] { background: var(--background-primary); color: var(--text-normal); border-color: var(--background-modifier-border); box-shadow: 0 1px 3px #00000008; }
 .crisp-pulse-analytics-coverage { margin-top: -14px; color: var(--text-muted); font-size: 12px; line-height: 1.6; }
-.crisp-pulse-analytics-section h3 { font-size: 18px; font-weight: 550; margin: 0 0 7px; }
-.crisp-pulse-analytics-description { color: var(--text-muted); font-size: 13px; line-height: 1.6; margin: 0 0 16px; max-width: 76ch; }
 .crisp-pulse-analytics-card { border: 1px solid var(--background-modifier-border); background: var(--background-primary); border-radius: 18px; padding: 24px 24px 18px; box-shadow: none; min-width: 0; }
 .crisp-pulse-analytics-summary { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
 .crisp-pulse-analytics-label { color: var(--text-muted); font-size: 13px; margin-bottom: 5px; }
@@ -888,7 +876,7 @@
 .crisp-pulse-analytics-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 28px 20px; align-items: stretch; }
 .crisp-pulse-analytics-pair > .crisp-pulse-analytics-section { display: flex; flex-direction: column; min-width: 0; }
 .crisp-pulse-analytics-pair .crisp-pulse-analytics-card { flex: 1; display: flex; flex-direction: column; }
-.crisp-pulse-analytics-pair .crisp-pulse-analytics-description { min-height: 3.2em; }
+.crisp-pulse-analytics-pair .pulse-v2-tray-sub.is-wrap { min-height: 3em; }
 .crisp-pulse-mix-big { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .crisp-pulse-mix-of { color: var(--text-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 .crisp-pulse-mix-bar { display: flex; gap: 3px; height: 12px; margin: 22px 0 24px; border-radius: 999px; overflow: hidden; }
@@ -1201,12 +1189,12 @@
   border: 1px solid var(--pulse-ui-border) !important; border-radius: 9px !important;
   box-shadow: none !important; height: 34px; font-size: 12px;
 }
-.crisp-pulse-view :is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-review-card,.crisp-pulse-analytics-card) {
+.crisp-pulse-view :is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-analytics-card) {
   background: var(--pulse-ui-surface); border: 1px solid var(--pulse-ui-border); border-radius: 16px;
   box-shadow: none !important;
 }
 .crisp-pulse-view .crisp-pulse-kpi-sub { font-size: 10px; color: var(--text-faint); font-weight: 400; }
-.crisp-pulse-view :is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-review-card) { padding: 24px; }
+.crisp-pulse-view :is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card) { padding: 24px; }
 .crisp-pulse-view :is(.crisp-pulse-heatmap-title,.crisp-pulse-detail-date) { font-size: 15px; font-weight: 600; }
 .crisp-pulse-view .crisp-pulse-heatmap-footer { color: var(--text-muted); font-size: 11px; line-height: 1.6; }
 .crisp-pulse-view .crisp-pulse-stat-box { background: var(--pulse-ui-soft); border: 0; border-radius: 10px; padding: 13px; }
@@ -1224,7 +1212,7 @@
 .crisp-pulse-view .crisp-pulse-analytics { gap: 32px; padding-top: 4px; }
 .crisp-pulse-view .crisp-pulse-analytics-heading h2 { font-size: 28px; font-weight: 550; }
 .crisp-pulse-view .crisp-pulse-analytics-card { padding: 24px; }
-.crisp-pulse-view :is(.crisp-pulse-analytics-description,.crisp-pulse-analytics-coverage,.crisp-pulse-analytics-heading p,.crisp-pulse-analytics-readout) { font-weight: 400; }
+.crisp-pulse-view :is(.crisp-pulse-analytics-coverage,.crisp-pulse-analytics-heading p,.crisp-pulse-analytics-readout) { font-weight: 400; }
 .crisp-pulse-view .crisp-pulse-analytics-section h3 { font-size: 17px; font-weight: 550; }
 .crisp-pulse-view .crisp-pulse-analytics-total { font-size: 32px; font-weight: 500; }
 .crisp-pulse-view .crisp-pulse-analytics-segments { border: 1px solid var(--pulse-ui-border); }
@@ -1232,7 +1220,7 @@
 .crisp-pulse-view .crisp-pulse-analytics-segments button[aria-pressed="true"] { background: var(--pulse-ui-surface) !important; color: var(--text-normal) !important; border-color: var(--pulse-ui-border) !important; }
 .crisp-pulse-view :is(button,select):focus-visible { outline: 2px solid var(--pulse-ui-accent) !important; outline-offset: 3px; }
 @container (max-width: 550px) {
-  .crisp-pulse-view :is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-review-card,.crisp-pulse-analytics-card) { padding: 16px 12px; border-radius: 12px; }
+  .crisp-pulse-view :is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-analytics-card) { padding: 16px 12px; border-radius: 12px; }
   .crisp-pulse-view .crisp-pulse-title { font-size: 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1323,7 +1311,7 @@ body.is-translucent.theme-light:not(.is-popout-window):not(.is-popout-modal) .cr
   --pulse-glass-rim: rgba(255, 255, 255, 0.65);
 }
 body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view
-:is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-review-card,.crisp-pulse-analytics-card,.crisp-pulse-breakdown-card) {
+:is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-analytics-card,.crisp-pulse-breakdown-card) {
   box-shadow: inset 0 1px 0 var(--pulse-glass-rim), 0 4px 14px rgba(0, 0, 0, 0.04) !important;
 }
 body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view
@@ -1440,4 +1428,37 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
   .crisp-pulse-view.pulse-v2 .pulse-v2-detail .crisp-pulse-stat-box.is-row-start:nth-child(even) { border-left: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); padding-left: 16px; }
   .crisp-pulse-view.pulse-v2 .pulse-v2-inset { padding: 16px 14px; }
   .crisp-pulse-view.pulse-v2 .pulse-v2-tray-head { padding: 12px 12px 14px; }
+}
+
+/* Analytics, portraits and review share the dashboard tray: two layers, same inset surface. */
+.crisp-pulse-view.pulse-v2 .pulse-v2-tray-sub.is-wrap { white-space: normal; overflow: visible; text-overflow: clip; max-width: 78ch; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-tray > .pulse-v2-inset.crisp-pulse-analytics-card,
+body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view.pulse-v2 .pulse-v2-tray > .pulse-v2-inset.crisp-pulse-analytics-card {
+  background: var(--pulse-ui-surface, var(--background-primary)); border: 0; border-radius: 15px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 0 0 1px color-mix(in srgb, var(--text-normal) 5%, transparent) !important;
+}
+.crisp-pulse-view.pulse-v2 .crisp-pulse-review-workspace { display: flex; flex-direction: column; gap: 20px; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-inset.crisp-pulse-review-section { margin: 0; border-top: 0; padding: 20px 22px; }
+@container (max-width: 520px) {
+  .crisp-pulse-view.pulse-v2 .pulse-v2-inset.crisp-pulse-review-section { padding: 16px 14px; }
+}
+/* Review figures read as a divided strip like the dashboard, not as filled tiles (a third layer). */
+.crisp-pulse-view.pulse-v2 .crisp-pulse-review-workspace :is(.crisp-pulse-review-comparison, .crisp-pulse-review-sources) { column-gap: 0; row-gap: 20px; }
+.crisp-pulse-view.pulse-v2 .crisp-pulse-review-workspace :is(.crisp-pulse-review-comparison, .crisp-pulse-review-sources) > .crisp-pulse-stat-box {
+  background: transparent; border: 0; border-left: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); border-radius: 0; box-shadow: none; padding: 2px 18px; gap: 6px;
+}
+.crisp-pulse-view.pulse-v2 .crisp-pulse-review-workspace :is(.crisp-pulse-review-comparison, .crisp-pulse-review-sources) .crisp-pulse-stat-label { min-height: 0; color: var(--text-muted); font-size: 12.5px; font-weight: 400; }
+.crisp-pulse-view.pulse-v2 .crisp-pulse-review-workspace :is(.crisp-pulse-review-comparison, .crisp-pulse-review-sources) .crisp-pulse-stat-value { font-family: var(--font-monospace); font-size: 20px; font-weight: 500; }
+.crisp-pulse-view.pulse-v2 .crisp-pulse-review-comparison > .crisp-pulse-stat-box:nth-child(3n + 1),
+.crisp-pulse-view.pulse-v2 .crisp-pulse-review-sources > .crisp-pulse-stat-box:nth-child(4n + 1) { border-left: 0; padding-left: 2px; }
+@container (max-width: 700px) {
+  .crisp-pulse-view.pulse-v2 .crisp-pulse-review-sources > .crisp-pulse-stat-box:nth-child(n) { border-left: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); padding-left: 18px; }
+  .crisp-pulse-view.pulse-v2 .crisp-pulse-review-sources > .crisp-pulse-stat-box:nth-child(odd) { border-left: 0; padding-left: 2px; }
+}
+@container (max-width: 600px) {
+  .crisp-pulse-view.pulse-v2 .crisp-pulse-review-comparison > .crisp-pulse-stat-box:nth-child(n) { border-left: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); padding-left: 18px; }
+  .crisp-pulse-view.pulse-v2 .crisp-pulse-review-comparison > .crisp-pulse-stat-box:nth-child(odd) { border-left: 0; padding-left: 2px; }
+}
+@container (max-width: 340px) {
+  .crisp-pulse-view.pulse-v2 :is(.crisp-pulse-review-comparison, .crisp-pulse-review-sources) > .crisp-pulse-stat-box:nth-child(n) { border-left: 0; padding-left: 2px; }
 }

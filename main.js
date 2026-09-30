@@ -3139,9 +3139,9 @@ class CrispPulseView extends ItemView {
     const scopeLabel = { reliable: '可靠记录', recorded_only: '仅实测记录', all: '全部历史' }[this.currentScope];
     section.createDiv({ cls: 'crisp-pulse-analytics-coverage', text: `${dates[0]} — ${dates.at(-1)} · ${scopeLabel} · 已纳入 ${data.recordedDays} / ${dates.length} 天。未记录或被筛选的日期留空，不视作零。` });
     const configs = [
-      { title: '每日贡献', description: '查看记录下来的工作节奏；分数依照当前插件计分口径，不代表知识质量。', type: 'bar', unit: '分', total: 'score', totalLabel: '区间贡献', series: [{ key: 'score', label: '贡献得分', color: 'blue' }] },
-      { title: '写作变化', description: '新增与删除来自保存前后的词数变化，改写为现有算法估算。三条曲线分别展示，不相加。', type: 'line', unit: '词', total: 'wordsAdded', totalLabel: '新增词数', series: [{ key: 'wordsAdded', label: '新增', color: 'blue' }, { key: 'wordsRemoved', label: '删除', color: 'orange' }, { key: 'rewrittenWords', label: '改写估算', color: 'green' }] },
-      { title: '时间投入', description: '交互时长按操作间隔估算，专注时长来自已有 Focus 记录。两者可能重叠，不合并计算。', type: 'line', unit: '分钟', total: 'activeMinutes', totalLabel: '交互活跃', series: [{ key: 'activeMinutes', label: '交互活跃', color: 'blue' }, { key: 'focusMinutes', label: 'Focus 记录', color: 'orange' }] }
+      { title: '每日贡献', icon: 'bar-chart-3', description: '查看记录下来的工作节奏；分数依照当前插件计分口径，不代表知识质量。', type: 'bar', unit: '分', total: 'score', totalLabel: '区间贡献', series: [{ key: 'score', label: '贡献得分', color: 'blue' }] },
+      { title: '写作变化', icon: 'line-chart', description: '新增与删除来自保存前后的词数变化，改写为现有算法估算。三条曲线分别展示，不相加。', type: 'line', unit: '词', total: 'wordsAdded', totalLabel: '新增词数', series: [{ key: 'wordsAdded', label: '新增', color: 'blue' }, { key: 'wordsRemoved', label: '删除', color: 'orange' }, { key: 'rewrittenWords', label: '改写估算', color: 'green' }] },
+      { title: '时间投入', icon: 'clock', description: '交互时长按操作间隔估算，专注时长来自已有 Focus 记录。两者可能重叠，不合并计算。', type: 'line', unit: '分钟', total: 'activeMinutes', totalLabel: '交互活跃', series: [{ key: 'activeMinutes', label: '交互活跃', color: 'blue' }, { key: 'focusMinutes', label: 'Focus 记录', color: 'orange' }] }
     ];
     const include = (record, key) => this.plugin.recordMatchesScope(record, key, this.currentScope);
     this.renderAnalyticsChart(section, data, configs[0]);
@@ -3171,11 +3171,8 @@ class CrispPulseView extends ItemView {
     this.containerEl.querySelector('.crisp-pulse-detail-card')?.scrollIntoView({ block: 'start', behavior: 'auto' });
   }
 
-  analyticsSection(parent, title, description) {
-    const section = parent.createDiv({ cls: 'crisp-pulse-analytics-section' });
-    section.createEl('h3', { text: title });
-    section.createEl('p', { cls: 'crisp-pulse-analytics-description', text: description });
-    return section.createDiv({ cls: 'crisp-pulse-analytics-card' });
+  analyticsSection(parent, title, description, icon = 'bar-chart-2') {
+    return this.trayCard(parent, { icon, title, subtitle: description, wrap: true, cls: 'crisp-pulse-analytics-section', insetCls: 'crisp-pulse-analytics-card' });
   }
 
   analyticsSvg(parent, width, height, label) {
@@ -3205,7 +3202,7 @@ class CrispPulseView extends ItemView {
       { key: 'notesCreated', label: '新建笔记', color: 'rose', unit: '篇' },
       { key: 'tasksCompleted', label: '完成任务', color: 'teal', unit: '项' }
     ];
-    const card = this.analyticsSection(parent, '投入节律', '每行一个指标，颜色深浅按该指标在本区间内的相对高低。竖向对齐同一天，可以看出哪天是全面投入，哪天只在一个方向上用力。');
+    const card = this.analyticsSection(parent, '投入节律', '每行一个指标，颜色深浅按该指标在本区间内的相对高低。竖向对齐同一天，可以看出哪天是全面投入，哪天只在一个方向上用力。', 'layout-grid');
     const { points } = data;
     const number = value => Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 1 });
     const compact = value => Number(value).toLocaleString('zh-CN', { notation: 'compact', maximumFractionDigits: 1 });
@@ -3295,7 +3292,7 @@ class CrispPulseView extends ItemView {
       { key: 'system', label: '系统目录', hint: '日志、备份等自动产物', color: 'gray' },
       { key: 'historical', label: '未分类', hint: '早期记录没有来源信息', color: 'faint' }
     ];
-    const card = this.analyticsSection(parent, '写作来源', '新增词数按保存方式拆分。大段捕获是按单次新增量推断的，粘贴、导入和同步都会落在这里。');
+    const card = this.analyticsSection(parent, '写作来源', '新增词数按保存方式拆分。大段捕获是按单次新增量推断的，粘贴、导入和同步都会落在这里。', 'pen-line');
     card.addClass('crisp-pulse-mix-card');
     const number = value => Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 0 });
     const pct = value => mix.total ? Math.round(value / mix.total * 1000) / 10 : 0;
@@ -3336,7 +3333,7 @@ class CrispPulseView extends ItemView {
   // Share of recorded note-days per project folder.
   renderAnalyticsFolders(parent, share) {
     const colors = ['blue', 'purple', 'orange', 'green', 'rose', 'gray'];
-    const card = this.analyticsSection(parent, '投入去向', '按“笔记 × 天”计数：同一篇笔记在一天内有记录算一次。目录取到项目一级，其余合并为“其他”。');
+    const card = this.analyticsSection(parent, '投入去向', '按“笔记 × 天”计数：同一篇笔记在一天内有记录算一次。目录取到项目一级，其余合并为“其他”。', 'folder-tree');
     card.addClass('crisp-pulse-folder-card');
     if (!share.total) { card.createDiv({ cls: 'crisp-pulse-analytics-empty', text: '所选范围内还没有按笔记记录的数据。' }); return; }
     const body = card.createDiv({ cls: 'crisp-pulse-folder-body' });
@@ -3434,7 +3431,7 @@ class CrispPulseView extends ItemView {
   renderYearRing(parent, profile) {
     const colors = { write: 'purple', interact: 'green', focus: 'orange', create: 'rose' };
     const weekly = profile.unit === 'week', unitName = weekly ? '周' : '天';
-    const card = this.analyticsSection(parent, '年轮', `从顶部缺口右侧开始顺时针，每${unitName}一片花瓣：越长表示当${unitName}贡献越高，颜色是当${unitName}相对自己最突出的投入方向。${weekly ? '范围超过 120 天，按周汇总。' : ''}`);
+    const card = this.analyticsSection(parent, '年轮', `从顶部缺口右侧开始顺时针，每${unitName}一片花瓣：越长表示当${unitName}贡献越高，颜色是当${unitName}相对自己最突出的投入方向。${weekly ? '范围超过 120 天，按周汇总。' : ''}`, 'orbit');
     const size = Math.max(300, Math.min(600, card.clientWidth - 48));
     const c = size / 2, inner = size * 0.19, outer = size * 0.42, labelR = size * 0.47;
     const wrap = card.createDiv({ cls: 'crisp-pulse-ring-wrap' });
@@ -3532,7 +3529,7 @@ class CrispPulseView extends ItemView {
 
   renderYearFingerprint(parent, profile) {
     const weekly = profile.unit === 'week', unitName = weekly ? '周' : '天';
-    const card = this.analyticsSection(parent, '知识指纹', `每${unitName}一根竖条，按写作、交互、专注、新建四个方向的相对比例分段上色，亮度随当${unitName}强度变化。每个人的都不一样，可以导出成图片。${weekly ? '范围超过 120 天，按周汇总。' : ''}`);
+    const card = this.analyticsSection(parent, '知识指纹', `每${unitName}一根竖条，按写作、交互、专注、新建四个方向的相对比例分段上色，亮度随当${unitName}强度变化。每个人的都不一样，可以导出成图片。${weekly ? '范围超过 120 天，按周汇总。' : ''}`, 'fingerprint');
     const palette = this.fingerprintPalette();
     card.addClass('crisp-pulse-fingerprint-card');
     card.style.background = palette.bg;
@@ -3619,7 +3616,7 @@ class CrispPulseView extends ItemView {
 
   // A month calendar of moons: the lit share of each moon is that day's intensity percentile in the range.
   renderYearMoons(parent, profile) {
-    const card = this.analyticsSection(parent, '月相日历', '每天一个月亮，亮面比例是当天强度在本范围内的百分位：满月是高峰日，新月是有记录但没有贡献的日子，虚线圈表示未记录。');
+    const card = this.analyticsSection(parent, '月相日历', '每天一个月亮，亮面比例是当天强度在本范围内的百分位：满月是高峰日，新月是有记录但没有贡献的日子，虚线圈表示未记录。', 'moon');
     const doc = card.ownerDocument;
     const days = profile.days;
     const full = days.filter(day => day.status === 'included' && day.intensity >= 0.9).length;
@@ -3705,7 +3702,7 @@ class CrispPulseView extends ItemView {
   // Weekly strata, newest on top: thickness follows words added, colour bands follow project folders.
   renderYearStrata(parent, strata) {
     const palette = ['blue', 'purple', 'orange', 'green', 'rose', 'teal'];
-    const card = this.analyticsSection(parent, '知识地层', '每周一层，最新的一周在最上面。层的厚度随当周新增词数变化，层内按项目目录分色；持续投入的项目会连成一条贯穿多层的矿脉。');
+    const card = this.analyticsSection(parent, '知识地层', '每周一层，最新的一周在最上面。层的厚度随当周新增词数变化，层内按项目目录分色；持续投入的项目会连成一条贯穿多层的矿脉。', 'layers');
     if (!strata.weeks.some(week => week.recorded)) { card.createDiv({ cls: 'crisp-pulse-analytics-empty', text: '这一年还没有可用记录。' }); return; }
     const width = Math.max(300, Math.min(1000, card.clientWidth - 48));
     const compact = width < 520, labelW = compact ? 34 : 50;
@@ -3804,10 +3801,7 @@ class CrispPulseView extends ItemView {
   }
 
   renderAnalyticsChart(parent, data, config) {
-    const section = parent.createDiv({ cls: 'crisp-pulse-analytics-section' });
-    section.createEl('h3', { text: config.title });
-    section.createEl('p', { cls: 'crisp-pulse-analytics-description', text: config.description });
-    const card = section.createDiv({ cls: 'crisp-pulse-analytics-card' });
+    const card = this.analyticsSection(parent, config.title, config.description, config.icon);
     const summary = card.createDiv({ cls: 'crisp-pulse-analytics-summary' });
     const number = value => Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 1 });
     const primary = summary.createDiv();
@@ -3992,16 +3986,21 @@ class CrispPulseView extends ItemView {
   }
 
   // Dashboard cards: a soft tray holding icon, title, subtitle and a status pill, with content on an inset card.
-  trayCard(parent, { icon, title, subtitle, pill, pillMuted = false, cls = '' }) {
+  trayCard(parent, { icon, title, subtitle, pill, pillMuted = false, cls = '', insetCls = '', wrap = false }) {
     const tray = parent.createDiv({ cls: `pulse-v2-tray ${cls}`.trim() });
     const head = tray.createDiv({ cls: 'pulse-v2-tray-head' });
     const iconEl = head.createDiv({ cls: 'pulse-v2-tray-icon' });
     setIcon(iconEl, icon);
     const text = head.createDiv({ cls: 'pulse-v2-tray-text' });
     text.createDiv({ cls: 'pulse-v2-tray-title', text: title });
-    if (subtitle) text.createDiv({ cls: 'pulse-v2-tray-sub', text: subtitle });
+    if (subtitle) text.createDiv({ cls: `pulse-v2-tray-sub${wrap ? ' is-wrap' : ''}`, text: subtitle });
     if (pill) head.createDiv({ cls: `pulse-v2-pill${pillMuted ? ' is-muted' : ''}`, text: pill });
-    return tray.createDiv({ cls: 'pulse-v2-inset' });
+    return tray.createDiv({ cls: `pulse-v2-inset ${insetCls}`.trim() });
+  }
+
+  // Review sections share the dashboard tray; the inset keeps the old class so its inner styles still apply.
+  reviewSection(parent, icon, title, note) {
+    return this.trayCard(parent, { icon, title, subtitle: note, wrap: true, insetCls: 'crisp-pulse-review-section' });
   }
 
   renderDashboardV2(wrapper) {
@@ -4380,9 +4379,8 @@ class CrispPulseView extends ItemView {
     const start = this.reviewStart || dateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
     this.reviewStart = start;this.reviewEnd = end;
     const model = this.plugin.getReviewModel(start, end, this.currentScope);
-    const card = parent.createDiv({ cls: 'crisp-pulse-review-card crisp-pulse-review-workspace' });
-    card.createEl('h2', { text: '知识复盘与报告' });
-    card.createEl('p', { cls: 'crisp-pulse-review-note', text: '先看发生了什么，再把证据、洞见和下一步写下来。报告包含整个区间，目录筛选只用于查看笔记。' });
+    const workspace = parent.createDiv({ cls: 'crisp-pulse-review-workspace' });
+    const card = this.trayCard(workspace, { icon: 'notebook-pen', title: '知识复盘与报告', subtitle: '先看发生了什么，再把证据、洞见和下一步写下来。报告包含整个区间，目录筛选只用于查看笔记。', wrap: true, pill: `${model.period.days} 天`, pillMuted: true });
     const periodControls = card.createDiv({ cls: 'crisp-pulse-review-controls' });
     const applyPeriod = (a, b) => {
       try {
@@ -4416,9 +4414,7 @@ class CrispPulseView extends ItemView {
     next.addEventListener('click', () => applyPeriod(reviewDayKey(reviewDayNumber(end) + 1), nextEnd));
     card.createEl('p', { cls: 'crisp-pulse-review-note', text: `${start} — ${end} · ${REVIEW_SCOPE_LABELS[this.currentScope]} · 纳入 ${model.current.coverage.recorded}/${model.period.days} 天，未记录 ${model.current.coverage.missing} 天，筛除 ${model.current.coverage.filtered} 天。未记录不等于零。` });
 
-    const comparison = card.createDiv({ cls: 'crisp-pulse-review-section' });
-    comparison.createEl('h3', { text: '前后周期对比' });
-    comparison.createEl('p', { cls: 'crisp-pulse-review-note', text: `前期 ${model.period.previousStart} — ${model.period.previousEnd}，纳入 ${model.previous.coverage.recorded}/${model.period.days} 天。覆盖不足时，变化只代表已纳入记录；贡献分不代表知识质量。` });
+    const comparison = this.reviewSection(workspace, 'git-compare', '前后周期对比', `前期 ${model.period.previousStart} — ${model.period.previousEnd}，纳入 ${model.previous.coverage.recorded}/${model.period.days} 天。覆盖不足时，变化只代表已纳入记录；贡献分不代表知识质量。`);
     const stats = comparison.createDiv({ cls: 'crisp-pulse-review-comparison' });
     for (const row of model.comparison) {
       const box = stats.createDiv({ cls: 'crisp-pulse-stat-box' });
@@ -4426,17 +4422,15 @@ class CrispPulseView extends ItemView {
       box.createDiv({ cls: 'crisp-pulse-stat-value', text: `${formatPulseMinutes(row.current)} ${row.unit}` });
       box.createDiv({ cls: 'crisp-pulse-review-note', text: `前期 ${formatPulseMinutes(row.previous)} ${row.unit} · ${row.changeLabel}` });
     }
-    this.renderReviewSources(card, model);
-    this.renderReviewDrilldown(card, model.current);
-    this.renderReviewActions(card, model);
-    this.renderReviewEvidence(card, model);
-    this.renderReviewDraft(card, model);
+    this.renderReviewSources(workspace, model);
+    this.renderReviewDrilldown(workspace, model.current);
+    this.renderReviewActions(workspace, model);
+    this.renderReviewEvidence(workspace, model);
+    this.renderReviewDraft(workspace, model);
   }
 
   renderReviewDrilldown(parent, review) {
-    const section = parent.createDiv({ cls: 'crisp-pulse-review-section' });
-    section.createEl('h3', { text: '目录与笔记钻取' });
-    section.createEl('p', { cls: 'crisp-pulse-review-note', text: '按文件记录查看新增、改写估算与任务。记录天数表示文件在多少天出现过，不代表编辑次数；历史路径随重命名更新。' });
+    const section = this.reviewSection(parent, 'folder-tree', '目录与笔记钻取', '按文件记录查看新增、改写估算与任务。记录天数表示文件在多少天出现过，不代表编辑次数；历史路径随重命名更新。');
     const controls = section.createDiv({ cls: 'crisp-pulse-review-controls' });
     const folders = new Set();
     for (const file of review.allFiles) {
@@ -4479,9 +4473,7 @@ class CrispPulseView extends ItemView {
   }
 
   renderReviewSources(parent, model) {
-    const section = parent.createDiv({ cls: 'crisp-pulse-review-section' });
-    section.createEl('h3', { text: '新增词数来源' });
-    section.createEl('p', { cls: 'crisp-pulse-review-note', text: '系统目录按路径识别；大段捕获为估算，其他新增来源未确认。历史记录保持未分类，无法据此区分人工与 AI 写作。' });
+    const section = this.reviewSection(parent, 'pen-line', '新增词数来源', '系统目录按路径识别；大段捕获为估算，其他新增来源未确认。历史记录保持未分类，无法据此区分人工与 AI 写作。');
     const grid = section.createDiv({ cls: 'crisp-pulse-review-sources' });
     for (const [key, label] of Object.entries(REVIEW_SOURCE_LABELS)) {
       const box = grid.createDiv({ cls: 'crisp-pulse-stat-box' });
@@ -4500,9 +4492,7 @@ class CrispPulseView extends ItemView {
   }
 
   renderReviewActions(parent, model) {
-    const section = parent.createDiv({ cls: 'crisp-pulse-review-section' });
-    section.createEl('h3', { text: '跨期行动' });
-    section.createEl('p', { cls: 'crisp-pulse-review-note', text: '跟进上一期的承诺，记录状态与实际交付。导入只读取同一数据范围的前一个等长周期，不修改上一期记录。' });
+    const section = this.reviewSection(parent, 'list-checks', '跨期行动', '跟进上一期的承诺，记录状态与实际交付。导入只读取同一数据范围的前一个等长周期，不修改上一期记录。');
     const args = [model.period.start, model.period.end, model.scope];
     const controls = section.createDiv({ cls: 'crisp-pulse-review-controls' });
     const inherit = controls.createEl('button', { cls: 'crisp-pulse-tab-btn', text: '带入上一期未完成行动' });
@@ -4565,9 +4555,7 @@ class CrispPulseView extends ItemView {
   }
 
   renderReviewEvidence(parent, model) {
-    const section = parent.createDiv({ cls: 'crisp-pulse-review-section' });
-    section.createEl('h3', { text: '洞见证据' });
-    section.createEl('p', { cls: 'crisp-pulse-review-note', text: '从本期笔记中关联来源，可保留原文摘录。摘录保存后不会随原文修改，仍可追溯采集时间和原始路径。' });
+    const section = this.reviewSection(parent, 'quote', '洞见证据', '从本期笔记中关联来源，可保留原文摘录。摘录保存后不会随原文修改，仍可追溯采集时间和原始路径。');
     const add = section.createEl('button', { cls: 'crisp-pulse-tab-btn', text: '从本期笔记添加证据' });
     add.disabled = !model.current.allFiles.length;
     add.addEventListener('click', () => new CrispPulseEvidenceModal(this.app, this.plugin, model, () => this.render()).open());
@@ -4587,9 +4575,7 @@ class CrispPulseView extends ItemView {
   }
 
   renderReviewDraft(parent, model) {
-    const section = parent.createDiv({ cls: 'crisp-pulse-review-section' });
-    section.createEl('h3', { text: '复盘报告' });
-    section.createEl('p', { cls: 'crisp-pulse-review-note', text: '草稿按日期区间和数据范围分别保存。后台定期保存，也可点击立即保存；复制和归档会包含最新输入。' });
+    const section = this.reviewSection(parent, 'scroll-text', '复盘报告', '草稿按日期区间和数据范围分别保存。后台定期保存，也可点击立即保存；复制和归档会包含最新输入。');
     const fields = section.createDiv({ cls: 'crisp-pulse-review-drafts' });
     for (const [key, label] of Object.entries(REVIEW_DRAFT_FIELDS)) {
       const wrap = fields.createEl('label', { text: label });
