@@ -55,7 +55,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8') +
-    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined};',
     context
   );
   const Pulse = context.module.exports;
@@ -1557,4 +1557,102 @@ test('JSON backup never carries the license code', async () => {
   assert.doesNotMatch(saved, /secret\.payload\.sig|licenseLastOnlineAt/);
   assert.equal(JSON.parse(saved).settings.dataQualityScope, p.settings.dataQualityScope);
   assert.equal(p.settings.licenseCode, 'secret.payload.sig');
+});
+
+test('writing mix never attributes more words than were added and keeps legacy words unclassified', () => {
+  const { helpers } = setup();
+  const day = (words, files, quality = 'recorded') => ({ quality, contribution: { wordsAdded: words }, files });
+  const daily = {
+    '2026-09-06': day(100, { 'Sidecar/logs/a.md': { sourceWords: { system: 80 } }, 'b.md': { sourceWords: { capture: 600, unattributed: 30 } } }),
+    '2026-09-07': day(50, { 'old.md': { wordsAdded: 50 } }),
+    '2026-09-08': day(999, { 'x.md': { sourceWords: { unattributed: 999 } } }, 'estimated')
+  };
+  const mix = helpers.buildWritingMix(daily, ['2026-09-05', '2026-09-06', '2026-09-07', '2026-09-08'], rec => rec.quality === 'recorded');
+  assert.deepEqual({ ...mix.parts }, { typed: 0, capture: 20, system: 80, historical: 50 });
+  assert.equal(mix.total, 150);
+  assert.equal(mix.days[0], null);assert.equal(mix.days[3], null);
+  assert.equal(mix.days[1].system + mix.days[1].capture + mix.days[1].typed + mix.days[1].historical, 100);
+});
+
+test('folder share groups by project folder, folds the tail into 其他 and sums to 100%', () => {
+  const { helpers } = setup();
+  const files = {};
+  for (const name of ['A', 'B', 'C', 'D', 'E', 'F', 'G']) files[`Topics/${name}/n.md`] = { wordsAdded: 10 };
+  files['Topics/A/m.md'] = { wordsAdded: 5 };files['Core/x.md'] = { wordsAdded: 1 };files['root.md'] = { wordsAdded: 1 };
+  const daily = { '2026-09-07': { quality: 'recorded', files }, '2026-09-08': { quality: 'estimated', files: { 'Skip/z.md': { wordsAdded: 999 } } } };
+  const share = helpers.buildFolderShare(daily, ['2026-09-07', '2026-09-08'], rec => rec.quality === 'recorded');
+  assert.equal(share.total, 10);
+  assert.equal(share.items[0].name, 'Topics/A');assert.equal(share.items[0].count, 2);assert.equal(share.items[0].words, 15);
+  assert.equal(share.items.length, 6);assert.equal(share.items.at(-1).name, '其他');assert.equal(share.items.at(-1).count, 4);
+  assert.ok(share.items.every(item => item.name !== 'Skip'));
+  assert.equal(share.items.reduce((sum, item) => sum + item.percent, 0), 100);
+  const empty = helpers.buildFolderShare({}, ['2026-09-08'], () => true);
+  assert.equal(empty.total, 0);assert.equal(empty.items.length, 0);
+});
+
+test('year profile separates future, missing, excluded and zero days and picks the dominant dimension', () => {
+  const { helpers } = setup();
+  const rec = (c, a = {}, quality = 'recorded') => ({ quality, contribution: { score: 0, wordsAdded: 0, notesCreated: 0, tasksCompleted: 0, ...c }, activity: { activeMinutes: 0, focusMinutes: 0, ...a } });
+  const daily = {
+    '2026-01-01': rec({ score: 10, wordsAdded: 100 }, { activeMinutes: 10 }),
+    '2026-01-02': rec({ score: 40, wordsAdded: 50 }, { activeMinutes: 5, focusMinutes: 120 }),
+    '2026-01-03': rec({ score: 0 }),
+    '2026-01-04': rec({ score: 99, wordsAdded: 9999 }, {}, 'estimated'),
+    '2026-01-06': rec({ score: 20, wordsAdded: 400 }, { activeMinutes: 20 })
+  };
+  const profile = helpers.buildYearProfile(daily, 2026, r => r.quality === 'recorded', '2026-01-06');
+  assert.equal(profile.days.length, 365);
+  const [d1, d2, d3, d4, d5, d6, d7] = profile.days;
+  assert.equal(d4.status, 'excluded');assert.equal(d5.status, 'missing');assert.equal(d7.status, 'future');
+  assert.equal(d3.status, 'included');assert.equal(d3.length, 0);assert.equal(d3.intensity, 0);assert.equal(d3.dominant, null);
+  assert.equal(d2.dominant, 'focus');assert.equal(d6.dominant, 'write');
+  assert.equal(d2.intensity, 1);assert.equal(d2.length, 1);
+  assert.ok(profile.days.every(d => d.length >= 0 && d.length <= 1 && d.intensity >= 0 && d.intensity <= 1));
+  assert.equal(profile.recordedDays, 4);assert.equal(profile.activeDays, 3);
+  assert.equal(profile.totals.score, 70);assert.equal(profile.totals.words, 550);
+});
+
+test('strata groups Monday weeks, keeps folder order stable and folds the tail the same way every week', () => {
+  const { helpers } = setup();
+  const files = names => Object.fromEntries(names.map(([path, words]) => [path, { wordsAdded: words }]));
+  const daily = {
+    '2026-01-01': { quality: 'recorded', contribution: { wordsAdded: 30 }, files: files([['Topics/A/x.md', 10], ['Topics/B/y.md', 20]]) },
+    '2026-01-05': { quality: 'recorded', contribution: { wordsAdded: 5 }, files: files([['Topics/A/x.md', 5], ['Core/z.md', 0]]) },
+    '2026-01-06': { quality: 'recorded', contribution: { wordsAdded: 7 }, files: files([['Topics/A/x.md', 7], ['Z/q.md', 0]]) }
+  };
+  const dates = Array.from({ length: 20 }, (_, i) => { const d = new Date(2026, 0, 1 + i); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  const strata = helpers.buildStrata(daily, dates, () => true, 2);
+  assert.deepEqual([...strata.folders], ['Topics/A', 'Topics/B', '其他']);
+  assert.equal(strata.weeks[0].start, '2026-01-01');assert.equal(strata.weeks[0].end, '2026-01-04');
+  assert.equal(strata.weeks[1].start, '2026-01-05');assert.equal(strata.weeks[1].end, '2026-01-11');
+  assert.equal(strata.weeks[0].words, 30);assert.equal(strata.weeks[0].counts['Topics/B'], 1);assert.equal(strata.weeks[0].counts['其他'] || 0, 0);
+  assert.equal(strata.weeks[1].counts['Topics/A'], 2);assert.equal(strata.weeks[1].counts['其他'], 2);assert.equal(strata.weeks[1].total, 4);
+  assert.equal(strata.weeks[2].recorded, false);assert.equal(strata.weeks[2].total, 0);
+});
+
+test('portrait range follows the data: first included record to today, at least 30 days', () => {
+  const { helpers } = setup();
+  const daily = { '2026-08-20': { quality: 'estimated' }, '2026-09-01': { quality: 'recorded' }, '2026-09-10': { quality: 'recorded' } };
+  const recorded = r => r.quality === 'recorded';
+  const long = helpers.portraitDates(daily, recorded, '2026-10-15');
+  assert.equal(long[0], '2026-09-01');assert.equal(long.at(-1), '2026-10-15');assert.equal(long.length, 45);
+  const short = helpers.portraitDates(daily, recorded, '2026-09-10');
+  assert.equal(short.length, 30);assert.equal(short.at(-1), '2026-09-10');assert.equal(short[0], '2026-08-12');
+  const none = helpers.portraitDates({}, recorded, '2026-09-10');
+  assert.equal(none.length, 30);assert.equal(none.at(-1), '2026-09-10');
+  const profile = helpers.buildDayProfile(daily, long, recorded, '2026-10-15');
+  assert.equal(profile.days.length, 45);assert.equal(profile.recordedDays, 2);
+});
+
+test('moon path draws nothing for a new moon, a full disc at 1, and bends the terminator the right way', () => {
+  const { helpers } = setup();
+  assert.equal(helpers.moonPath(0, 10, 10, 8), '');
+  assert.equal(helpers.moonPath(-1, 10, 10, 8), '');
+  const full = helpers.moonPath(1, 10, 10, 8);
+  assert.match(full, /^M10,2 A8,8 0 1 1 10,18 A8,8 0 1 1 10,2 Z$/);
+  // Crescent: terminator bulges toward the lit (right) side; gibbous: toward the dark side.
+  assert.match(helpers.moonPath(0.25, 10, 10, 8), /A4,8 0 0 0 10,2 Z$/);
+  assert.match(helpers.moonPath(0.75, 10, 10, 8), /A4,8 0 0 1 10,2 Z$/);
+  assert.match(helpers.moonPath(0.5, 10, 10, 8), /A0,8 0 0 [01] 10,2 Z$/);
+  assert.equal(helpers.moonPath(2, 10, 10, 8), full);
 });

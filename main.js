@@ -1577,7 +1577,8 @@ class CrispPulsePlugin extends Plugin {
         const dot = fileName.lastIndexOf(".");
         let path = fileName;
         for (let i = 2; await this.app.vault.adapter.exists(path); i++) path = `${fileName.slice(0, dot)}-${i}${fileName.slice(dot)}`;
-        await this.app.vault.create(path, content);
+        if (typeof content !== 'string') await this.app.vault.createBinary(path, content);
+        else await this.app.vault.create(path, content);
         new Notice(`已导出到库根目录：${path}`);
         return { success: true, path };
       } catch (error) {
@@ -2686,7 +2687,7 @@ class CrispPulsePlugin extends Plugin {
 
 // Analytics uses daily aggregates only; a missing/excluded day is never invented as zero.
 function buildAnalyticsData(daily, dates, includeRecord) {
-  const fields = { score: 'contribution', wordsAdded: 'contribution', wordsRemoved: 'contribution', rewrittenWords: 'contribution', activeMinutes: 'activity', focusMinutes: 'activity' };
+  const fields = { score: 'contribution', wordsAdded: 'contribution', wordsRemoved: 'contribution', rewrittenWords: 'contribution', notesCreated: 'contribution', tasksCompleted: 'contribution', activeMinutes: 'activity', focusMinutes: 'activity' };
   const totals = Object.fromEntries(Object.keys(fields).map(key => [key, 0]));
   let recordedDays = 0;
   const points = dates.map(date => {
@@ -2725,6 +2726,251 @@ function analyticsLinePath(points, field, x, y) {
   return commands.join(' ');
 }
 
+// Split each day's added words by recorded source. Sources are clamped to the day's total in a fixed
+// order, and whatever older records never classified stays "historical" instead of being guessed.
+function buildWritingMix(daily, dates, includeRecord) {
+  const parts = { typed: 0, capture: 0, system: 0, historical: 0 };
+  const sourceKeys = { system: 'system', capture: 'capture', typed: 'unattributed' };
+  const days = dates.map(date => {
+    const record = daily[date];
+    if (!record || !includeRecord(record, date)) return null;
+    let left = Math.max(0, Number(record.contribution?.wordsAdded) || 0);
+    const day = { date, typed: 0, capture: 0, system: 0, historical: 0 };
+    for (const [part, source] of Object.entries(sourceKeys)) {
+      let sum = 0;
+      for (const file of Object.values(record.files || {})) {
+        const amount = file?.sourceWords?.[source];
+        if (Number.isFinite(amount) && amount > 0) sum += amount;
+      }
+      day[part] = Math.min(left, sum);
+      left -= day[part];
+    }
+    day.historical = left;
+    for (const key of Object.keys(parts)) parts[key] += day[key];
+    return day;
+  });
+  return { parts, total: Object.values(parts).reduce((sum, value) => sum + value, 0), days };
+}
+
+// Project-level folder for a note: "Topics/self-media/x.md" -> "Topics/self-media", "Core/x.md" -> "Core".
+function analyticsFolderOf(path) {
+  const parts = String(path).split('/');
+  if (parts.length > 2) return `${parts[0]}/${parts[1]}`;
+  return parts.length === 2 ? parts[0] : '(根目录)';
+}
+
+// Where recorded work went: one count per note per day, top folders plus a folded "其他" tail.
+function buildFolderShare(daily, dates, includeRecord, limit = 5) {
+  const groups = new Map();
+  for (const date of dates) {
+    const record = daily[date];
+    if (!record || !includeRecord(record, date)) continue;
+    for (const [path, file] of Object.entries(record.files || {})) {
+      const name = analyticsFolderOf(path);
+      const group = groups.get(name) || { name, count: 0, words: 0 };
+      group.count += 1;
+      group.words += Number.isFinite(file?.wordsAdded) && file.wordsAdded > 0 ? file.wordsAdded : 0;
+      groups.set(name, group);
+    }
+  }
+  const sorted = [...groups.values()].sort((a, b) => b.count - a.count || b.words - a.words || a.name.localeCompare(b.name));
+  const items = sorted.slice(0, limit);
+  const tail = sorted.slice(limit);
+  if (tail.length) items.push({ name: '其他', count: tail.reduce((s, g) => s + g.count, 0), words: tail.reduce((s, g) => s + g.words, 0), folded: tail.length });
+  const total = items.reduce((sum, item) => sum + item.count, 0);
+  // Largest-remainder rounding keeps the legend summing to exactly 100%.
+  for (const item of items) item.percent = total ? Math.floor(item.count * 100 / total) : 0;
+  let remainder = total ? 100 - items.reduce((sum, item) => sum + item.percent, 0) : 0;
+  for (const item of [...items].sort((a, b) => (b.count * 100 / total - b.percent) - (a.count * 100 / total - a.percent))) { if (remainder-- <= 0) break; item.percent++; }
+  return { total, items };
+}
+
+// Robust upper reference: the value at the given quantile of the positive samples.
+function yearQuantile(values, q) {
+  const sorted = values.filter(v => v > 0).sort((a, b) => a - b);
+  return sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] : 0;
+}
+
+const YEAR_DIMENSIONS = [
+  { key: 'write', field: 'words', label: '写作' },
+  { key: 'interact', field: 'active', label: '交互' },
+  { key: 'focus', field: 'focus', label: '专注' },
+  { key: 'create', field: 'notes', label: '新建' }
+];
+
+// One entry per calendar day of the year. Each dimension is normalised against its own 90th percentile
+// so a day's "dominant" colour means "unusually high for this kind of work", not "largest raw number".
+function buildYearProfile(daily, year, includeRecord, todayKey = getTodayKey()) {
+  const dates = [];
+  for (let d = new Date(year, 0, 1); d.getFullYear() === year; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) dates.push(dateKey(d));
+  return { ...buildDayProfile(daily, dates, includeRecord, todayKey), year };
+}
+
+// Default portrait window: from the first included record to today, never shorter than minDays.
+function portraitDates(daily, includeRecord, todayKey = getTodayKey(), minDays = 30) {
+  const first = Object.keys(daily).filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key) && key <= todayKey && daily[key] && includeRecord(daily[key], key)).sort()[0];
+  const [y, m, d] = todayKey.split('-').map(Number);
+  const earliest = dateKey(new Date(y, m - 1, d - minDays + 1));
+  const start = first && first < earliest ? first : earliest;
+  const dates = [];
+  const [sy, sm, sd] = start.split('-').map(Number);
+  for (let i = 0; ; i++) {
+    const key = dateKey(new Date(sy, sm - 1, sd + i));
+    if (key > todayKey) break;
+    dates.push(key);
+  }
+  return dates;
+}
+
+function buildDayProfile(daily, dates, includeRecord, todayKey = getTodayKey()) {
+  const days = [];
+  for (const date of dates) {
+    const d = new Date(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)));
+    const record = daily[date];
+    const status = date > todayKey ? 'future' : !record ? 'missing' : !includeRecord(record, date) ? 'excluded' : 'included';
+    const value = (group, field) => { const v = status === 'included' ? record[group]?.[field] : 0; return Number.isFinite(v) && v > 0 ? v : 0; };
+    days.push({ date, month: d.getMonth(), status, score: value('contribution', 'score'), words: value('contribution', 'wordsAdded'), notes: value('contribution', 'notesCreated'), tasks: value('contribution', 'tasksCompleted'), active: value('activity', 'activeMinutes'), focus: value('activity', 'focusMinutes') });
+  }
+  const included = days.filter(day => day.status === 'included');
+  const scales = Object.fromEntries(YEAR_DIMENSIONS.map(dim => [dim.key, yearQuantile(included.map(day => day[dim.field]), 0.9)]));
+  const scoreRef = yearQuantile(included.map(day => day.score), 0.98);
+  const positiveScores = included.map(day => day.score).filter(v => v > 0).sort((a, b) => a - b);
+  for (const day of days) {
+    day.dims = Object.fromEntries(YEAR_DIMENSIONS.map(dim => [dim.key, scales[dim.key] > 0 ? Math.min(1, day[dim.field] / scales[dim.key]) : 0]));
+    day.dominant = null;
+    for (const dim of YEAR_DIMENSIONS) if (day.dims[dim.key] > 0 && (!day.dominant || day.dims[dim.key] > day.dims[day.dominant])) day.dominant = dim.key;
+    day.length = scoreRef > 0 ? Math.min(1, Math.sqrt(day.score / scoreRef)) : 0;
+    day.intensity = day.score > 0 && positiveScores.length ? positiveScores.filter(v => v <= day.score).length / positiveScores.length : 0;
+  }
+  const sum = field => Math.round(included.reduce((total, day) => total + day[field], 0) * 10) / 10;
+  return { days, recordedDays: included.length, activeDays: included.filter(day => day.score > 0).length, totals: { score: sum('score'), words: sum('words'), active: sum('active'), focus: sum('focus'), notes: sum('notes') } };
+}
+
+// Weekly layers (Monday-based, clipped to the given dates) split by a fixed set of project folders,
+// so a folder worked on week after week lines up into a continuous vein.
+function buildStrata(daily, dates, includeRecord, limit = 6) {
+  const share = buildFolderShare(daily, dates, includeRecord, limit);
+  const folders = share.items.map(item => item.name);
+  const named = new Set(folders.filter(name => name !== '其他'));
+  const weeks = [];
+  let week = null;
+  for (const date of dates) {
+    const [y, m, d] = date.split('-').map(Number);
+    if (!week || new Date(y, m - 1, d).getDay() === 1) weeks.push(week = { start: date, end: date, words: 0, total: 0, counts: {}, recorded: false });
+    week.end = date;
+    const record = daily[date];
+    if (!record || !includeRecord(record, date)) continue;
+    week.recorded = true;
+    const words = record.contribution?.wordsAdded;
+    if (Number.isFinite(words) && words > 0) week.words += words;
+    for (const path of Object.keys(record.files || {})) {
+      const folder = analyticsFolderOf(path);
+      const name = named.has(folder) ? folder : '其他';
+      week.counts[name] = (week.counts[name] || 0) + 1;
+      week.total += 1;
+    }
+  }
+  return { folders, weeks };
+}
+
+// Fingerprint colours are resolved per theme and written inline, so the exported PNG matches what is on screen.
+const FINGERPRINT_PALETTES = {
+  dark: { bg: '#15171a', border: '#262a2f', title: '#7d838c', heading: '#ece9e3', empty: '#1e2125', zero: '#2a2e33', tick: '#5d636b', text: '#c9c6c0', write: '#a48ef0', interact: '#6cc6a2', focus: '#edac68', create: '#ec87a4' },
+  light: { bg: '#fbfaf8', border: '#e7e4df', title: '#8b9097', heading: '#1f2328', empty: '#efedea', zero: '#e3e0db', tick: '#a2a6ac', text: '#3b4046', write: '#7b5cc8', interact: '#3f9f7c', focus: '#d98a37', create: '#d0577a' }
+};
+
+// Axis labels that stay readable at any span: Mondays for short windows, month starts for long ones.
+function portraitTicks(days) {
+  const ticks = [];
+  days.forEach((day, i) => {
+    const [y, m, d] = day.date.split('-').map(Number);
+    if (days.length <= 62 ? new Date(y, m - 1, d).getDay() === 1 : d === 1) ticks.push({ index: i, label: days.length <= 62 ? `${m}/${d}` : `${m}月` });
+  });
+  return ticks;
+}
+
+function portraitTitle(profile) {
+  if (profile.year) return String(profile.year);
+  const first = profile.days[0]?.date || '', last = profile.days.at(-1)?.date || '';
+  return `${first.slice(5).replace('-', '.')} — ${last.slice(5).replace('-', '.')}`;
+}
+
+// Lit part of a moon lit from the right: outer right half plus an elliptical terminator.
+// A crescent's terminator bows toward the lit side, a gibbous moon's toward the dark side.
+function moonPath(fraction, cx, cy, r) {
+  const f = Math.min(1, Number.isFinite(fraction) ? fraction : 0);
+  if (!(f > 0)) return '';
+  const n = v => Math.round(v * 100) / 100;
+  const top = `${n(cx)},${n(cy - r)}`, bottom = `${n(cx)},${n(cy + r)}`;
+  if (f >= 1) return `M${top} A${n(r)},${n(r)} 0 1 1 ${bottom} A${n(r)},${n(r)} 0 1 1 ${top} Z`;
+  return `M${top} A${n(r)},${n(r)} 0 0 1 ${bottom} A${n(r * Math.abs(1 - 2 * f))},${n(r)} 0 0 ${f > 0.5 ? 1 : 0} ${top} Z`;
+}
+
+function svgDrawer(doc, svg) {
+  return (tag, attributes, text, into = svg) => {
+    const node = doc.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, String(value));
+    if (text !== undefined) node.textContent = text;
+    into.appendChild(node);
+    return node;
+  };
+}
+
+// Draws the fingerprint and returns bar geometry so the view can lay interaction targets over it.
+function drawFingerprint(draw, profile, width, height, palette) {
+  const mono = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  const compact = width < 560;
+  const pad = Math.round(width * (compact ? 0.06 : 0.05));
+  const fs = Math.max(10, Math.min(16, width / 62));
+  draw('rect', { x: 0, y: 0, width, height, fill: palette.bg });
+  draw('text', { x: pad, y: pad + fs, fill: palette.title, 'font-family': mono, 'font-size': fs * 0.8, 'letter-spacing': fs * 0.25 }, 'CRISP PULSE · 知识指纹');
+  const title = portraitTitle(profile);
+  draw('text', { x: width - pad, y: pad + fs * 2.1, fill: palette.heading, 'font-family': mono, 'font-size': fs * (title.length > 6 ? 1.6 : 2.6), 'font-weight': 500, 'text-anchor': 'end' }, title);
+  const x0 = pad, x1 = width - pad, y0 = pad + fs * 3.6, y1 = height - pad - fs * 4.2;
+  const n = profile.days.length, step = (x1 - x0) / n;
+  const barW = step < 2 ? step * 0.92 : step * (n <= 90 ? 0.66 : 0.6);
+  const rx = barW >= 6 ? Math.min(4, barW * 0.22) : 0;
+  const gap = barW >= 8 ? 2 : 0;
+  const order = ['write', 'interact', 'focus', 'create'];
+  const bars = profile.days.map((day, i) => {
+    const x = x0 + i * step + (step - barW) / 2;
+    const group = draw('g', { class: 'pulse-fp-bar' });
+    if (day.status === 'future') return { group, x, index: i };
+    const block = (y, h, fill, opacity = 1) => draw('rect', { x, y, width: barW, height: Math.max(0, h), rx, fill, 'fill-opacity': opacity }, undefined, group);
+    if (day.status !== 'included') { block(y0, y1 - y0, palette.empty); return { group, x, index: i }; }
+    const parts = order.filter(key => day.dims[key] > 0);
+    const total = parts.reduce((sum, key) => sum + day.dims[key], 0);
+    if (!parts.length) { block(y0, y1 - y0, palette.zero); return { group, x, index: i }; }
+    const opacity = Math.round((0.35 + 0.65 * day.intensity) * 100) / 100;
+    const usable = y1 - y0 - gap * (parts.length - 1);
+    let y = y0;
+    for (const key of parts) {
+      const h = usable * day.dims[key] / total;
+      block(y, h, palette[key], opacity);
+      y += h + gap;
+    }
+    return { group, x, index: i };
+  });
+  for (const tick of portraitTicks(profile.days)) {
+    if (compact && tick.index % 2 && n <= 62) continue;
+    draw('text', { x: x0 + (tick.index + 0.5) * step, y: y1 + fs * 1.5, fill: palette.tick, 'font-family': mono, 'font-size': fs * 0.75, 'text-anchor': 'middle' }, tick.label);
+  }
+  const number = value => Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 1 });
+  const stats = [`${profile.activeDays} 天`, `${number(profile.totals.words)} 词`, `${number(profile.totals.active / 60)} 小时`];
+  if (!compact) stats.push(`${number(profile.totals.notes)} 篇新建`);
+  draw('text', { x: x0, y: height - pad, fill: palette.text, 'font-family': mono, 'font-size': fs }, stats.join(' · '));
+  if (!compact) {
+    let lx = x1;
+    for (const dim of [...YEAR_DIMENSIONS].reverse()) {
+      draw('text', { x: lx, y: height - pad, fill: palette.title, 'font-family': mono, 'font-size': fs * 0.8, 'text-anchor': 'end' }, dim.label);
+      lx -= fs * 0.8 * dim.label.length + fs * 0.45;
+      draw('rect', { x: lx - fs * 0.6, y: height - pad - fs * 0.62, width: fs * 0.6, height: fs * 0.6, rx: 1.5, fill: palette[dim.key] });
+      lx -= fs * 1.6;
+    }
+  }
+  return { bars, x0, step, y0, y1 };
+}
+
 class CrispPulseView extends ItemView {
   constructor(leaf, plugin) {
     super(leaf);
@@ -2753,13 +2999,14 @@ class CrispPulseView extends ItemView {
   async onOpen() {
     this.render();
     const container = this.containerEl.children[1];
+    this.registerDomEvent(container, 'pointerdown', event => { this.lastPointerType = event.pointerType; }, { capture: true });
     const win = container.ownerDocument.defaultView;
     this.analyticsResizeObserver = new win.ResizeObserver(() => {
-      if (this.activeViewTab !== "analytics" || Math.abs(container.clientWidth - (this.analyticsLastWidth || 0)) < 2) return;
+      if (!["analytics", "yearly"].includes(this.activeViewTab) || Math.abs(container.clientWidth - (this.analyticsLastWidth || 0)) < 2) return;
       if (this.analyticsResizeFrame) win.cancelAnimationFrame(this.analyticsResizeFrame);
       this.analyticsResizeFrame = win.requestAnimationFrame(() => {
         this.analyticsResizeFrame = null;
-        if (container.isConnected && this.activeViewTab === "analytics") this.render();
+        if (container.isConnected && ["analytics", "yearly"].includes(this.activeViewTab)) this.render();
       });
     });
     this.analyticsResizeObserver.observe(container);
@@ -2804,6 +3051,8 @@ class CrispPulseView extends ItemView {
       this.renderDayDetailCard(wrapper);
     } else if (this.activeViewTab === "analytics") {
       this.renderAnalytics(wrapper);
+    } else if (this.activeViewTab === "yearly") {
+      this.renderYearly(wrapper);
     } else {
       // Retrospective View
       this.renderRetrospectivePanel(wrapper);
@@ -2862,7 +3111,650 @@ class CrispPulseView extends ItemView {
       { title: '写作变化', description: '新增与删除来自保存前后的词数变化，改写为现有算法估算。三条曲线分别展示，不相加。', type: 'line', unit: '词', total: 'wordsAdded', totalLabel: '新增词数', series: [{ key: 'wordsAdded', label: '新增', color: 'blue' }, { key: 'wordsRemoved', label: '删除', color: 'orange' }, { key: 'rewrittenWords', label: '改写估算', color: 'green' }] },
       { title: '时间投入', description: '交互时长按操作间隔估算，专注时长来自已有 Focus 记录。两者可能重叠，不合并计算。', type: 'line', unit: '分钟', total: 'activeMinutes', totalLabel: '交互活跃', series: [{ key: 'activeMinutes', label: '交互活跃', color: 'blue' }, { key: 'focusMinutes', label: 'Focus 记录', color: 'orange' }] }
     ];
-    for (const config of configs) this.renderAnalyticsChart(section, data, config);
+    const include = (record, key) => this.plugin.recordMatchesScope(record, key, this.currentScope);
+    this.renderAnalyticsChart(section, data, configs[0]);
+    this.renderAnalyticsRhythm(section, data);
+    this.renderAnalyticsChart(section, data, configs[1]);
+    const pair = section.createDiv({ cls: 'crisp-pulse-analytics-pair' });
+    this.renderAnalyticsWritingMix(pair, buildWritingMix(this.plugin.store.daily || {}, dates, include));
+    this.renderAnalyticsFolders(pair, buildFolderShare(this.plugin.store.daily || {}, dates, include));
+    this.renderAnalyticsChart(section, data, configs[2]);
+  }
+
+  // Touch has no hover: the first tap on a day shows its readout, a second tap on the same day opens it.
+  activateDay(date, show) {
+    if (this.lastPointerType === 'touch' && this.armedDate !== date) {
+      this.armedDate = date;
+      show?.();
+      return;
+    }
+    this.armedDate = null;
+    this.openAnalyticsDay(date);
+  }
+
+  openAnalyticsDay(date) {
+    this.selectedDate = date;
+    this.activeViewTab = 'dashboard';
+    this.render();
+    this.containerEl.querySelector('.crisp-pulse-detail-card')?.scrollIntoView({ block: 'start', behavior: 'auto' });
+  }
+
+  analyticsSection(parent, title, description) {
+    const section = parent.createDiv({ cls: 'crisp-pulse-analytics-section' });
+    section.createEl('h3', { text: title });
+    section.createEl('p', { cls: 'crisp-pulse-analytics-description', text: description });
+    return section.createDiv({ cls: 'crisp-pulse-analytics-card' });
+  }
+
+  analyticsSvg(parent, width, height, label) {
+    const doc = parent.ownerDocument;
+    const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('class', 'crisp-pulse-analytics-chart');
+    if (label) { svg.setAttribute('role', 'group'); svg.setAttribute('aria-label', label); } else svg.setAttribute('aria-hidden', 'true');
+    parent.appendChild(svg);
+    const draw = (tag, attributes, text, into = svg) => {
+      const node = doc.createElementNS('http://www.w3.org/2000/svg', tag);
+      for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, String(value));
+      if (text !== undefined) node.textContent = text;
+      into.appendChild(node);
+      return node;
+    };
+    return { svg, draw };
+  }
+
+  // Several measures on one day-aligned grid: shows which days were broad investment and which were single-track.
+  renderAnalyticsRhythm(parent, data) {
+    const rows = [
+      { key: 'score', label: '贡献得分', color: 'blue', unit: '分' },
+      { key: 'wordsAdded', label: '新增词数', color: 'purple', unit: '词' },
+      { key: 'activeMinutes', label: '交互活跃', color: 'green', unit: '分钟' },
+      { key: 'focusMinutes', label: 'Focus', color: 'orange', unit: '分钟' },
+      { key: 'notesCreated', label: '新建笔记', color: 'rose', unit: '篇' },
+      { key: 'tasksCompleted', label: '完成任务', color: 'teal', unit: '项' }
+    ];
+    const card = this.analyticsSection(parent, '投入节律', '每行一个指标，颜色深浅按该指标在本区间内的相对高低。竖向对齐同一天，可以看出哪天是全面投入，哪天只在一个方向上用力。');
+    const { points } = data;
+    const number = value => Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 1 });
+    const compact = value => Number(value).toLocaleString('zh-CN', { notation: 'compact', maximumFractionDigits: 1 });
+    // A day counts as broad when at least 4 measures sit above that measure's own median for the range.
+    const medians = Object.fromEntries(rows.map(row => {
+      const values = points.map(p => p[row.key]).filter(v => v !== null).sort((a, b) => a - b);
+      return [row.key, values.length ? values[Math.floor((values.length - 1) / 2)] : Infinity];
+    }));
+    const broadDays = points.filter(p => p.status === 'included' && rows.filter(r => p[r.key] > 0 && p[r.key] > medians[r.key]).length >= 4).length;
+    const summary = card.createDiv({ cls: 'crisp-pulse-analytics-summary' });
+    const primary = summary.createDiv();
+    primary.createDiv({ cls: 'crisp-pulse-analytics-label', text: '全面投入' });
+    primary.createDiv({ cls: 'crisp-pulse-analytics-total', text: data.recordedDays ? `${broadDays} 天` : '—' });
+    summary.createDiv({ cls: 'crisp-pulse-analytics-subtotals', text: `至少 4 项指标高于各自区间中位数的日子 · 已纳入 ${data.recordedDays} 天` });
+    if (!data.recordedDays) card.createDiv({ cls: 'crisp-pulse-analytics-empty', text: '所选范围暂无可用记录。' });
+
+    const available = Math.max(280, Math.min(960, card.clientWidth - 48));
+    const labelW = 76, showTotals = available >= 520, totalW = showTotals ? 64 : 0;
+    const minCol = 7;
+    const width = Math.max(available, labelW + totalW + points.length * minCol);
+    const rowH = 30, top = 26, height = top + rows.length * rowH + 4;
+    const scroll = card.createDiv({ cls: 'crisp-pulse-analytics-chart-scroll' });
+    const { svg, draw } = this.analyticsSvg(scroll, width, height, '投入节律矩阵。左右方向键查看日期，Enter 打开日明细。');
+    if (width > available) svg.style.minWidth = `${width}px`;
+    const left = labelW, right = width - totalW;
+    const colW = (right - left) / points.length;
+    const cellW = Math.min(26, Math.max(3, colW * (points.length > 45 ? 0.62 : 0.72)));
+    const cx = i => left + (i + 0.5) * colW;
+    const labelIndices = [...new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])];
+    for (const i of labelIndices) draw('text', { x: cx(i), y: 12, 'text-anchor': i === 0 && colW < 30 ? 'start' : i === points.length - 1 && colW < 30 ? 'end' : 'middle', class: 'pulse-chart-axis' }, points[i].date.slice(5).replace('-', '/'));
+    rows.forEach((row, r) => {
+      const y = top + r * rowH;
+      draw('circle', { cx: 6, cy: y + rowH / 2 - 2, r: 3.5, class: `pulse-chart-fill-${row.color}` });
+      draw('text', { x: 16, y: y + rowH / 2 + 2, class: 'pulse-rhythm-label' }, row.label);
+      const positives = points.map(p => p[row.key]).filter(v => v > 0).sort((a, b) => a - b);
+      let total = 0;
+      points.forEach((p, i) => {
+        const value = p[row.key];
+        const attrs = { x: cx(i) - cellW / 2, y: y + 3, width: cellW, height: rowH - 10, rx: Math.min(5, cellW / 2) };
+        if (value === null) { draw('rect', { ...attrs, class: 'pulse-rhythm-missing' }); return; }
+        total += value;
+        if (!(value > 0)) { draw('rect', { ...attrs, class: 'pulse-rhythm-zero' }); return; }
+        const rank = positives.filter(v => v <= value).length / positives.length;
+        const level = rank > 0.75 ? 1 : rank > 0.5 ? 0.74 : rank > 0.25 ? 0.5 : 0.3;
+        draw('rect', { ...attrs, class: `pulse-chart-fill-${row.color}`, 'fill-opacity': level });
+      });
+      if (showTotals) draw('text', { x: width - 2, y: y + rowH / 2 + 2, 'text-anchor': 'end', class: 'pulse-rhythm-total' }, points.some(p => p[row.key] !== null) ? compact(total) : '—');
+    });
+
+    const pad = Math.max(3, Math.min(6, colW * 0.2));
+    const selector = draw('rect', { x: 0, y: top - 2, width: cellW + pad * 2, height: rows.length * rowH - 2, rx: Math.min(9, cellW / 2 + pad), class: 'pulse-rhythm-selector', visibility: 'hidden' });
+    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: '悬停或用方向键查看某一天的全部指标；点击可打开该日明细。' });
+    readout.setAttr('aria-live', 'polite');
+    const describe = p => p.status === 'missing' ? `${p.date} · 未记录` : p.status === 'excluded' ? `${p.date} · 已被当前数据范围排除`
+      : `${p.date} · ` + rows.map(row => `${row.label} ${p[row.key] === null ? '未记录' : `${number(p[row.key])} ${row.unit}`}`).join(' · ');
+    const targets = [];
+    points.forEach((point, index) => {
+      const target = draw('rect', { x: left + index * colW, y: top - 4, width: colW, height: rows.length * rowH + 2, class: 'pulse-chart-target', role: 'button', tabindex: index === points.length - 1 ? 0 : -1, 'aria-label': describe(point) + '，打开日明细', 'data-analytics-date': point.date });
+      targets.push(target);
+      const show = () => { selector.setAttribute('x', cx(index) - cellW / 2 - pad); selector.setAttribute('visibility', 'visible'); readout.textContent = describe(point); };
+      target.addEventListener('pointerenter', show);
+      target.addEventListener('focus', show);
+      target.addEventListener('click', () => this.activateDay(point.date, show));
+      target.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.openAnalyticsDay(point.date); return; }
+        const next = event.key === 'ArrowLeft' ? index - 1 : event.key === 'ArrowRight' ? index + 1 : event.key === 'Home' ? 0 : event.key === 'End' ? points.length - 1 : null;
+        if (next === null || !targets[next]) return;
+        event.preventDefault();
+        target.setAttribute('tabindex', '-1'); targets[next].setAttribute('tabindex', '0'); targets[next].focus();
+      });
+    });
+    svg.addEventListener('pointerleave', () => selector.setAttribute('visibility', 'hidden'));
+    // When the matrix scrolls on narrow panes, start at the most recent days like the heatmap does.
+    scroll.scrollLeft = scroll.scrollWidth;
+    const legend = card.createDiv({ cls: 'crisp-pulse-analytics-legend crisp-pulse-rhythm-legend' });
+    legend.createSpan({ text: '少' });
+    for (const opacity of [0.3, 0.5, 0.74, 1]) legend.createSpan({ cls: 'pulse-rhythm-swatch', attr: { style: `opacity:${opacity}` } });
+    legend.createSpan({ text: '多' });
+    const blank = legend.createSpan(); blank.createSpan({ cls: 'pulse-rhythm-swatch is-missing' }); blank.createSpan({ text: '未记录' });
+  }
+
+  // Where added words came from, using the per-file sources recorded since 1.7.0.
+  renderAnalyticsWritingMix(parent, mix) {
+    const parts = [
+      { key: 'typed', label: '逐步写入', hint: '单次保存少于 500 词', color: 'blue' },
+      { key: 'capture', label: '大段捕获', hint: '单次保存 500 词以上', color: 'orange' },
+      { key: 'system', label: '系统目录', hint: '日志、备份等自动产物', color: 'gray' },
+      { key: 'historical', label: '未分类', hint: '早期记录没有来源信息', color: 'faint' }
+    ];
+    const card = this.analyticsSection(parent, '写作来源', '新增词数按保存方式拆分。大段捕获是按单次新增量推断的，粘贴、导入和同步都会落在这里。');
+    card.addClass('crisp-pulse-mix-card');
+    const number = value => Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 0 });
+    const pct = value => mix.total ? Math.round(value / mix.total * 1000) / 10 : 0;
+    const head = card.createDiv({ cls: 'crisp-pulse-mix-head' });
+    head.createDiv({ cls: 'crisp-pulse-analytics-label', text: '区间新增' });
+    const big = head.createDiv({ cls: 'crisp-pulse-mix-big' });
+    big.createSpan({ cls: 'crisp-pulse-analytics-total', text: mix.total ? `${number(mix.total)} 词` : '—' });
+    const lead = parts.filter(part => part.key !== 'historical').sort((a, b) => mix.parts[b.key] - mix.parts[a.key])[0];
+    if (mix.total && mix.parts[lead.key] > 0) big.createSpan({ cls: 'crisp-pulse-mix-of', text: `${lead.label}最多，占 ${pct(mix.parts[lead.key])}%` });
+    const bar = card.createDiv({ cls: 'crisp-pulse-mix-bar' });
+    bar.setAttr('role', 'img');
+    bar.setAttr('aria-label', parts.map(part => `${part.label} ${pct(mix.parts[part.key])}%`).join('，'));
+    if (!mix.total) bar.addClass('is-empty');
+    for (const part of parts) {
+      if (!(mix.parts[part.key] > 0)) continue;
+      const segment = bar.createDiv({ cls: `crisp-pulse-mix-segment pulse-chart-fill-${part.color}` });
+      segment.style.flexGrow = String(mix.parts[part.key]);
+    }
+    const grid = card.createDiv({ cls: 'crisp-pulse-mix-grid' });
+    for (const part of parts) {
+      const cell = grid.createDiv({ cls: 'crisp-pulse-mix-cell' });
+      cell.setAttr('title', part.hint);
+      const name = cell.createDiv({ cls: 'crisp-pulse-mix-name' });
+      name.createSpan({ cls: `pulse-chart-dot pulse-chart-fill-${part.color}` });
+      name.createSpan({ text: part.label });
+      const row = cell.createDiv({ cls: 'crisp-pulse-mix-value' });
+      row.createSpan({ text: `${pct(mix.parts[part.key])}%` });
+      const { draw } = this.analyticsSvg(row, 64, 22);
+      const values = mix.days.map(day => day ? day[part.key] : null);
+      const max = Math.max(0, ...values.map(v => v || 0));
+      const series = values.map(v => ({ v }));
+      const path = analyticsLinePath(series, 'v', i => values.length > 1 ? 2 + i * 60 / (values.length - 1) : 32, v => max > 0 ? 19 - v / max * 16 : 19);
+      if (path) draw('path', { d: path, fill: 'none', class: `pulse-mix-spark pulse-chart-stroke-${part.color}` });
+      cell.createDiv({ cls: 'crisp-pulse-mix-words', text: `${number(mix.parts[part.key])} 词` });
+    }
+  }
+
+  // Share of recorded note-days per project folder.
+  renderAnalyticsFolders(parent, share) {
+    const colors = ['blue', 'purple', 'orange', 'green', 'rose', 'gray'];
+    const card = this.analyticsSection(parent, '投入去向', '按“笔记 × 天”计数：同一篇笔记在一天内有记录算一次。目录取到项目一级，其余合并为“其他”。');
+    card.addClass('crisp-pulse-folder-card');
+    if (!share.total) { card.createDiv({ cls: 'crisp-pulse-analytics-empty', text: '所选范围内还没有按笔记记录的数据。' }); return; }
+    const body = card.createDiv({ cls: 'crisp-pulse-folder-body' });
+    const size = 188, c = size / 2, radius = 76, stroke = 14;
+    const ring = body.createDiv({ cls: 'crisp-pulse-folder-ring' });
+    const { draw } = this.analyticsSvg(ring, size, size);
+    const gap = share.items.length > 1 ? (stroke + 5) / radius : 0;
+    const point = angle => `${c + radius * Math.sin(angle)},${c - radius * Math.cos(angle)}`;
+    let start = 0;
+    const arcs = share.items.map((item, i) => {
+      const sweep = item.count / share.total * Math.PI * 2;
+      const from = start + gap / 2, to = start + sweep - gap / 2, mid = start + sweep / 2;
+      start += sweep;
+      const color = item.name === '其他' ? 'gray' : colors[i % (colors.length - 1)];
+      item.color = color;
+      if (share.items.length === 1) return draw('circle', { cx: c, cy: c, r: radius, fill: 'none', 'stroke-width': stroke, class: `pulse-folder-arc pulse-chart-stroke-${color}` });
+      if (to - from < 0.01) return draw('circle', { cx: c + radius * Math.sin(mid), cy: c - radius * Math.cos(mid), r: stroke / 2 - 1, class: `pulse-folder-arc pulse-chart-fill-${color}` });
+      return draw('path', { d: `M${point(from)} A${radius},${radius} 0 ${to - from > Math.PI ? 1 : 0} 1 ${point(to)}`, fill: 'none', 'stroke-width': stroke, class: `pulse-folder-arc pulse-chart-stroke-${color}` });
+    });
+    const center = ring.createDiv({ cls: 'crisp-pulse-folder-center' });
+    center.createDiv({ cls: 'crisp-pulse-analytics-label', text: '笔记 × 天' });
+    center.createDiv({ cls: 'crisp-pulse-folder-total', text: share.total.toLocaleString('zh-CN') });
+    const list = body.createDiv({ cls: 'crisp-pulse-folder-list' });
+    share.items.forEach((item, i) => {
+      const row = list.createDiv({ cls: 'crisp-pulse-folder-row' });
+      row.setAttr('tabindex', '0');
+      row.setAttr('aria-label', `${item.name}：${item.count} 次，占 ${item.percent}%，新增 ${item.words} 词`);
+      row.createSpan({ cls: `pulse-chart-dot pulse-chart-fill-${item.color}` });
+      const name = row.createDiv({ cls: 'crisp-pulse-folder-name' });
+      name.createDiv({ text: item.name });
+      if (item.folded) name.createDiv({ cls: 'crisp-pulse-folder-sub', text: `${item.folded} 个目录` });
+      row.createSpan({ cls: 'crisp-pulse-folder-count', text: item.count.toLocaleString('zh-CN') });
+      row.createSpan({ cls: 'crisp-pulse-folder-pct', text: `${item.percent}%` });
+      const focus = on => { body.toggleClass('is-focusing', on); arcs.forEach((arc, j) => arc.classList.toggle('is-active', on && j === i)); row.toggleClass('is-active', on); };
+      row.addEventListener('pointerenter', () => focus(true));
+      row.addEventListener('pointerleave', () => focus(false));
+      row.addEventListener('focus', () => focus(true));
+      row.addEventListener('blur', () => focus(false));
+    });
+  }
+
+  renderYearly(parent) {
+    this.analyticsLastWidth = this.containerEl.children[1].clientWidth;
+    const daily = this.plugin.store.daily || {};
+    const include = (record, key) => this.plugin.recordMatchesScope(record, key, this.currentScope);
+    const thisYear = new Date().getFullYear();
+    // Only offer years that hold at least one record inside the current scope.
+    const years = [...new Set([thisYear, ...Object.keys(daily).filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key) && daily[key] && include(daily[key], key)).map(key => Number(key.slice(0, 4))).filter(y => y >= 2000 && y <= thisYear)])].sort((a, b) => a - b).slice(-5);
+    if (this.yearlyYear !== 'auto' && !years.includes(this.yearlyYear)) this.yearlyYear = 'auto';
+    const section = parent.createDiv({ cls: 'crisp-pulse-analytics crisp-pulse-yearly' });
+    const heading = section.createDiv({ cls: 'crisp-pulse-analytics-heading' });
+    const text = heading.createDiv();
+    text.createEl('h2', { text: '年度画像' });
+    text.createEl('p', { text: '把长期记录换几种形状看：年轮、指纹、月相和地层。' });
+    const segments = heading.createDiv({ cls: 'crisp-pulse-analytics-segments' });
+    segments.setAttr('aria-label', '选择时间范围');
+    for (const option of ['auto', ...years]) {
+      const button = segments.createEl('button', { text: option === 'auto' ? '自动' : String(option) });
+      button.setAttr('aria-pressed', String(option === this.yearlyYear));
+      button.setAttr('title', option === 'auto' ? '从第一条记录到今天，至少 30 天' : `${option} 年完整日历年`);
+      button.addEventListener('click', () => { this.yearlyYear = option; this.render(); });
+    }
+    const profile = this.yearlyYear === 'auto'
+      ? buildDayProfile(daily, portraitDates(daily, include), include)
+      : buildYearProfile(daily, this.yearlyYear, include);
+    const scopeLabel = REVIEW_SCOPE_LABELS[this.currentScope] || this.currentScope;
+    const span = profile.year ? `${profile.year} 年` : `${formatDateDisplay(profile.days[0].date)} — 今天`;
+    section.createDiv({ cls: 'crisp-pulse-analytics-coverage', text: `${span} · ${scopeLabel} · 已纳入 ${profile.recordedDays} 天，其中 ${profile.activeDays} 天有贡献。未记录或被筛选的日期留空。` });
+    this.renderYearRing(section, profile);
+    this.renderYearFingerprint(section, profile);
+    this.renderYearMoons(section, profile);
+    const dates = profile.days.filter(day => day.status !== 'future').map(day => day.date);
+    this.renderYearStrata(section, buildStrata(daily, dates, include));
+  }
+
+  describeYearDay(day) {
+    const number = value => Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 1 });
+    if (day.status === 'future') return `${formatDateDisplay(day.date)} · 尚未到来`;
+    if (day.status === 'missing') return `${formatDateDisplay(day.date)} · 未记录`;
+    if (day.status === 'excluded') return `${formatDateDisplay(day.date)} · 已被当前数据范围排除`;
+    const lead = YEAR_DIMENSIONS.find(dim => dim.key === day.dominant);
+    return `${formatDateDisplay(day.date)} · 贡献 ${number(day.score)} 分 · 新增 ${number(day.words)} 词 · 交互 ${number(day.active)} 分钟 · Focus ${number(day.focus)} 分钟 · 新建 ${number(day.notes)} 篇${lead ? ` · 以${lead.label}为主` : ''}`;
+  }
+
+  // The range wound clockwise from a small gap at twelve o'clock; one capsule petal per day.
+  renderYearRing(parent, profile) {
+    const colors = { write: 'purple', interact: 'green', focus: 'orange', create: 'rose' };
+    const card = this.analyticsSection(parent, '年轮', '从顶部缺口右侧开始顺时针，每天一片花瓣：越长表示当天贡献越高，颜色是当天相对自己最突出的投入方向。');
+    const size = Math.max(300, Math.min(600, card.clientWidth - 48));
+    const c = size / 2, inner = size * 0.19, outer = size * 0.42, labelR = size * 0.47;
+    const wrap = card.createDiv({ cls: 'crisp-pulse-ring-wrap' });
+    wrap.style.maxWidth = `${size}px`;
+    const { svg, draw } = this.analyticsSvg(wrap, size, size, '年轮。左右方向键逐日查看，Enter 打开日明细。');
+    svg.classList.add('crisp-pulse-ring');
+    svg.setAttribute('tabindex', '0');
+    const days = profile.days, n = days.length;
+    const gapFrac = n >= 360 ? 0.02 : 0.07;
+    const startAngle = Math.PI * 2 * gapFrac / 2, arc = Math.PI * 2 * (1 - gapFrac);
+    const angleOf = i => startAngle + (i + 0.5) / n * arc;
+    const at = (angle, r) => [c + r * Math.sin(angle), c - r * Math.cos(angle)];
+    const petalW = Math.max(1.4, Math.min(18, inner * arc / n * 0.64));
+    for (const f of [0.5, 1]) draw('circle', { cx: c, cy: c, r: inner + (outer - inner) * f, class: 'pulse-ring-guide' });
+    const ticks = portraitTicks(days);
+    for (const tick of ticks) {
+      const [lx, ly] = at(angleOf(tick.index), labelR);
+      draw('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'middle', class: 'pulse-ring-month' }, tick.label);
+    }
+    if (!profile.year) {
+      const [sx, sy] = at(startAngle, outer + 2), [ex, ey] = at(-startAngle, outer + 2);
+      draw('text', { x: sx + 4, y: sy - 8, 'text-anchor': 'start', class: 'pulse-ring-edge' }, '起');
+      draw('text', { x: ex - 4, y: ey - 8, 'text-anchor': 'end', class: 'pulse-ring-edge' }, '今天');
+    }
+    const base = inner + petalW / 2 + 2;
+    const petals = days.map((day, i) => {
+      const angle = angleOf(i);
+      if (day.status === 'future') return null;
+      if (day.status !== 'included') { const [x, y] = at(angle, base); return draw('circle', { cx: x, cy: y, r: Math.max(1, petalW * 0.28), class: 'pulse-ring-missing pulse-ring-petal' }); }
+      const length = day.length > 0 ? 4 + (outer - base - petalW / 2 - 4) * day.length : 0;
+      const [x1, y1] = at(angle, base), [x2, y2] = at(angle, base + length);
+      const cls = day.dominant ? `pulse-ring-petal pulse-ring-tick pulse-chart-stroke-${colors[day.dominant]}` : 'pulse-ring-petal pulse-ring-tick pulse-ring-zero';
+      return draw('line', { x1, y1, x2, y2, 'stroke-width': petalW, 'stroke-opacity': day.dominant ? Math.round((0.5 + 0.5 * day.intensity) * 100) / 100 : 1, class: cls });
+    });
+    const center = wrap.createDiv({ cls: 'crisp-pulse-ring-center' });
+    const centerTop = center.createDiv({ cls: 'crisp-pulse-analytics-label' });
+    const centerMain = center.createDiv({ cls: 'crisp-pulse-ring-year' });
+    const centerSub = center.createDiv({ cls: 'crisp-pulse-ring-sub' });
+    const resetCenter = () => { centerTop.textContent = profile.year ? `${profile.year} 年` : `${n} 天`; centerMain.textContent = String(profile.activeDays); centerSub.textContent = '天有贡献'; };
+    resetCenter();
+    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: '悬停在花瓣上查看某一天，点击打开日明细。' });
+    readout.setAttr('aria-live', 'polite');
+    let current = null;
+    const show = index => {
+      const day = days[index];
+      current = index;
+      svg.classList.add('is-inspecting');
+      petals.forEach((petal, i) => petal?.classList.toggle('is-hot', i === index));
+      centerTop.textContent = `${Number(day.date.slice(5, 7))}月${Number(day.date.slice(8))}日`;
+      centerMain.textContent = day.status === 'included' ? Number(day.score).toLocaleString('zh-CN', { maximumFractionDigits: 1 }) : '—';
+      const lead = YEAR_DIMENSIONS.find(dim => dim.key === day.dominant);
+      centerSub.textContent = day.status === 'included' ? (lead ? `分 · 以${lead.label}为主` : '分') : day.status === 'future' ? '尚未到来' : day.status === 'missing' ? '未记录' : '已排除';
+      readout.textContent = this.describeYearDay(day);
+    };
+    const hide = () => { current = null; svg.classList.remove('is-inspecting'); petals.forEach(petal => petal?.classList.remove('is-hot')); resetCenter(); };
+    const indexAt = event => {
+      const box = svg.getBoundingClientRect();
+      const scale = size / box.width;
+      const dx = (event.clientX - box.left) * scale - c, dy = (event.clientY - box.top) * scale - c;
+      const r = Math.hypot(dx, dy);
+      if (r < inner * 0.8 || r > labelR + 10) return null;
+      const angle = (Math.atan2(dx, -dy) + Math.PI * 2) % (Math.PI * 2);
+      if (angle < startAngle || angle > startAngle + arc) return null;
+      return Math.min(n - 1, Math.floor((angle - startAngle) / arc * n));
+    };
+    svg.addEventListener('pointermove', event => { const i = indexAt(event); if (i === null) { if (current !== null) hide(); } else if (i !== current) show(i); });
+    svg.addEventListener('pointerleave', () => { if (svg.ownerDocument.activeElement !== svg) hide(); });
+    svg.addEventListener('click', event => { const i = indexAt(event); if (i !== null && days[i].status !== 'future') this.activateDay(days[i].date, () => show(i)); });
+    const lastIncluded = days.findLastIndex(day => day.status === 'included');
+    svg.addEventListener('focus', () => show(lastIncluded >= 0 ? lastIncluded : n - 1));
+    svg.addEventListener('blur', hide);
+    svg.addEventListener('keydown', event => {
+      if (current === null) return;
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (days[current].status !== 'future') this.openAnalyticsDay(days[current].date); return; }
+      const delta = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 7, ArrowUp: -7 }[event.key];
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? n - 1 : delta === undefined ? null : Math.max(0, Math.min(n - 1, current + delta));
+      if (next === null) return;
+      event.preventDefault();
+      show(next);
+    });
+    const legend = card.createDiv({ cls: 'crisp-pulse-analytics-legend' });
+    for (const dim of YEAR_DIMENSIONS) {
+      const item = legend.createSpan();
+      item.createSpan({ cls: `pulse-chart-dot pulse-chart-fill-${colors[dim.key]}` });
+      item.createSpan({ text: `以${dim.label}为主` });
+    }
+    legend.createSpan({ cls: 'crisp-pulse-legend-note', text: '花瓣长度 = 当天贡献' });
+  }
+
+  fingerprintPalette() {
+    return FINGERPRINT_PALETTES[this.containerEl.ownerDocument.body.classList.contains('theme-dark') ? 'dark' : 'light'];
+  }
+
+  renderYearFingerprint(parent, profile) {
+    const card = this.analyticsSection(parent, '知识指纹', '每天一根竖条，按写作、交互、专注、新建四个方向的相对比例分段上色，亮度随当天强度变化。每个人的都不一样，可以导出成图片。');
+    const palette = this.fingerprintPalette();
+    card.addClass('crisp-pulse-fingerprint-card');
+    card.style.background = palette.bg;
+    card.style.borderColor = palette.border;
+    const width = Math.max(300, Math.min(1100, card.clientWidth));
+    const height = Math.round(width * (width < 560 ? 0.66 : 0.44));
+    const { svg, draw } = this.analyticsSvg(card, width, height, '知识指纹。左右方向键逐日查看，Enter 打开日明细。');
+    svg.classList.add('crisp-pulse-fp');
+    const geometry = drawFingerprint(draw, profile, width, height, palette);
+    const foot = card.createDiv({ cls: 'crisp-pulse-fingerprint-actions' });
+    foot.style.background = palette.bg;
+    const readout = foot.createDiv({ cls: 'crisp-pulse-fp-readout', text: '悬停在竖条上查看某一天，点击打开日明细。' });
+    readout.style.color = palette.title;
+    readout.setAttr('aria-live', 'polite');
+    const button = foot.createEl('button', { text: '导出 PNG' });
+    button.style.cssText = `background:${palette.empty};color:${palette.text};border-color:${palette.border}`;
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try { await this.exportYearFingerprint(profile); } finally { button.disabled = false; }
+    });
+    const days = profile.days;
+    const targets = [];
+    const show = index => {
+      svg.classList.add('is-inspecting');
+      geometry.bars.forEach(bar => bar.group.classList.toggle('is-hot', bar.index === index));
+      readout.textContent = this.describeYearDay(days[index]);
+      readout.style.color = palette.text;
+    };
+    const hide = () => { svg.classList.remove('is-inspecting'); geometry.bars.forEach(bar => bar.group.classList.remove('is-hot')); };
+    const lastIndex = days.findLastIndex(d => d.status !== 'future');
+    days.forEach((day, i) => {
+      if (day.status === 'future') { targets.push(null); return; }
+      const target = draw('rect', { x: geometry.x0 + i * geometry.step, y: geometry.y0 - 6, width: geometry.step, height: geometry.y1 - geometry.y0 + 12, class: 'pulse-chart-target', role: 'button', tabindex: i === lastIndex ? 0 : -1, 'aria-label': this.describeYearDay(day) + '，打开日明细', 'data-analytics-date': day.date });
+      targets.push(target);
+      target.addEventListener('pointerenter', () => show(i));
+      target.addEventListener('focus', () => show(i));
+      target.addEventListener('click', () => this.activateDay(day.date, () => show(i)));
+      target.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.openAnalyticsDay(day.date); return; }
+        const step = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
+        if (!step) return;
+        let next = i + step;
+        while (targets[next] === null) next += step;
+        if (!targets[next]) return;
+        event.preventDefault();
+        target.setAttribute('tabindex', '-1'); targets[next].setAttribute('tabindex', '0'); targets[next].focus();
+      });
+    });
+    svg.addEventListener('pointerleave', () => { if (!svg.contains(svg.ownerDocument.activeElement)) hide(); });
+    svg.addEventListener('focusout', event => { if (!svg.contains(event.relatedTarget)) hide(); });
+  }
+
+  async exportYearFingerprint(profile) {
+    const width = 1600, height = 704, ratio = 2;
+    const doc = this.containerEl.ownerDocument;
+    const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    svg.setAttribute('width', String(width)); svg.setAttribute('height', String(height));
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    drawFingerprint(svgDrawer(doc, svg), profile, width, height, this.fingerprintPalette());
+    const win = doc.defaultView;
+    const url = win.URL.createObjectURL(new win.Blob([new win.XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml;charset=utf-8' }));
+    try {
+      const image = new win.Image();
+      await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = () => reject(new Error('图片渲染失败')); image.src = url; });
+      const canvas = doc.createElement('canvas');
+      canvas.width = width * ratio; canvas.height = height * ratio;
+      const context = canvas.getContext('2d');
+      context.scale(ratio, ratio);
+      context.drawImage(image, 0, 0, width, height);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('无法生成 PNG');
+      const suffix = profile.year ? String(profile.year) : `${profile.days[0].date}_${profile.days.at(-1).date}`;
+      const res = await this.plugin.saveExportFile(`crisp-pulse-fingerprint-${suffix}.png`, await blob.arrayBuffer(), 'image/png');
+      if (res.success && !res.path) new Notice('已导出知识指纹图片');
+    } catch (error) {
+      console.error('[Crisp Pulse] Fingerprint export failed:', error);
+      new Notice('导出失败：' + (error?.message || error));
+    } finally {
+      win.URL.revokeObjectURL(url);
+    }
+  }
+
+  // A month calendar of moons: the lit share of each moon is that day's intensity percentile in the range.
+  renderYearMoons(parent, profile) {
+    const card = this.analyticsSection(parent, '月相日历', '每天一个月亮，亮面比例是当天强度在本范围内的百分位：满月是高峰日，新月是有记录但没有贡献的日子，虚线圈表示未记录。');
+    const doc = card.ownerDocument;
+    const days = profile.days;
+    const full = days.filter(day => day.status === 'included' && day.intensity >= 0.9).length;
+    const rest = days.filter(day => day.status === 'included' && !(day.score > 0)).length;
+    const summary = card.createDiv({ cls: 'crisp-pulse-analytics-summary' });
+    const primary = summary.createDiv();
+    primary.createDiv({ cls: 'crisp-pulse-analytics-label', text: '满月' });
+    primary.createDiv({ cls: 'crisp-pulse-analytics-total', text: profile.recordedDays ? `${full} 天` : '—' });
+    summary.createDiv({ cls: 'crisp-pulse-analytics-subtotals', text: `强度前 10% 的日子 · 新月 ${rest} 天 · 已纳入 ${profile.recordedDays} 天` });
+    const months = new Map();
+    days.forEach((day, index) => {
+      const key = day.date.slice(0, 7);
+      if (!months.has(key)) months.set(key, []);
+      months.get(key).push({ day, index });
+    });
+    const grid = card.createDiv({ cls: `crisp-pulse-moon-months${months.size <= 2 ? ' is-few' : ''}` });
+    const cells = [];
+    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: '悬停在月亮上查看某一天，点击打开日明细。' });
+    readout.setAttr('aria-live', 'polite');
+    const lastIndex = days.findLastIndex(day => day.status !== 'future');
+    for (const [key, entries] of months) {
+      const [y, m] = key.split('-').map(Number);
+      const block = grid.createDiv({ cls: 'crisp-pulse-moon-month' });
+      block.createDiv({ cls: 'crisp-pulse-moon-title', text: `${y} 年 ${m} 月` });
+      const table = block.createDiv({ cls: 'crisp-pulse-moon-grid' });
+      for (const label of ['一', '二', '三', '四', '五', '六', '日']) table.createDiv({ cls: 'crisp-pulse-moon-weekday', text: label });
+      // Leading blanks keep weekday columns aligned; days before the range stay blank rather than looking unrecorded.
+      const lead = (new Date(y, m - 1, 1).getDay() + 6) % 7;
+      for (let i = 0; i < lead + Number(entries[0].day.date.slice(8)) - 1; i++) table.createDiv({ cls: 'crisp-pulse-moon-blank' });
+      for (const { day, index } of entries) {
+        const cell = table.createDiv({ cls: `crisp-pulse-moon is-${day.status}` });
+        const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 28 28');
+        svg.setAttribute('aria-hidden', 'true');
+        cell.appendChild(svg);
+        const draw = svgDrawer(doc, svg);
+        if (day.status === 'future') draw('circle', { cx: 14, cy: 14, r: 2, class: 'pulse-moon-future' });
+        else if (day.status !== 'included') draw('circle', { cx: 14, cy: 14, r: 10.5, class: 'pulse-moon-missing' });
+        else {
+          if (day.intensity >= 0.9) draw('circle', { cx: 14, cy: 14, r: 13, class: 'pulse-moon-halo' });
+          draw('circle', { cx: 14, cy: 14, r: 10.5, class: 'pulse-moon-dark' });
+          const lit = moonPath(day.intensity, 14, 14, 10.5);
+          if (lit) draw('path', { d: lit, class: 'pulse-moon-lit' });
+        }
+        cell.createDiv({ cls: 'crisp-pulse-moon-day', text: String(Number(day.date.slice(8))) });
+        if (day.status === 'future') continue;
+        cell.setAttr('role', 'button');
+        cell.setAttr('tabindex', index === lastIndex ? '0' : '-1');
+        cell.setAttr('aria-label', this.describeYearDay(day) + '，打开日明细');
+        cell.dataset.analyticsDate = day.date;
+        cells[index] = cell;
+        const show = () => { grid.addClass('is-inspecting'); cells.forEach(c => c?.toggleClass('is-hot', c === cell)); readout.textContent = this.describeYearDay(day); };
+        cell.addEventListener('pointerenter', show);
+        cell.addEventListener('focus', show);
+        cell.addEventListener('click', () => this.activateDay(day.date, show));
+        cell.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.openAnalyticsDay(day.date); return; }
+          const delta = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 7, ArrowUp: -7 }[event.key];
+          if (delta === undefined) return;
+          const next = cells[index + delta];
+          if (!next) return;
+          event.preventDefault();
+          cell.setAttr('tabindex', '-1'); next.setAttr('tabindex', '0'); next.focus();
+        });
+      }
+    }
+    grid.addEventListener('pointerleave', () => { if (!grid.contains(doc.activeElement)) { grid.removeClass('is-inspecting'); cells.forEach(c => c?.removeClass('is-hot')); } });
+    grid.addEventListener('focusout', event => { if (!grid.contains(event.relatedTarget)) { grid.removeClass('is-inspecting'); cells.forEach(c => c?.removeClass('is-hot')); } });
+    const legend = card.createDiv({ cls: 'crisp-pulse-analytics-legend crisp-pulse-moon-legend' });
+    legend.createSpan({ text: '新月' });
+    for (const f of [0, 0.25, 0.5, 0.75, 1]) {
+      const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 28 28');
+      svg.setAttribute('aria-hidden', 'true');
+      legend.appendChild(svg);
+      const draw = svgDrawer(doc, svg);
+      draw('circle', { cx: 14, cy: 14, r: 10.5, class: 'pulse-moon-dark' });
+      if (f) draw('path', { d: moonPath(f, 14, 14, 10.5), class: 'pulse-moon-lit' });
+    }
+    legend.createSpan({ text: '满月' });
+  }
+
+  // Weekly strata, newest on top: thickness follows words added, colour bands follow project folders.
+  renderYearStrata(parent, strata) {
+    const palette = ['blue', 'purple', 'orange', 'green', 'rose', 'teal'];
+    const card = this.analyticsSection(parent, '知识地层', '每周一层，最新的一周在最上面。层的厚度随当周新增词数变化，层内按项目目录分色；持续投入的项目会连成一条贯穿多层的矿脉。');
+    if (!strata.weeks.some(week => week.recorded)) { card.createDiv({ cls: 'crisp-pulse-analytics-empty', text: '这一年还没有可用记录。' }); return; }
+    const width = Math.max(300, Math.min(1000, card.clientWidth - 48));
+    const compact = width < 520, labelW = compact ? 34 : 50;
+    const minT = 5, maxT = compact ? 24 : 32;
+    const ref = yearQuantile(strata.weeks.map(week => week.words), 0.95);
+    // Consecutive unrecorded weeks collapse into one thin band instead of a stack of hairlines.
+    const layers = [];
+    let y = 4;
+    for (const week of [...strata.weeks].reverse()) {
+      const previous = layers[layers.length - 1];
+      if (!week.recorded && previous && !previous.week.recorded) {
+        previous.week = { ...previous.week, start: week.start, span: previous.week.span + 1 };
+        continue;
+      }
+      const t = !week.recorded ? 12 : ref > 0 ? minT + (maxT - minT) * Math.sqrt(Math.min(1, week.words / ref)) : minT;
+      layers.push({ week: week.recorded ? week : { ...week, span: 1 }, top: y, bottom: y + t });
+      y += t + (week.recorded ? 0 : 2);
+    }
+    const height = Math.ceil(y + 4);
+    const { svg, draw } = this.analyticsSvg(card, width, height, '知识地层。上下方向键逐周查看。');
+    svg.classList.add('crisp-pulse-strata');
+    const left = labelW, right = width;
+    // Deterministic seams so the same year always draws the same rock.
+    const seam = (k, x) => (k === 0 || k === layers.length) ? 0 : Math.sin(x / 37 + k * 1.7) * 1.6 + Math.sin(x / 13 + k * 0.9) * 0.7;
+    const edge = (k, base) => {
+      const points = [];
+      for (let x = left; x <= right; x += 10) points.push([x, base + seam(k, x)]);
+      if (points[points.length - 1][0] !== right) points.push([right, base + seam(k, right)]);
+      return points;
+    };
+    const uid = `pulse-strata-${Math.random().toString(36).slice(2, 8)}`;
+    const defs = draw('defs', {});
+    const colorOf = name => name === '其他' ? 'gray' : palette[strata.folders.indexOf(name) % palette.length];
+    const groups = [];
+    let lastMonth = null, lastLabelY = -Infinity;
+    layers.forEach((layer, k) => {
+      const upper = edge(k, layer.top), lower = edge(k + 1, layer.bottom).reverse();
+      const d = 'M' + [...upper, ...lower].map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`).join(' L') + ' Z';
+      const group = draw('g', { class: 'pulse-strata-layer' });
+      groups.push(group);
+      const { week } = layer;
+      if (!week.recorded) {
+        draw('path', { d, class: 'pulse-strata-gap' }, undefined, group);
+        draw('text', { x: left + 10, y: (layer.top + layer.bottom) / 2 + 3.5, class: 'pulse-strata-gap-label' }, `未记录 · ${week.span} 周`, group);
+      }
+      else if (!week.total) draw('path', { d, class: 'pulse-strata-blank' }, undefined, group);
+      else {
+        const clip = draw('clipPath', { id: `${uid}-${k}` }, undefined, defs);
+        draw('path', { d }, undefined, clip);
+        const intensity = ref > 0 ? Math.min(1, week.words / ref) : 0;
+        let x = left;
+        for (const name of strata.folders) {
+          const count = week.counts[name] || 0;
+          if (!count) continue;
+          const w = (right - left) * count / week.total;
+          draw('rect', { x, y: layer.top - 3, width: w + 0.5, height: layer.bottom - layer.top + 6, 'clip-path': `url(#${uid}-${k})`, 'fill-opacity': Math.round((0.42 + 0.58 * intensity) * 100) / 100, class: `pulse-chart-fill-${colorOf(name)}` }, undefined, group);
+          x += w;
+        }
+      }
+      const month = Number(week.start.slice(5, 7));
+      const labelY = (layer.top + layer.bottom) / 2 + 4;
+      if (week.recorded && month !== lastMonth && labelY - lastLabelY >= 14) { draw('text', { x: 0, y: labelY, class: 'pulse-strata-label' }, `${month}月`); lastLabelY = labelY; }
+      lastMonth = month;
+    });
+    layers.forEach((layer, k) => { if (k && layer.week.recorded && layers[k - 1].week.recorded) draw('path', { d: 'M' + edge(k, layer.top).map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`).join(' L'), class: 'pulse-strata-seam' }); });
+    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: '悬停在某一层查看当周的投入分布。' });
+    readout.setAttr('aria-live', 'polite');
+    const describe = week => {
+      const range = `${week.start.slice(5).replace('-', '/')}–${week.end.slice(5).replace('-', '/')}`;
+      const [yy, mm, dd] = week.start.split('-').map(Number);
+      const title = `${getIsoWeekString(new Date(yy, mm - 1, dd)).replace(/^\d+-W/, '第 ')} 周 · ${range}`;
+      if (!week.recorded) return week.span > 1 ? `${week.start.slice(5).replace('-', '/')}–${week.end.slice(5).replace('-', '/')} · 连续 ${week.span} 周未记录` : `${title} · 未记录`;
+      const parts = strata.folders.filter(name => week.counts[name]).map(name => `${name} ${Math.round(week.counts[name] / week.total * 100)}%`);
+      return `${title} · 新增 ${Number(week.words).toLocaleString('zh-CN')} 词` + (parts.length ? ` · ${parts.join(' · ')}` : '');
+    };
+    const targets = layers.map((layer, k) => {
+      const target = draw('rect', { x: left, y: layer.top, width: right - left, height: layer.bottom - layer.top, class: 'pulse-chart-target pulse-strata-target', role: 'img', tabindex: k === 0 ? 0 : -1, 'aria-label': describe(layer.week) });
+      const show = () => { svg.classList.add('is-inspecting'); groups.forEach((g, j) => g.classList.toggle('is-hot', j === k)); readout.textContent = describe(layer.week); };
+      target.addEventListener('pointerenter', show);
+      target.addEventListener('focus', show);
+      target.addEventListener('keydown', event => {
+        const next = event.key === 'ArrowUp' ? k - 1 : event.key === 'ArrowDown' ? k + 1 : null;
+        if (next === null || !targets[next]) return;
+        event.preventDefault();
+        target.setAttribute('tabindex', '-1'); targets[next].setAttribute('tabindex', '0'); targets[next].focus();
+      });
+      return target;
+    });
+    svg.addEventListener('pointerleave', () => { svg.classList.remove('is-inspecting'); groups.forEach(g => g.classList.remove('is-hot')); });
+    const legend = card.createDiv({ cls: 'crisp-pulse-analytics-legend' });
+    for (const name of strata.folders) {
+      const item = legend.createSpan();
+      item.createSpan({ cls: `pulse-chart-dot pulse-chart-fill-${colorOf(name)}` });
+      item.createSpan({ text: name });
+    }
   }
 
   renderAnalyticsChart(parent, data, config) {
@@ -2946,13 +3838,8 @@ class CrispPulseView extends ItemView {
       };
       target.addEventListener('pointerenter', show);
       target.addEventListener('focus', show);
-      const open = () => {
-        this.selectedDate = point.date;
-        this.activeViewTab = 'dashboard';
-        this.render();
-        this.containerEl.querySelector('.crisp-pulse-detail-card')?.scrollIntoView({ block: 'start', behavior: 'auto' });
-      };
-      target.addEventListener('click', open);
+      const open = () => this.openAnalyticsDay(point.date);
+      target.addEventListener('click', () => this.activateDay(point.date, show));
       target.addEventListener('keydown', event => {
         if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); return; }
         const next = event.key === 'ArrowLeft' ? index - 1 : event.key === 'ArrowRight' ? index + 1 : event.key === 'Home' ? 0 : event.key === 'End' ? points.length - 1 : null;
@@ -3004,7 +3891,12 @@ class CrispPulseView extends ItemView {
       text: "数据分析"
     });
     analyticsButton.addEventListener("click", () => { this.activeViewTab = "analytics"; this.containerEl.children[1].scrollTop = 0; this.render(); });
-    for (const [button, key] of [[dashBtn, "dashboard"], [reviewBtn, "review"], [analyticsButton, "analytics"]]) button.setAttr("aria-pressed", String(this.activeViewTab === key));
+    const yearlyButton = viewSwitch.createEl("button", {
+      cls: `crisp-pulse-tab-btn ${this.activeViewTab === "yearly" ? "is-active" : ""}`,
+      text: "年度画像"
+    });
+    yearlyButton.addEventListener("click", () => { this.activeViewTab = "yearly"; this.containerEl.children[1].scrollTop = 0; this.render(); });
+    for (const [button, key] of [[dashBtn, "dashboard"], [reviewBtn, "review"], [analyticsButton, "analytics"], [yearlyButton, "yearly"]]) button.setAttr("aria-pressed", String(this.activeViewTab === key));
 
     const actions = header.createDiv({ cls: "crisp-pulse-actions" });
 
