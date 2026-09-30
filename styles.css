@@ -1205,3 +1205,211 @@
   min-height: 38px;
   touch-action: manipulation;
 }
+
+/* ==========================================================================
+   Presentation layer — formerly the vault snippets crisp-pulse-modern.css and
+   pulse-launchpad.css, merged so the plugin looks the same with no snippet enabled.
+   Order matters: the token rules at the end used to load last and still win.
+   ========================================================================== */
+.crisp-pulse-view {
+  --pulse-ui-surface: var(--background-primary);
+  --pulse-ui-soft: var(--background-secondary);
+  --pulse-ui-border: var(--background-modifier-border);
+  --pulse-ui-accent: var(--interactive-accent);
+  background: var(--pulse-ui-soft);
+  padding: 28px 32px;
+  font-weight: 400;
+}
+.crisp-pulse-view .crisp-pulse-wrapper { max-width: 1160px; gap: 24px; }
+.crisp-pulse-view .crisp-pulse-header { gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--pulse-ui-border); }
+.crisp-pulse-view .crisp-pulse-title-group { gap: 14px; flex-wrap: wrap; min-width: 0; }
+.crisp-pulse-view .crisp-pulse-title { font-size: 21px; font-weight: 600; letter-spacing: -.025em; line-height: 1.35; }
+.crisp-pulse-view .crisp-pulse-title-icon { width: 32px; height: 32px; border-radius: 10px; background: var(--pulse-ui-surface); border: 1px solid var(--pulse-ui-border); color: var(--text-normal); }
+.crisp-pulse-view .crisp-pulse-actions { gap: 6px; flex-wrap: wrap; }
+.crisp-pulse-view button.crisp-pulse-tab-btn {
+  background: var(--pulse-ui-surface) !important;
+  color: var(--text-muted) !important;
+  border: 1px solid var(--pulse-ui-border) !important;
+  box-shadow: none !important;
+  border-radius: 9px !important;
+  min-height: 34px; height: auto; padding: 7px 12px;
+  font-size: 12px; font-weight: 500;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.crisp-pulse-view button.crisp-pulse-tab-btn:hover { color: var(--text-normal) !important; background: var(--background-modifier-hover) !important; }
+.crisp-pulse-view button.crisp-pulse-tab-btn.is-active {
+  background: var(--pulse-ui-accent) !important; color: var(--text-on-accent) !important; border-color: var(--pulse-ui-accent) !important;
+}
+.crisp-pulse-view select.crisp-pulse-scope-select {
+  background-color: var(--pulse-ui-surface) !important; color: var(--text-normal) !important;
+  border: 1px solid var(--pulse-ui-border) !important; border-radius: 9px !important;
+  box-shadow: none !important; height: 34px; font-size: 12px;
+}
+.crisp-pulse-view .crisp-pulse-kpi-row { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.crisp-pulse-view :is(.crisp-pulse-kpi-card,.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-review-card,.crisp-pulse-analytics-card) {
+  background: var(--pulse-ui-surface); border: 1px solid var(--pulse-ui-border); border-radius: 16px;
+  box-shadow: none !important;
+}
+.crisp-pulse-view .crisp-pulse-kpi-card { padding: 18px 16px; gap: 10px; }
+.crisp-pulse-view .crisp-pulse-kpi-label { color: var(--text-muted); font-size: 12px; font-weight: 500; letter-spacing: 0; }
+.crisp-pulse-view .crisp-pulse-kpi-val { font-size: 25px; line-height: 1.25; font-weight: 550; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.crisp-pulse-view .crisp-pulse-kpi-sub { font-size: 10px; color: var(--text-faint); font-weight: 400; }
+.crisp-pulse-view .crisp-pulse-metric-tabs { gap: 8px; padding: 2px 0 4px; }
+.crisp-pulse-view :is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-review-card) { padding: 24px; }
+.crisp-pulse-view :is(.crisp-pulse-heatmap-title,.crisp-pulse-detail-date) { font-size: 15px; font-weight: 600; }
+.crisp-pulse-view .crisp-pulse-heatmap-footer { color: var(--text-muted); font-size: 11px; line-height: 1.6; }
+.crisp-pulse-view .crisp-pulse-stat-box { background: var(--pulse-ui-soft); border: 0; border-radius: 10px; padding: 13px; }
+.crisp-pulse-view .crisp-pulse-stat-label { font-size: 11px; font-weight: 400; }
+.crisp-pulse-view .crisp-pulse-stat-value { margin-top: 3px; font-size: 18px; font-weight: 550; }
+.crisp-pulse-view .crisp-pulse-breakdown-card { background: var(--pulse-ui-surface); border: 1px solid var(--pulse-ui-border); border-radius: 12px; box-shadow: none; }
+.crisp-pulse-view .crisp-pulse-breakdown-row { padding: 10px 0; font-weight: 400; }
+.crisp-pulse-view .crisp-pulse-breakdown-formula { color: var(--text-muted); }
+.crisp-pulse-view :is(button.crisp-pulse-file-item,button.crisp-pulse-topfile-item) {
+  background: transparent !important; color: var(--text-normal) !important;
+  box-shadow: none !important; border: 1px solid transparent !important; border-radius: 8px !important;
+  padding: 9px 10px; min-height: 36px; height: auto; font-weight: 400;
+}
+.crisp-pulse-view :is(button.crisp-pulse-file-item,button.crisp-pulse-topfile-item):hover { background: var(--background-modifier-hover) !important; border-color: var(--pulse-ui-border) !important; }
+.crisp-pulse-view .crisp-pulse-analytics { gap: 32px; padding-top: 4px; }
+.crisp-pulse-view .crisp-pulse-analytics-heading h2 { font-size: 28px; font-weight: 550; }
+.crisp-pulse-view .crisp-pulse-analytics-card { padding: 24px; }
+.crisp-pulse-view :is(.crisp-pulse-analytics-description,.crisp-pulse-analytics-coverage,.crisp-pulse-analytics-heading p,.crisp-pulse-analytics-readout) { font-weight: 400; }
+.crisp-pulse-view .crisp-pulse-analytics-section h3 { font-size: 17px; font-weight: 550; }
+.crisp-pulse-view .crisp-pulse-analytics-total { font-size: 32px; font-weight: 500; }
+.crisp-pulse-view .crisp-pulse-analytics-segments { border: 1px solid var(--pulse-ui-border); }
+.crisp-pulse-view .crisp-pulse-analytics-segments button { background: transparent !important; color: var(--text-muted) !important; border-color: transparent !important; box-shadow: none !important; font-weight: 500; }
+.crisp-pulse-view .crisp-pulse-analytics-segments button[aria-pressed="true"] { background: var(--pulse-ui-surface) !important; color: var(--text-normal) !important; border-color: var(--pulse-ui-border) !important; }
+.crisp-pulse-view :is(button,select):focus-visible { outline: 2px solid var(--pulse-ui-accent) !important; outline-offset: 3px; }
+@container (max-width: 900px) {
+  .crisp-pulse-view .crisp-pulse-kpi-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container (max-width: 550px) {
+  .crisp-pulse-view .crisp-pulse-kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .crisp-pulse-view :is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-review-card,.crisp-pulse-analytics-card) { padding: 16px 12px; border-radius: 12px; }
+  .crisp-pulse-view .crisp-pulse-title { font-size: 18px; }
+  .crisp-pulse-view .crisp-pulse-kpi-val { font-size: 23px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .crisp-pulse-view button.crisp-pulse-tab-btn { transition: none; }
+}
+
+/* One metric-card rhythm across overview, day detail, and weekly review. */
+.crisp-pulse-view :is(.crisp-pulse-kpi-card, .crisp-pulse-stat-box) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  text-align: left;
+  padding: 16px;
+  gap: 8px;
+  min-width: 0;
+}
+.crisp-pulse-view :is(.crisp-pulse-kpi-label, .crisp-pulse-stat-label) {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  min-height: 2.9em;
+  margin: 0;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+.crisp-pulse-view :is(.crisp-pulse-kpi-val, .crisp-pulse-stat-value) {
+  text-align: left;
+  line-height: 1.3;
+  margin: 0;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+  overflow-wrap: anywhere;
+}
+.crisp-pulse-view .crisp-pulse-kpi-card > .crisp-pulse-kpi-sub { text-align: left; line-height: 1.45; margin: 0; }
+@container (max-width: 550px) {
+  .crisp-pulse-view :is(.crisp-pulse-kpi-card,.crisp-pulse-stat-box) { padding: 14px; }
+}
+.crisp-pulse-view .crisp-pulse-stat-value { font-size: 18px; word-break: keep-all; }
+
+/* Small interaction details: clear focus, flexible badges, stable file rows. */
+.crisp-pulse-view .crisp-pulse-score-clickable { cursor: pointer; transition: background-color .15s ease; }
+.crisp-pulse-view .crisp-pulse-score-clickable:hover { background: var(--background-modifier-hover); }
+.crisp-pulse-view .crisp-pulse-score-clickable:focus-visible { outline: 2px solid var(--pulse-ui-accent); outline-offset: 3px; }
+.crisp-pulse-view .crisp-pulse-score-clickable .crisp-pulse-stat-label::after { content: " ⌄"; color: var(--text-faint); }
+.crisp-pulse-view .crisp-pulse-score-clickable[aria-expanded="true"] .crisp-pulse-stat-label::after { content: " ⌃"; }
+.crisp-pulse-view .crisp-pulse-detail-badges { flex-wrap: wrap; gap: 6px; min-width: 0; }
+.crisp-pulse-view .crisp-pulse-badge { line-height: 1.5; }
+.crisp-pulse-view .crisp-pulse-file-name { min-width: 0; }
+.crisp-pulse-view .crisp-pulse-file-meta { flex-shrink: 0; }
+.crisp-pulse-view .crisp-pulse-breakdown-row { align-items: baseline; gap: 12px; }
+.crisp-pulse-view .crisp-pulse-breakdown-val { white-space: nowrap; flex-shrink: 0; }
+@container (max-width: 550px) {
+  .crisp-pulse-view .crisp-pulse-breakdown-formula { display: block; margin: 4px 0 0; }
+  .crisp-pulse-view .crisp-pulse-review-header { flex-wrap: wrap; gap: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .crisp-pulse-view .crisp-pulse-score-clickable { transition: none; }
+}
+
+/* Match the active article divider: accent at the centre, fading at both ends. */
+.crisp-pulse-view .crisp-pulse-header {
+  position: relative;
+  border-bottom-color: transparent;
+}
+.crisp-pulse-view .crisp-pulse-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--color-accent, #D87757), transparent);
+  pointer-events: none;
+}
+
+/* Native glass presentation. macOS supplies blur; charts stay filter-free. */
+body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view {
+  --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 14%, transparent);
+  --pulse-ui-soft: color-mix(in srgb, var(--text-normal) 5%, transparent);
+  --pulse-ui-border: color-mix(in srgb, var(--text-normal) 13%, transparent);
+  --pulse-glass-rim: rgba(255, 255, 255, 0.16);
+  --text-muted: color-mix(in srgb, var(--text-normal) 78%, transparent);
+  --text-faint: color-mix(in srgb, var(--text-normal) 66%, transparent);
+  background: transparent !important;
+}
+body.is-translucent.theme-light:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view {
+  --pulse-glass-rim: rgba(255, 255, 255, 0.65);
+}
+body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view
+:is(.crisp-pulse-kpi-card,.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-review-card,.crisp-pulse-analytics-card,.crisp-pulse-breakdown-card) {
+  box-shadow: inset 0 1px 0 var(--pulse-glass-rim), 0 4px 14px rgba(0, 0, 0, 0.04) !important;
+}
+body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view
+:is(.crisp-pulse-heatmap-card,.crisp-pulse-analytics-card) {
+  background: color-mix(in srgb, var(--background-primary) 28%, transparent);
+}
+body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view
+:is(button.crisp-pulse-tab-btn:not(.is-active):not(:disabled),select.crisp-pulse-scope-select) {
+  background-color: var(--pulse-ui-soft) !important;
+  box-shadow: inset 0 1px 0 var(--pulse-glass-rim) !important;
+}
+body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view button.crisp-pulse-tab-btn:not(.is-active):not(:disabled):hover {
+  background: color-mix(in srgb, var(--text-normal) 10%, transparent) !important;
+}
+body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view .crisp-pulse-analytics-segments button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--text-normal) 12%, transparent) !important;
+}
+
+/* Hide the page scrollbar while preserving wheel, touch and keyboard scrolling. */
+.crisp-pulse-view {
+  scrollbar-width: none;
+}
+.crisp-pulse-view::-webkit-scrollbar {
+  display: none;
+}
+
+/* Surface and text tokens per theme; translucent windows get glass variants. */
+.crisp-pulse-view { --pulse-ui-surface: var(--background-primary); --pulse-ui-soft: var(--background-secondary); --pulse-ui-border: var(--background-modifier-border); --pulse-ui-accent: var(--interactive-accent, #6b84bf); --pulse-glass-rim: rgba(255, 255, 255, 0.55); --text-muted: color-mix(in srgb, var(--text-normal) 78%, transparent); --text-faint: color-mix(in srgb, var(--text-normal) 55%, transparent); color: var(--text-normal); font-family: var(--font-interface); font-weight: 400; scrollbar-width: none; background: var(--pulse-ui-soft) !important; padding: 20px 28px 56px !important; }
+.crisp-pulse-view::-webkit-scrollbar { display: none; }
+body.theme-dark.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 36%, transparent); --pulse-ui-soft: color-mix(in srgb, var(--background-primary) 22%, transparent); --pulse-ui-border: color-mix(in srgb, var(--text-normal) 14%, transparent); --pulse-glass-rim: rgba(255, 255, 255, 0.18); --text-normal: #f1f2f6; --text-muted: rgba(235, 240, 250, 0.80); --text-faint: rgba(220, 225, 235, 0.54); background: transparent !important; }
+body.theme-light.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view { --pulse-ui-surface: rgba(255, 255, 255, 0.82); --pulse-ui-soft: rgba(248, 249, 250, 0.72); --pulse-ui-border: rgba(0, 0, 0, 0.08); --pulse-glass-rim: rgba(255, 255, 255, 0.95); --text-normal: #1f2937; --text-muted: #4b5563; --text-faint: #6b7280; background: transparent !important; }
+body.theme-dark .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 92%, #ffffff); --pulse-ui-soft: var(--background-primary); --pulse-ui-border: color-mix(in srgb, var(--text-normal) 16%, transparent); --pulse-glass-rim: rgba(255, 255, 255, 0.10); --text-normal: #ecedf1; --text-muted: rgba(236, 237, 241, 0.78); --text-faint: rgba(236, 237, 241, 0.52); }
+body.theme-light .crisp-pulse-view { --pulse-ui-surface: #ffffff; --pulse-ui-soft: var(--background-secondary, #f8f9fa); --pulse-ui-border: rgba(0, 0, 0, 0.08); --pulse-glass-rim: rgba(255, 255, 255, 0.9); --text-normal: #1f2937; --text-muted: #4b5563; --text-faint: #6b7280; background: var(--background-secondary, #f8f9fa) !important; }
