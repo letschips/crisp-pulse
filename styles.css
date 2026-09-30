@@ -113,52 +113,9 @@
   cursor: pointer;
 }
 
-/* --- KPI Row --- */
-.crisp-pulse-kpi-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-}
-
-.crisp-pulse-kpi-card {
-  background-color: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-m);
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-
-.crisp-pulse-kpi-label {
-  font-size: var(--font-ui-smaller);
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 600;
-}
-
-.crisp-pulse-kpi-val {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--text-normal);
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-}
-
 .crisp-pulse-kpi-sub {
   font-size: 11px;
   color: var(--text-faint);
-}
-
-/* --- Metric Selector Tabs --- */
-.crisp-pulse-metric-tabs {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  overflow-x: auto;
-  padding: 2px 0;
 }
 
 .crisp-pulse-tab-btn {
@@ -514,7 +471,6 @@
 .crisp-pulse-heatmap-footer { flex-wrap: wrap; gap: 10px; }
 @container (max-width: 500px) {
   .crisp-pulse-heatmap-card, .crisp-pulse-detail-card { padding: 12px; }
-  .crisp-pulse-kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .crisp-pulse-title { font-size: var(--font-ui-medium); }
   .crisp-pulse-file-item { flex-wrap: wrap; gap: 4px; }
   .crisp-pulse-file-meta { margin-left: 0; }
@@ -1245,16 +1201,11 @@
   border: 1px solid var(--pulse-ui-border) !important; border-radius: 9px !important;
   box-shadow: none !important; height: 34px; font-size: 12px;
 }
-.crisp-pulse-view .crisp-pulse-kpi-row { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
-.crisp-pulse-view :is(.crisp-pulse-kpi-card,.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-review-card,.crisp-pulse-analytics-card) {
+.crisp-pulse-view :is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-review-card,.crisp-pulse-analytics-card) {
   background: var(--pulse-ui-surface); border: 1px solid var(--pulse-ui-border); border-radius: 16px;
   box-shadow: none !important;
 }
-.crisp-pulse-view .crisp-pulse-kpi-card { padding: 18px 16px; gap: 10px; }
-.crisp-pulse-view .crisp-pulse-kpi-label { color: var(--text-muted); font-size: 12px; font-weight: 500; letter-spacing: 0; }
-.crisp-pulse-view .crisp-pulse-kpi-val { font-size: 25px; line-height: 1.25; font-weight: 550; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .crisp-pulse-view .crisp-pulse-kpi-sub { font-size: 10px; color: var(--text-faint); font-weight: 400; }
-.crisp-pulse-view .crisp-pulse-metric-tabs { gap: 8px; padding: 2px 0 4px; }
 .crisp-pulse-view :is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-review-card) { padding: 24px; }
 .crisp-pulse-view :is(.crisp-pulse-heatmap-title,.crisp-pulse-detail-date) { font-size: 15px; font-weight: 600; }
 .crisp-pulse-view .crisp-pulse-heatmap-footer { color: var(--text-muted); font-size: 11px; line-height: 1.6; }
@@ -1280,21 +1231,16 @@
 .crisp-pulse-view .crisp-pulse-analytics-segments button { background: transparent !important; color: var(--text-muted) !important; border-color: transparent !important; box-shadow: none !important; font-weight: 500; }
 .crisp-pulse-view .crisp-pulse-analytics-segments button[aria-pressed="true"] { background: var(--pulse-ui-surface) !important; color: var(--text-normal) !important; border-color: var(--pulse-ui-border) !important; }
 .crisp-pulse-view :is(button,select):focus-visible { outline: 2px solid var(--pulse-ui-accent) !important; outline-offset: 3px; }
-@container (max-width: 900px) {
-  .crisp-pulse-view .crisp-pulse-kpi-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
 @container (max-width: 550px) {
-  .crisp-pulse-view .crisp-pulse-kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .crisp-pulse-view :is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-review-card,.crisp-pulse-analytics-card) { padding: 16px 12px; border-radius: 12px; }
   .crisp-pulse-view .crisp-pulse-title { font-size: 18px; }
-  .crisp-pulse-view .crisp-pulse-kpi-val { font-size: 23px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .crisp-pulse-view button.crisp-pulse-tab-btn { transition: none; }
 }
 
-/* One metric-card rhythm across overview, day detail, and weekly review. */
-.crisp-pulse-view :is(.crisp-pulse-kpi-card, .crisp-pulse-stat-box) {
+/* One metric-card rhythm across day detail and weekly review. */
+.crisp-pulse-view :is(.crisp-pulse-stat-box) {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -1304,7 +1250,7 @@
   gap: 8px;
   min-width: 0;
 }
-.crisp-pulse-view :is(.crisp-pulse-kpi-label, .crisp-pulse-stat-label) {
+.crisp-pulse-view :is(.crisp-pulse-stat-label) {
   text-align: left;
   font-size: 12px;
   font-weight: 500;
@@ -1314,7 +1260,7 @@
   letter-spacing: 0;
   overflow-wrap: anywhere;
 }
-.crisp-pulse-view :is(.crisp-pulse-kpi-val, .crisp-pulse-stat-value) {
+.crisp-pulse-view :is(.crisp-pulse-stat-value) {
   text-align: left;
   line-height: 1.3;
   margin: 0;
@@ -1323,9 +1269,8 @@
   letter-spacing: -.02em;
   overflow-wrap: anywhere;
 }
-.crisp-pulse-view .crisp-pulse-kpi-card > .crisp-pulse-kpi-sub { text-align: left; line-height: 1.45; margin: 0; }
 @container (max-width: 550px) {
-  .crisp-pulse-view :is(.crisp-pulse-kpi-card,.crisp-pulse-stat-box) { padding: 14px; }
+  .crisp-pulse-view :is(.crisp-pulse-stat-box) { padding: 14px; }
 }
 .crisp-pulse-view .crisp-pulse-stat-value { font-size: 18px; word-break: keep-all; }
 
@@ -1378,7 +1323,7 @@ body.is-translucent.theme-light:not(.is-popout-window):not(.is-popout-modal) .cr
   --pulse-glass-rim: rgba(255, 255, 255, 0.65);
 }
 body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view
-:is(.crisp-pulse-kpi-card,.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-review-card,.crisp-pulse-analytics-card,.crisp-pulse-breakdown-card) {
+:is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-review-card,.crisp-pulse-analytics-card,.crisp-pulse-breakdown-card) {
   box-shadow: inset 0 1px 0 var(--pulse-glass-rim), 0 4px 14px rgba(0, 0, 0, 0.04) !important;
 }
 body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view
@@ -1412,3 +1357,83 @@ body.theme-dark.is-translucent:not(.is-popout-window):not(.is-popout-modal) .cri
 body.theme-light.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view { --pulse-ui-surface: rgba(255, 255, 255, 0.82); --pulse-ui-soft: rgba(248, 249, 250, 0.72); --pulse-ui-border: rgba(0, 0, 0, 0.08); --pulse-glass-rim: rgba(255, 255, 255, 0.95); --text-normal: #1f2937; --text-muted: #4b5563; --text-faint: #6b7280; background: transparent !important; }
 body.theme-dark .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 92%, #ffffff); --pulse-ui-soft: var(--background-primary); --pulse-ui-border: color-mix(in srgb, var(--text-normal) 16%, transparent); --pulse-glass-rim: rgba(255, 255, 255, 0.10); --text-normal: #ecedf1; --text-muted: rgba(236, 237, 241, 0.78); --text-faint: rgba(236, 237, 241, 0.52); }
 body.theme-light .crisp-pulse-view { --pulse-ui-surface: #ffffff; --pulse-ui-soft: var(--background-secondary, #f8f9fa); --pulse-ui-border: rgba(0, 0, 0, 0.08); --pulse-glass-rim: rgba(255, 255, 255, 0.9); --text-normal: #1f2937; --text-muted: #4b5563; --text-faint: #6b7280; background: var(--background-secondary, #f8f9fa) !important; }
+
+/* ==========================================================================
+   Dashboard tray layout (pulse-v2): tray header on a soft surface, content on an
+   inset card, figures in monospace.
+   ========================================================================== */
+.crisp-pulse-view.pulse-v2 .crisp-pulse-wrapper { gap: 20px; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-tray {
+  background: color-mix(in srgb, var(--text-normal) 4%, var(--pulse-ui-surface, var(--background-primary)));
+  border: 1px solid var(--pulse-ui-border, var(--background-modifier-border));
+  border-radius: 20px; padding: 6px; min-width: 0;
+}
+.crisp-pulse-view.pulse-v2 .pulse-v2-tray-head { display: flex; align-items: center; gap: 14px; padding: 14px 16px 16px; min-width: 0; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-tray-icon {
+  flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--text-normal) 6%, transparent); color: var(--pulse-ui-accent, var(--interactive-accent));
+}
+.crisp-pulse-view.pulse-v2 .pulse-v2-tray-icon svg { width: 18px; height: 18px; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-tray-text { flex: 1; min-width: 0; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-tray-title { font-size: 15px; font-weight: 600; letter-spacing: -.01em; line-height: 1.35; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-tray-sub { color: var(--text-muted); font-size: 12.5px; line-height: 1.5; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-pill {
+  flex: none; font-family: var(--font-monospace); font-size: 12px; line-height: 1; padding: 6px 9px; border-radius: 7px;
+  color: var(--pulse-ui-accent, var(--interactive-accent)); background: color-mix(in srgb, var(--pulse-ui-accent, var(--interactive-accent)) 12%, transparent);
+}
+.crisp-pulse-view.pulse-v2 .pulse-v2-pill.is-muted { color: var(--text-muted); background: color-mix(in srgb, var(--text-normal) 6%, transparent); }
+.crisp-pulse-view.pulse-v2 .pulse-v2-inset {
+  background: var(--pulse-ui-surface, var(--background-primary)); border-radius: 15px; padding: 20px 22px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 0 0 1px color-mix(in srgb, var(--text-normal) 5%, transparent); min-width: 0;
+}
+/* Stat strip: one row, hairline dividers, monospace figures. */
+.crisp-pulse-view.pulse-v2 .pulse-v2-strip { display: grid; grid-template-columns: repeat(var(--pulse-v2-cols, 6), minmax(0, 1fr)); }
+.crisp-pulse-view.pulse-v2 .pulse-v2-stat { padding: 2px 18px; border-left: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); min-width: 0; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-stat:first-child { border-left: 0; padding-left: 2px; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-stat-label { color: var(--text-muted); font-size: 12.5px; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-stat-value { font-family: var(--font-monospace); font-size: 23px; font-weight: 500; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-stat-unit { font-family: var(--font-interface); font-size: 12px; color: var(--text-muted); margin-left: 4px; letter-spacing: 0; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-stat.is-accent .pulse-v2-stat-value { color: var(--pulse-ui-accent, var(--interactive-accent)); }
+/* Segmented metric switch inside the heatmap card. */
+.crisp-pulse-view.pulse-v2 .pulse-v2-seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 10px; background: color-mix(in srgb, var(--text-normal) 5%, transparent); margin-bottom: 18px; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-seg button {
+  background: transparent; box-shadow: none; border: 1px solid transparent; color: var(--text-muted);
+  font-size: 12.5px; font-weight: 500; height: auto; padding: 6px 12px; border-radius: 8px; cursor: pointer;
+}
+.crisp-pulse-view.pulse-v2 .pulse-v2-seg button:hover { color: var(--text-normal); }
+.crisp-pulse-view.pulse-v2 .pulse-v2-seg button[aria-selected="true"] {
+  background: var(--pulse-ui-surface, var(--background-primary)); color: var(--text-normal);
+  border-color: var(--pulse-ui-border, var(--background-modifier-border)); box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+}
+/* Reused cards lose their own chrome inside a tray; their headers move to the tray head. */
+.crisp-pulse-view.pulse-v2 .pulse-v2-inset > :is(.crisp-pulse-heatmap-card, .crisp-pulse-detail-card) {
+  background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; margin: 0; border-radius: 0;
+}
+.crisp-pulse-view.pulse-v2 .pulse-v2-inset > .crisp-pulse-heatmap-card > .crisp-pulse-heatmap-header,
+.crisp-pulse-view.pulse-v2 .pulse-v2-inset > .crisp-pulse-detail-card > .crisp-pulse-detail-header { display: none; }
+.crisp-pulse-view.pulse-v2 .crisp-pulse-heatmap-footer { font-family: var(--font-monospace); font-size: 11px; }
+/* Day detail figures become a two-row divided strip. */
+.crisp-pulse-view.pulse-v2 .pulse-v2-detail .crisp-pulse-stats-grid { display: grid; grid-template-columns: repeat(var(--pulse-detail-cols, 4), minmax(0, 1fr)); gap: 0; row-gap: 18px; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-detail .crisp-pulse-stat-box {
+  background: transparent; border: 0; border-left: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); border-radius: 0; padding: 2px 18px; box-shadow: none; gap: 6px;
+}
+.crisp-pulse-view.pulse-v2 .pulse-v2-detail .crisp-pulse-stat-box.is-row-start { border-left: 0; padding-left: 2px; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-detail :is(.crisp-pulse-stat-label) { min-height: 0; color: var(--text-muted); font-size: 12.5px; font-weight: 400; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-detail :is(.crisp-pulse-stat-value) { font-family: var(--font-monospace); font-size: 20px; font-weight: 500; }
+.crisp-pulse-stat-unit { margin-left: 4px; font-size: 12px; color: var(--text-muted); font-family: var(--font-interface); font-weight: 400; letter-spacing: 0; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-detail .crisp-pulse-score-clickable { border-radius: 8px; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-detail .crisp-pulse-breakdown-card { margin-top: 20px; background: color-mix(in srgb, var(--text-normal) 2.5%, transparent); border: 0; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-detail :is(.crisp-pulse-breakdown-val) { font-family: var(--font-monospace); }
+@container (max-width: 760px) {
+  .crisp-pulse-view.pulse-v2 .pulse-v2-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 18px; }
+  .crisp-pulse-view.pulse-v2 .pulse-v2-stat:nth-child(3n + 1) { border-left: 0; padding-left: 2px; }
+}
+@container (max-width: 520px) {
+  .crisp-pulse-view.pulse-v2 .pulse-v2-strip, .crisp-pulse-view.pulse-v2 .pulse-v2-detail .crisp-pulse-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .crisp-pulse-view.pulse-v2 .pulse-v2-stat, .crisp-pulse-view.pulse-v2 .pulse-v2-detail .crisp-pulse-stat-box { border-left: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); padding-left: 16px; }
+  .crisp-pulse-view.pulse-v2 .pulse-v2-stat:nth-child(odd), .crisp-pulse-view.pulse-v2 .pulse-v2-detail .crisp-pulse-stat-box:nth-child(odd) { border-left: 0; padding-left: 2px; }
+  .crisp-pulse-view.pulse-v2 .pulse-v2-stat:nth-child(even) { border-left: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); padding-left: 16px; }
+  .crisp-pulse-view.pulse-v2 .pulse-v2-detail .crisp-pulse-stat-box.is-row-start:nth-child(even) { border-left: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); padding-left: 16px; }
+  .crisp-pulse-view.pulse-v2 .pulse-v2-inset { padding: 16px 14px; }
+  .crisp-pulse-view.pulse-v2 .pulse-v2-tray-head { padding: 12px 12px 14px; }
+}

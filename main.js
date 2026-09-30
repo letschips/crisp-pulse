@@ -3,7 +3,7 @@
    Crafted for the Crisp Plugin Suite
    ========================================================================== */
 
-const { Plugin, ItemView, Setting, PluginSettingTab, Notice, TFile, Modal, Platform = {}, addIcon = (() => {}) } = require("obsidian");
+const { Plugin, ItemView, Setting, PluginSettingTab, Notice, TFile, Modal, Platform = {}, addIcon = (() => {}), setIcon = (() => {}) } = require("obsidian");
 
 const VIEW_TYPE_PULSE = "crisp-pulse-view";
 
@@ -3072,6 +3072,7 @@ class CrispPulseView extends ItemView {
       ? { tag: active.tagName, label: active.getAttribute("aria-label"), text: active.textContent } : null;
     container.empty();
     container.classList.add("crisp-pulse-view");
+    container.classList.add("pulse-v2");
 
     const wrapper = container.createDiv({ cls: "crisp-pulse-wrapper" });
 
@@ -3079,17 +3080,7 @@ class CrispPulseView extends ItemView {
     this.renderHeader(wrapper);
 
     if (this.activeViewTab === "dashboard") {
-      // 2. KPI Row
-      this.renderKPIRow(wrapper);
-
-      // 3. Metric Tabs
-      this.renderMetricTabs(wrapper);
-
-      // 4. Annual Heatmap Card
-      this.renderHeatmapCard(wrapper);
-
-      // 5. Day Detail Card with Score Breakdown
-      this.renderDayDetailCard(wrapper);
+      this.renderDashboardV2(wrapper);
     } else if (this.activeViewTab === "analytics") {
       this.renderAnalytics(wrapper);
     } else if (this.activeViewTab === "yearly") {
@@ -4000,52 +3991,60 @@ class CrispPulseView extends ItemView {
     });
   }
 
-  renderKPIRow(parent) {
-    const stats = this.plugin.calcStats(this.currentScope, this.currentDateRange);
-    const kpiRow = parent.createDiv({ cls: "crisp-pulse-kpi-row" });
-
-    const cards = [
-      { label: "累计贡献分", val: stats.totalScore, sub: "Total Contribution" },
-      { label: "活跃天数", val: `${stats.activeDays} 天`, sub: "Active Days" },
-      { label: "当前连续天数", val: `${stats.currentStreak} 天`, sub: "Current Streak" },
-      { label: "最长连续天数", val: `${stats.longestStreak} 天`, sub: "Longest Streak" },
-      { label: "交互活跃时长", val: `${stats.totalActiveHours || "0.0"} 小时`, sub: "Interactive Time" }
-    ];
-
-    if (Number(stats.totalFocusHours) > 0) {
-      cards.push({ label: "深度专注时长", val: `${stats.totalFocusHours} 小时`, sub: "Focus Time" });
-    }
-
-    for (const card of cards) {
-      const cardEl = kpiRow.createDiv({ cls: "crisp-pulse-kpi-card" });
-      cardEl.createDiv({ cls: "crisp-pulse-kpi-label", text: card.label });
-      cardEl.createDiv({ cls: "crisp-pulse-kpi-val", text: String(card.val) });
-      cardEl.createDiv({ cls: "crisp-pulse-kpi-sub", text: card.sub });
-    }
+  // Dashboard cards: a soft tray holding icon, title, subtitle and a status pill, with content on an inset card.
+  trayCard(parent, { icon, title, subtitle, pill, pillMuted = false, cls = '' }) {
+    const tray = parent.createDiv({ cls: `pulse-v2-tray ${cls}`.trim() });
+    const head = tray.createDiv({ cls: 'pulse-v2-tray-head' });
+    const iconEl = head.createDiv({ cls: 'pulse-v2-tray-icon' });
+    setIcon(iconEl, icon);
+    const text = head.createDiv({ cls: 'pulse-v2-tray-text' });
+    text.createDiv({ cls: 'pulse-v2-tray-title', text: title });
+    if (subtitle) text.createDiv({ cls: 'pulse-v2-tray-sub', text: subtitle });
+    if (pill) head.createDiv({ cls: `pulse-v2-pill${pillMuted ? ' is-muted' : ''}`, text: pill });
+    return tray.createDiv({ cls: 'pulse-v2-inset' });
   }
 
-  renderMetricTabs(parent) {
-    const tabsRow = parent.createDiv({ cls: "crisp-pulse-metric-tabs" });
-
-    const metrics = [
-      { id: "contribution", label: "贡献分 (Contribution)" },
-      { id: "activity", label: "交互活跃 (Active Time)" },
-      { id: "focus", label: "深度专注 (Focus Time)" },
-      { id: "words", label: "新增字数 (Words)" },
-      { id: "notes", label: "新建笔记 (Notes)" },
-      { id: "tasks", label: "完成任务 (Tasks)" }
+  renderDashboardV2(wrapper) {
+    const stats = this.plugin.calcStats(this.currentScope, this.currentDateRange);
+    const scopeLabel = REVIEW_SCOPE_LABELS[this.currentScope] || this.currentScope;
+    const rangeLabel = { year: '近 53 周', '90d': '最近 90 天', '30d': '最近 30 天', '7d': '最近 7 天', ytd: '本年' }[this.currentDateRange] || '近 53 周';
+    const overview = this.trayCard(wrapper, { icon: 'activity', title: '知识脉冲概览', subtitle: `${rangeLabel} · ${scopeLabel}`, pill: stats.currentStreak > 0 ? `连续 ${stats.currentStreak} 天` : '今天还没开始', pillMuted: !(stats.currentStreak > 0) });
+    const strip = overview.createDiv({ cls: 'pulse-v2-strip' });
+    const cells = [
+      { label: '累计贡献分', val: Number(stats.totalScore || 0).toLocaleString('zh-CN', { maximumFractionDigits: 1 }), unit: '分' },
+      { label: '活跃天数', val: stats.activeDays, unit: '天' },
+      { label: '当前连续', val: stats.currentStreak, unit: '天', accent: stats.currentStreak > 0 },
+      { label: '最长连续', val: stats.longestStreak, unit: '天' },
+      { label: '交互活跃', val: stats.totalActiveHours || '0.0', unit: '小时' }
     ];
-
-    for (const m of metrics) {
-      const btn = tabsRow.createEl("button", {
-        cls: `crisp-pulse-tab-btn ${this.selectedMetric === m.id ? "is-active" : ""}`,
-        text: m.label
-      });
-      btn.addEventListener("click", () => {
-        this.selectedMetric = m.id;
-        this.render();
-      });
+    if (Number(stats.totalFocusHours) > 0) cells.push({ label: '深度专注', val: stats.totalFocusHours, unit: '小时' });
+    strip.style.setProperty('--pulse-v2-cols', String(cells.length));
+    for (const cell of cells) {
+      const el = strip.createDiv({ cls: `pulse-v2-stat${cell.accent ? ' is-accent' : ''}` });
+      el.createDiv({ cls: 'pulse-v2-stat-label', text: cell.label });
+      const value = el.createDiv({ cls: 'pulse-v2-stat-value' });
+      value.createSpan({ text: String(cell.val) });
+      value.createSpan({ cls: 'pulse-v2-stat-unit', text: cell.unit });
     }
+
+    const metricLabel = this.getMetricLabel(this.selectedMetric);
+    const heat = this.trayCard(wrapper, { icon: 'calendar-days', title: '年度知识活跃脉冲', subtitle: `${metricLabel} · 强度按个人近期分位数`, pill: `${stats.activeDays} 天活跃`, pillMuted: true, cls: 'pulse-v2-heat' });
+    const seg = heat.createDiv({ cls: 'pulse-v2-seg' });
+    seg.setAttr('role', 'tablist');
+    for (const m of [['contribution', '贡献分'], ['activity', '交互活跃'], ['focus', '深度专注'], ['words', '新增字数'], ['notes', '新建笔记'], ['tasks', '完成任务']]) {
+      const b = seg.createEl('button', { text: m[1] });
+      b.setAttr('role', 'tab');
+      b.setAttr('aria-selected', String(this.selectedMetric === m[0]));
+      b.addEventListener('click', () => { this.selectedMetric = m[0]; this.render(); });
+    }
+    this.renderHeatmapCard(heat);
+
+    const rec = this.plugin.store.daily[this.selectedDate] || createEmptyDailyRecord(this.selectedDate, 'none');
+    const quality = rec.quality === 'recorded' ? '真实记录' : rec.quality === 'estimated' ? '历史估算' : rec.quality === 'mixed' ? '含估算' : '无记录';
+    const { map } = this.plugin.calculateIntensities(this.selectedMetric, this.currentScope);
+    const info = map.get(this.selectedDate) || { level: 0, percentile: 0 };
+    const detail = this.trayCard(wrapper, { icon: 'file-text', title: `${formatDateDisplay(this.selectedDate)} 明细`, subtitle: `${quality}${info.level > 0 ? ` · 强度第 ${info.percentile}% 分位` : ''}`, pill: `${(rec.contribution?.score || 0).toFixed(1)} 分`, pillMuted: !(rec.contribution?.score > 0), cls: 'pulse-v2-detail' });
+    this.renderDayDetailCard(detail);
   }
 
   renderHeatmapCard(parent) {
@@ -4253,7 +4252,9 @@ class CrispPulseView extends ItemView {
     scoreBox.setAttr("aria-label", "贡献得分，展开或收起计分明细");
     scoreBox.setAttr("aria-expanded", String(this.showBreakdown));
     scoreBox.createDiv({ cls: "crisp-pulse-stat-label", text: "贡献得分" });
-    scoreBox.createDiv({ cls: "crisp-pulse-stat-value", text: (rec.contribution.score || 0).toFixed(1) });
+    const scoreValue = scoreBox.createDiv({ cls: "crisp-pulse-stat-value" });
+    scoreValue.createSpan({ text: (rec.contribution.score || 0).toFixed(1) });
+    scoreValue.createSpan({ cls: "crisp-pulse-stat-unit", text: "分" });
     const toggleBreakdown = () => {
       this.showBreakdown = !this.showBreakdown;
       this.render();
@@ -4264,25 +4265,32 @@ class CrispPulseView extends ItemView {
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleBreakdown(); }
     });
 
+    const count = value => Number(value || 0).toLocaleString("zh-CN");
     const statItems = [
-      { label: "新增词数", val: `+${rec.contribution.wordsAdded || 0}` },
-      { label: "深度改写/润色", val: `+${rec.contribution.rewrittenWords || 0} 词` },
-      { label: "新建笔记", val: `${rec.contribution.notesCreated || 0} 篇` },
-      { label: "有效编辑会话", val: `${rec.contribution.meaningfulEdits || 0} 次` },
-      { label: "完成任务", val: `${rec.contribution.tasksCompleted || 0} 项` },
-      { label: "新建内链", val: `${rec.contribution.linksCreated || 0} 条` },
-      { label: "交互活跃时长", val: `${formatPulseMinutes(rec.activity.activeMinutes)} 分钟` }
+      { label: "新增词数", val: `+${count(rec.contribution.wordsAdded)}`, unit: "词" },
+      { label: "深度改写/润色", val: `+${count(rec.contribution.rewrittenWords)}`, unit: "词" },
+      { label: "新建笔记", val: count(rec.contribution.notesCreated), unit: "篇" },
+      { label: "有效编辑会话", val: count(rec.contribution.meaningfulEdits), unit: "次" },
+      { label: "完成任务", val: count(rec.contribution.tasksCompleted), unit: "项" },
+      { label: "新建内链", val: count(rec.contribution.linksCreated), unit: "条" },
+      { label: "交互活跃时长", val: formatPulseMinutes(rec.activity.activeMinutes), unit: "分钟" }
     ];
 
     if (this.plugin.settings.includeFocusInContribution || (rec.activity?.focusMinutes > 0)) {
-      statItems.push({ label: "深度专注时长", val: `${formatPulseMinutes(rec.activity?.focusMinutes)} 分钟` });
+      statItems.push({ label: "深度专注时长", val: formatPulseMinutes(rec.activity?.focusMinutes), unit: "分钟" });
     }
 
     for (const item of statItems) {
       const box = statsGrid.createDiv({ cls: "crisp-pulse-stat-box" });
       box.createDiv({ cls: "crisp-pulse-stat-label", text: item.label });
-      box.createDiv({ cls: "crisp-pulse-stat-value", text: item.val });
+      const value = box.createDiv({ cls: "crisp-pulse-stat-value" });
+      value.createSpan({ text: item.val });
+      value.createSpan({ cls: "crisp-pulse-stat-unit", text: item.unit });
     }
+    // Two even rows (4+4 or 5+4) instead of leaving one box alone on a third row.
+    const columns = Math.ceil(statsGrid.children.length / 2);
+    statsGrid.style.setProperty("--pulse-detail-cols", String(columns));
+    [...statsGrid.children].forEach((box, index) => box.toggleClass("is-row-start", index % columns === 0));
 
     // Score Breakdown Drawer
     if (this.showBreakdown) {
