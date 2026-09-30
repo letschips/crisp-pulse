@@ -1680,3 +1680,70 @@ test('auto portrait range never exceeds the most recent 365 days', () => {
   const dates = helpers.portraitDates({ '2024-01-01': { quality: 'recorded' } }, () => true, '2026-09-30');
   assert.equal(dates.length, 365);assert.equal(dates.at(-1), '2026-09-30');assert.equal(dates[0], '2025-10-01');
 });
+
+// 1.10.1: Obsidian's loadData returns undefined on unreadable JSON, and saveData swallows write errors.
+function diskVault(p, files) {
+  p.manifest = { ...p.manifest, dir: '.obsidian/plugins/crisp-pulse' };
+  p.app.vault.adapter = {
+    exists: async path => files.has(path),
+    read: async path => { if (!files.has(path)) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' }); return files.get(path); },
+    write: async (path, data) => { files.set(path, data); },
+    mkdir: async () => {},
+    list: async () => ({ files: [...files.keys()] })
+  };
+}
+
+test('an unreadable data.json is kept, copied aside and never overwritten by defaults', async () => {
+  const { p } = setup();
+  const dataPath = '.obsidian/plugins/crisp-pulse/data.json';
+  const broken = '{ "daily": { "2026-09-07": ';
+  const files = new Map([[dataPath, broken]]);
+  diskVault(p, files);
+  let writes = 0;
+  p.loadData = async () => undefined;
+  p.saveData = async value => { writes++; files.set(dataPath, JSON.stringify(value, undefined, 2)); };
+  await p.loadPluginData();
+  await p.checkIdleSessions();
+  const result = await p.savePluginData();
+  assert.equal(writes, 0);
+  assert.equal(files.get(dataPath), broken);
+  assert.equal(result.success, false);
+  assert.ok([...files.entries()].some(([path, data]) => path.includes('/backups/') && data === broken), 'raw bytes copied to backups');
+});
+
+test('a save that Obsidian silently drops is reported as failed and stays dirty', async () => {
+  const { p } = setup();
+  const dataPath = '.obsidian/plugins/crisp-pulse/data.json';
+  const files = new Map();
+  diskVault(p, files);
+  await p.loadPluginData();
+  p.saveData = async () => {};
+  p.getOrCreateTodayRecord().contribution.wordsAdded = 123;
+  p.dirty = true;
+  const failed = await p.savePluginData();
+  assert.equal(failed.success, false);
+  assert.equal(p.dirty, true);
+  assert.equal(p.saveStatus, 'error');
+  p.saveData = async value => { files.set(dataPath, JSON.stringify(value, undefined, 2)); };
+  const saved = await p.savePluginData();
+  assert.equal(saved.success, true);
+  assert.equal(p.dirty, false);
+});
+
+test('focus minutes use the length the session started with, not a default changed mid-session', async () => {
+  const { p } = setup();
+  await p.loadPluginData();
+  const focus = {
+    settings: { sessionDurationMinutes: 25 },
+    async startFocusSession(minutes = this.settings.sessionDurationMinutes) { this.settings.sessionDurationMinutes = Math.round(minutes); },
+    async completeFocusSession() {}
+  };
+  p.app.plugins.getPlugin = id => id === 'crisp-focus' ? focus : null;
+  p.focusAdapter.attach();
+  await focus.startFocusSession();
+  focus.settings.sessionDurationMinutes = 50;
+  await focus.completeFocusSession();
+  assert.equal(p.getOrCreateTodayRecord().activity.focusMinutes, 25);
+  p.focusAdapter.detach();
+  assert.equal(typeof focus.startFocusSession, 'function');
+});

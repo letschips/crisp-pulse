@@ -1003,9 +1003,23 @@ class CrispFocusAdapter {
     this.attachedPlugin = focusPlugin;
     this.originalComplete = focusPlugin.completeFocusSession;
 
+    // Remember the length a session started with; Focus lets the default change while it runs.
+    this.sessionMinutes = null;
+    if (typeof focusPlugin.startFocusSession === "function") {
+      this.originalStart = focusPlugin.startFocusSession;
+      const originalStart = this.originalStart;
+      this.startWrapper = function(...args) {
+        const requested = args.length && args[0] !== undefined ? args[0] : focusPlugin.settings?.sessionDurationMinutes;
+        self.sessionMinutes = Math.max(1, Math.min(240, Math.round(Number(requested) || 25)));
+        return originalStart.apply(this, args);
+      };
+      focusPlugin.startFocusSession = this.startWrapper;
+    }
+
     const originalComplete = this.originalComplete;
     this.completeWrapper = async function(...args) {
-      const duration = focusPlugin.settings?.sessionDurationMinutes || 25;
+      const duration = self.sessionMinutes || focusPlugin.settings?.sessionDurationMinutes || 25;
+      self.sessionMinutes = null;
       const result = await originalComplete.apply(this, args);
       if (self.attachedPlugin !== focusPlugin || self.plugin.stopped) return result;
       try {
@@ -1037,6 +1051,9 @@ class CrispFocusAdapter {
 
   detach() {
     if (this.attachedPlugin) {
+      if (this.originalStart && this.attachedPlugin.startFocusSession === this.startWrapper) this.attachedPlugin.startFocusSession = this.originalStart;
+      this.originalStart = null;
+      this.sessionMinutes = null;
       if (this.originalComplete && this.attachedPlugin.completeFocusSession === this.completeWrapper) {
         this.attachedPlugin.completeFocusSession = this.originalComplete;
         this.originalComplete = null;
@@ -1439,8 +1456,49 @@ class CrispPulsePlugin extends Plugin {
     this.flushAllSessions();
   }
 
+  storeFilePath() {
+    return this.manifest?.dir ? `${this.manifest.dir}/data.json` : null;
+  }
+
+  // Obsidian's loadData() yields null for a missing file but undefined when data.json exists and cannot be
+  // read or parsed (sync conflict, partial write). Never let defaults overwrite such a file.
+  async handleUnreadableStore() {
+    this.storeLoadFailed = true;
+    const path = this.storeFilePath();
+    const adapter = this.app?.vault?.adapter;
+    try {
+      if (path && typeof adapter?.read === "function" && typeof adapter?.write === "function") {
+        const raw = await adapter.read(path);
+        const backupDir = `${this.manifest.dir}/backups`;
+        if (typeof adapter.exists === "function" && !(await adapter.exists(backupDir)) && typeof adapter.mkdir === "function") await adapter.mkdir(backupDir);
+        const d = new Date();
+        const ts = `${dateKey(d).replace(/-/g, "")}-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}${String(d.getSeconds()).padStart(2, "0")}`;
+        await adapter.write(`${backupDir}/data-unreadable-${ts}.json`, raw);
+      }
+    } catch (error) {
+      console.error("[Crisp Pulse] Could not copy unreadable data.json:", error);
+    }
+    console.error("[Crisp Pulse] data.json could not be read; saving is paused to protect it.");
+    new Notice("Crisp Pulse：无法读取统计文件 data.json（可能是同步冲突或写入中断）。原文件已保留并在 backups 里复制了一份，本次运行暂停保存。修复或恢复该文件后请重启 Obsidian。", 0);
+  }
+
+  // saveData() swallows write errors in Obsidian, so read the file back before calling a save successful.
+  async verifyStoreWrite(payload) {
+    const path = this.storeFilePath();
+    const adapter = this.app?.vault?.adapter;
+    if (!path || typeof adapter?.read !== "function") return;
+    let onDisk;
+    try {
+      onDisk = JSON.stringify(JSON.parse(await adapter.read(path)));
+    } catch (error) {
+      throw new Error(`data.json 写入后无法读回：${error?.message || error}`);
+    }
+    if (onDisk !== JSON.stringify(payload)) throw new Error("data.json 未写入：磁盘内容与待保存数据不一致");
+  }
+
   async loadPluginData() {
     const raw = await this.loadData();
+    if (raw === undefined) await this.handleUnreadableStore();
     const { store, repairedCount } = validateAndRepairStore(raw, DEFAULT_SETTINGS);
     this.store = store;
     this.settings = this.store.settings;
@@ -1455,6 +1513,15 @@ class CrispPulsePlugin extends Plugin {
   }
 
   async savePluginData({ throwOnError = false } = {}) {
+    if (this.storeLoadFailed) {
+      // Keep collected changes pending; writing now would replace the unreadable history with defaults.
+      this.saveStatus = "error";
+      const error = new Error("data.json 读取失败，已暂停保存以保护原文件");
+      this.lastSaveError = error;
+      this.updateStatusBar?.();
+      if (throwOnError) throw error;
+      return { success: false, reason: "load_failed", error };
+    }
     this.store.settings = this.settings;
     this.saveStatus = "saving";
     this.dirty = false;
@@ -1464,6 +1531,7 @@ class CrispPulsePlugin extends Plugin {
       .catch(() => {})
       .then(async () => {
         await this.saveData(payload);
+        await this.verifyStoreWrite(payload);
         this.saveStatus = "idle";
         this.lastSavedTime = Date.now();
         this.lastSaveError = null;
