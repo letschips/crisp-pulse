@@ -979,8 +979,8 @@
 .pulse-ring-tick { stroke-linecap: round; transition: opacity .15s ease; }
 .pulse-ring-zero { stroke: var(--background-modifier-border); }
 .pulse-ring-missing { fill: var(--background-modifier-border); }
-.pulse-ring-petal { transition: opacity .15s ease; }
-.crisp-pulse-ring.is-inspecting .pulse-ring-petal:not(.is-hot) { opacity: .22; }
+/* Dense marks switch instantly: per-mark fades turned a quick sweep into a flickering trail. */
+.crisp-pulse-ring.is-inspecting .pulse-ring-petal:not(.is-hot) { opacity: .32; }
 .crisp-pulse-ring .pulse-ring-tick.is-hot { stroke-opacity: 1; }
 .pulse-ring-edge { fill: var(--text-faint); font-family: var(--font-interface); font-size: 11px; }
 .crisp-pulse-ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; text-align: center; }
@@ -992,8 +992,7 @@
 .crisp-pulse-fingerprint-card > svg { display: block; }
 .crisp-pulse-fingerprint-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 20px 16px; }
 .crisp-pulse-fp-readout { min-width: 0; font-size: 12px; line-height: 1.6; font-variant-numeric: tabular-nums; }
-.crisp-pulse-fp .pulse-fp-bar { transition: opacity .15s ease; }
-.crisp-pulse-fp.is-inspecting .pulse-fp-bar:not(.is-hot) { opacity: .3; }
+.crisp-pulse-fp.is-inspecting .pulse-fp-bar:not(.is-hot) { opacity: .38; }
 .crisp-pulse-fp .pulse-chart-target:focus-visible { stroke: currentColor; fill: none; }
 .crisp-pulse-analytics .crisp-pulse-fingerprint-actions button { flex: none; border: 1px solid; box-shadow: none; font-size: 12px; padding: 5px 12px; border-radius: 8px; cursor: pointer; }
 .crisp-pulse-analytics .crisp-pulse-fingerprint-actions button:hover { filter: brightness(1.08); }
@@ -1005,7 +1004,7 @@
 .pulse-strata-gap { fill: var(--background-modifier-border); fill-opacity: .18; stroke: var(--background-modifier-border); stroke-dasharray: 2 3; }
 .pulse-strata-gap-label { fill: var(--text-faint); font-family: var(--font-interface); font-size: 10px; }
 .pulse-strata-label { fill: var(--text-muted); font-family: var(--font-interface); font-size: 11px; }
-@media (prefers-reduced-motion: reduce) { .pulse-ring-petal, .pulse-strata-layer, .crisp-pulse-fp .pulse-fp-bar { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .pulse-strata-layer { transition: none; } }
 @container (max-width: 460px) { .crisp-pulse-ring-year { font-size: 28px; } }
 
 /* Moon calendar: warm moonlight on a quiet disc; unrecorded days are only an outline. */
@@ -1020,13 +1019,13 @@
 .crisp-pulse-moon-title { font-size: 13px; font-weight: 550; margin-bottom: 10px; font-variant-numeric: tabular-nums; }
 .crisp-pulse-moon-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px 2px; }
 .crisp-pulse-moon-weekday { text-align: center; color: var(--text-faint); font-size: 11px; padding-bottom: 4px; }
-.crisp-pulse-moon { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 3px 0 2px; border-radius: 10px; outline: none; transition: opacity .15s ease, background-color .15s ease; }
+.crisp-pulse-moon { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 3px 0 2px; border-radius: 10px; outline: none; }
 .crisp-pulse-moon[role="button"] { cursor: pointer; }
 .crisp-pulse-moon svg { width: 100%; max-width: 30px; aspect-ratio: 1; display: block; overflow: visible; }
 .crisp-pulse-moon-day { color: var(--text-faint); font-size: 10px; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .crisp-pulse-moon.is-hot, .crisp-pulse-moon:focus-visible { background: var(--background-modifier-hover); }
 .crisp-pulse-moon.is-hot .crisp-pulse-moon-day { color: var(--text-normal); }
-.crisp-pulse-moon-months.is-inspecting .crisp-pulse-moon:not(.is-hot) { opacity: .45; }
+.crisp-pulse-moon-months.is-inspecting .crisp-pulse-moon:not(.is-hot) { opacity: .55; }
 .pulse-moon-dark { fill: var(--pulse-moon-dark); }
 .pulse-moon-lit { fill: var(--pulse-moon-lit); }
 .pulse-moon-halo { fill: none; stroke: var(--pulse-moon-halo); stroke-opacity: .35; stroke-width: 1.2; }
@@ -1034,7 +1033,6 @@
 .pulse-moon-future { fill: var(--background-modifier-border); }
 .crisp-pulse-moon-legend { align-items: center; gap: 8px; margin-top: 4px; }
 .crisp-pulse-moon-legend svg { width: 16px; height: 16px; }
-@media (prefers-reduced-motion: reduce) { .crisp-pulse-moon { transition: none; } }
 
 /* Matches the narrower card padding set for the same container width below. */
 @container (max-width: 550px) {

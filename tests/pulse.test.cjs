@@ -55,7 +55,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8') +
-    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined};',
     context
   );
   const Pulse = context.module.exports;
@@ -1655,4 +1655,26 @@ test('moon path draws nothing for a new moon, a full disc at 1, and bends the te
   assert.match(helpers.moonPath(0.75, 10, 10, 8), /A4,8 0 0 1 10,2 Z$/);
   assert.match(helpers.moonPath(0.5, 10, 10, 8), /A0,8 0 0 [01] 10,2 Z$/);
   assert.equal(helpers.moonPath(2, 10, 10, 8), full);
+});
+
+test('long portraits fold into Monday weeks that keep sums, the best day and honest statuses', () => {
+  const { helpers } = setup();
+  const rec = (score, words, quality = 'recorded') => ({ quality, contribution: { score, wordsAdded: words, notesCreated: 1, tasksCompleted: 0 }, activity: { activeMinutes: 10, focusMinutes: 0 } });
+  const daily = { '2026-09-02': rec(10, 100), '2026-09-04': rec(30, 50), '2026-09-08': rec(5, 5, 'estimated') };
+  const dates = ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-05', '2026-09-06', '2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10'];
+  const day = helpers.buildDayProfile(daily, dates, r => r.quality === 'recorded', '2026-09-09');
+  const week = helpers.buildWeekProfile(day);
+  assert.equal(week.unit, 'week');assert.equal(week.days.length, 2);
+  const [w1, w2] = week.days;
+  assert.equal(w1.date, '2026-09-01');assert.equal(w1.end, '2026-09-06');assert.equal(w1.status, 'included');
+  assert.equal(w1.score, 40);assert.equal(w1.words, 150);assert.equal(w1.activeDays, 2);assert.equal(w1.bestDate, '2026-09-04');
+  assert.equal(w2.date, '2026-09-07');assert.equal(w2.end, '2026-09-10');assert.equal(w2.status, 'excluded');assert.equal(w2.score, 0);
+  assert.equal(w1.length, 1);assert.equal(w1.intensity, 1);assert.ok(w1.dominant);
+  assert.equal(week.activeDays, day.activeDays);assert.deepEqual({ ...week.totals }, { ...day.totals });
+});
+
+test('auto portrait range never exceeds the most recent 365 days', () => {
+  const { helpers } = setup();
+  const dates = helpers.portraitDates({ '2024-01-01': { quality: 'recorded' } }, () => true, '2026-09-30');
+  assert.equal(dates.length, 365);assert.equal(dates.at(-1), '2026-09-30');assert.equal(dates[0], '2025-10-01');
 });

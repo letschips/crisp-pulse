@@ -2807,11 +2807,13 @@ function buildYearProfile(daily, year, includeRecord, todayKey = getTodayKey()) 
 }
 
 // Default portrait window: from the first included record to today, never shorter than minDays.
-function portraitDates(daily, includeRecord, todayKey = getTodayKey(), minDays = 30) {
+// Capped at maxDays so years of history do not crowd the default view; older years stay one click away.
+function portraitDates(daily, includeRecord, todayKey = getTodayKey(), minDays = 30, maxDays = 365) {
   const first = Object.keys(daily).filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key) && key <= todayKey && daily[key] && includeRecord(daily[key], key)).sort()[0];
   const [y, m, d] = todayKey.split('-').map(Number);
   const earliest = dateKey(new Date(y, m - 1, d - minDays + 1));
-  const start = first && first < earliest ? first : earliest;
+  const oldest = dateKey(new Date(y, m - 1, d - maxDays + 1));
+  const start = !first || first > earliest ? earliest : first < oldest ? oldest : first;
   const dates = [];
   const [sy, sm, sd] = start.split('-').map(Number);
   for (let i = 0; ; i++) {
@@ -2831,19 +2833,52 @@ function buildDayProfile(daily, dates, includeRecord, todayKey = getTodayKey()) 
     const value = (group, field) => { const v = status === 'included' ? record[group]?.[field] : 0; return Number.isFinite(v) && v > 0 ? v : 0; };
     days.push({ date, month: d.getMonth(), status, score: value('contribution', 'score'), words: value('contribution', 'wordsAdded'), notes: value('contribution', 'notesCreated'), tasks: value('contribution', 'tasksCompleted'), active: value('activity', 'activeMinutes'), focus: value('activity', 'focusMinutes') });
   }
+  scoreProfileUnits(days);
   const included = days.filter(day => day.status === 'included');
-  const scales = Object.fromEntries(YEAR_DIMENSIONS.map(dim => [dim.key, yearQuantile(included.map(day => day[dim.field]), 0.9)]));
-  const scoreRef = yearQuantile(included.map(day => day.score), 0.98);
-  const positiveScores = included.map(day => day.score).filter(v => v > 0).sort((a, b) => a - b);
-  for (const day of days) {
-    day.dims = Object.fromEntries(YEAR_DIMENSIONS.map(dim => [dim.key, scales[dim.key] > 0 ? Math.min(1, day[dim.field] / scales[dim.key]) : 0]));
-    day.dominant = null;
-    for (const dim of YEAR_DIMENSIONS) if (day.dims[dim.key] > 0 && (!day.dominant || day.dims[dim.key] > day.dims[day.dominant])) day.dominant = dim.key;
-    day.length = scoreRef > 0 ? Math.min(1, Math.sqrt(day.score / scoreRef)) : 0;
-    day.intensity = day.score > 0 && positiveScores.length ? positiveScores.filter(v => v <= day.score).length / positiveScores.length : 0;
-  }
   const sum = field => Math.round(included.reduce((total, day) => total + day[field], 0) * 10) / 10;
-  return { days, recordedDays: included.length, activeDays: included.filter(day => day.score > 0).length, totals: { score: sum('score'), words: sum('words'), active: sum('active'), focus: sum('focus'), notes: sum('notes') } };
+  return { unit: 'day', days, recordedDays: included.length, activeDays: included.filter(day => day.score > 0).length, totals: { score: sum('score'), words: sum('words'), active: sum('active'), focus: sum('focus'), notes: sum('notes') } };
+}
+
+// Shared by day and week units: dimensions against their own 90th percentile, petal length against the 98th.
+function scoreProfileUnits(units) {
+  const included = units.filter(unit => unit.status === 'included');
+  const scales = Object.fromEntries(YEAR_DIMENSIONS.map(dim => [dim.key, yearQuantile(included.map(unit => unit[dim.field]), 0.9)]));
+  const scoreRef = yearQuantile(included.map(unit => unit.score), 0.98);
+  const positiveScores = included.map(unit => unit.score).filter(v => v > 0).sort((a, b) => a - b);
+  for (const unit of units) {
+    unit.dims = Object.fromEntries(YEAR_DIMENSIONS.map(dim => [dim.key, scales[dim.key] > 0 ? Math.min(1, unit[dim.field] / scales[dim.key]) : 0]));
+    unit.dominant = null;
+    for (const dim of YEAR_DIMENSIONS) if (unit.dims[dim.key] > 0 && (!unit.dominant || unit.dims[dim.key] > unit.dims[unit.dominant])) unit.dominant = dim.key;
+    unit.length = scoreRef > 0 ? Math.min(1, Math.sqrt(unit.score / scoreRef)) : 0;
+    unit.intensity = unit.score > 0 && positiveScores.length ? positiveScores.filter(v => v <= unit.score).length / positiveScores.length : 0;
+  }
+  return units;
+}
+
+// Long spans fold into Monday weeks so the ring and fingerprint stay legible; totals stay those of the days.
+function buildWeekProfile(dayProfile) {
+  const weeks = [];
+  let week = null;
+  for (const day of dayProfile.days) {
+    const [y, m, d] = day.date.split('-').map(Number);
+    if (!week || new Date(y, m - 1, d).getDay() === 1) {
+      week = { date: day.date, end: day.date, month: day.month, unit: 'week', statuses: new Set(), score: 0, words: 0, notes: 0, tasks: 0, active: 0, focus: 0, activeDays: 0, bestDate: null, bestScore: -1 };
+      weeks.push(week);
+    }
+    week.end = day.date;
+    week.statuses.add(day.status);
+    if (day.status !== 'included') continue;
+    for (const field of ['score', 'words', 'notes', 'tasks', 'active', 'focus']) week[field] += day[field];
+    if (day.score > 0) week.activeDays++;
+    if (day.score > week.bestScore) { week.bestScore = day.score; week.bestDate = day.date; }
+  }
+  for (const w of weeks) {
+    w.status = w.statuses.has('included') ? 'included' : w.statuses.size === 1 && w.statuses.has('future') ? 'future' : w.statuses.has('excluded') ? 'excluded' : 'missing';
+    for (const field of ['score', 'words', 'notes', 'tasks', 'active', 'focus']) w[field] = Math.round(w[field] * 10) / 10;
+    delete w.statuses; delete w.bestScore;
+  }
+  scoreProfileUnits(weeks);
+  return { ...dayProfile, unit: 'week', days: weeks };
 }
 
 // Weekly layers (Monday-based, clipped to the given dates) split by a fixed set of project folders,
@@ -2882,6 +2917,10 @@ const FINGERPRINT_PALETTES = {
 // Axis labels that stay readable at any span: Mondays for short windows, month starts for long ones.
 function portraitTicks(days) {
   const ticks = [];
+  if (days[0]?.unit === 'week') {
+    days.forEach((week, i) => { if (i > 0 && week.month !== days[i - 1].month) ticks.push({ index: i, label: `${week.month + 1}月` }); });
+    return ticks;
+  }
   days.forEach((day, i) => {
     const [y, m, d] = day.date.split('-').map(Number);
     if (days.length <= 62 ? new Date(y, m - 1, d).getDay() === 1 : d === 1) ticks.push({ index: i, label: days.length <= 62 ? `${m}/${d}` : `${m}月` });
@@ -2891,7 +2930,9 @@ function portraitTicks(days) {
 
 function portraitTitle(profile) {
   if (profile.year) return String(profile.year);
-  const first = profile.days[0]?.date || '', last = profile.days.at(-1)?.date || '';
+  const first = profile.days[0]?.date || '', last = profile.days.at(-1)?.end || profile.days.at(-1)?.date || '';
+  // Across a year boundary month-day alone is ambiguous, so show year and month instead.
+  if (first.slice(0, 4) !== last.slice(0, 4)) return `${first.slice(0, 7).replace('-', '.')} — ${last.slice(0, 7).replace('-', '.')}`;
   return `${first.slice(5).replace('-', '.')} — ${last.slice(5).replace('-', '.')}`;
 }
 
@@ -3370,11 +3411,13 @@ class CrispPulseView extends ItemView {
     const profile = this.yearlyYear === 'auto'
       ? buildDayProfile(daily, portraitDates(daily, include), include)
       : buildYearProfile(daily, this.yearlyYear, include);
+    // Past ~4 months one mark per day turns into a smear; ring and fingerprint switch to weeks, the calendar stays daily.
+    const portrait = profile.days.length > 120 ? buildWeekProfile(profile) : profile;
     const scopeLabel = REVIEW_SCOPE_LABELS[this.currentScope] || this.currentScope;
     const span = profile.year ? `${profile.year} 年` : `${formatDateDisplay(profile.days[0].date)} — 今天`;
     section.createDiv({ cls: 'crisp-pulse-analytics-coverage', text: `${span} · ${scopeLabel} · 已纳入 ${profile.recordedDays} 天，其中 ${profile.activeDays} 天有贡献。未记录或被筛选的日期留空。` });
-    this.renderYearRing(section, profile);
-    this.renderYearFingerprint(section, profile);
+    this.renderYearRing(section, portrait);
+    this.renderYearFingerprint(section, portrait);
     this.renderYearMoons(section, profile);
     const dates = profile.days.filter(day => day.status !== 'future').map(day => day.date);
     this.renderYearStrata(section, buildStrata(daily, dates, include));
@@ -3382,6 +3425,13 @@ class CrispPulseView extends ItemView {
 
   describeYearDay(day) {
     const number = value => Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 1 });
+    if (day.unit === 'week') {
+      const range = `${day.date.slice(5).replace('-', '/')}–${day.end.slice(5).replace('-', '/')}`;
+      if (day.status === 'future') return `${range} · 尚未到来`;
+      if (day.status !== 'included') return `${range} · ${day.status === 'missing' ? '未记录' : '已被当前数据范围排除'}`;
+      const lead = YEAR_DIMENSIONS.find(dim => dim.key === day.dominant);
+      return `${range} · 贡献 ${number(day.score)} 分 · ${day.activeDays} 天有贡献 · 新增 ${number(day.words)} 词 · 交互 ${number(day.active)} 分钟 · 新建 ${number(day.notes)} 篇${lead ? ` · 以${lead.label}为主` : ''}`;
+    }
     if (day.status === 'future') return `${formatDateDisplay(day.date)} · 尚未到来`;
     if (day.status === 'missing') return `${formatDateDisplay(day.date)} · 未记录`;
     if (day.status === 'excluded') return `${formatDateDisplay(day.date)} · 已被当前数据范围排除`;
@@ -3392,7 +3442,8 @@ class CrispPulseView extends ItemView {
   // The range wound clockwise from a small gap at twelve o'clock; one capsule petal per day.
   renderYearRing(parent, profile) {
     const colors = { write: 'purple', interact: 'green', focus: 'orange', create: 'rose' };
-    const card = this.analyticsSection(parent, '年轮', '从顶部缺口右侧开始顺时针，每天一片花瓣：越长表示当天贡献越高，颜色是当天相对自己最突出的投入方向。');
+    const weekly = profile.unit === 'week', unitName = weekly ? '周' : '天';
+    const card = this.analyticsSection(parent, '年轮', `从顶部缺口右侧开始顺时针，每${unitName}一片花瓣：越长表示当${unitName}贡献越高，颜色是当${unitName}相对自己最突出的投入方向。${weekly ? '范围超过 120 天，按周汇总。' : ''}`);
     const size = Math.max(300, Math.min(600, card.clientWidth - 48));
     const c = size / 2, inner = size * 0.19, outer = size * 0.42, labelR = size * 0.47;
     const wrap = card.createDiv({ cls: 'crisp-pulse-ring-wrap' });
@@ -3431,9 +3482,9 @@ class CrispPulseView extends ItemView {
     const centerTop = center.createDiv({ cls: 'crisp-pulse-analytics-label' });
     const centerMain = center.createDiv({ cls: 'crisp-pulse-ring-year' });
     const centerSub = center.createDiv({ cls: 'crisp-pulse-ring-sub' });
-    const resetCenter = () => { centerTop.textContent = profile.year ? `${profile.year} 年` : `${n} 天`; centerMain.textContent = String(profile.activeDays); centerSub.textContent = '天有贡献'; };
+    const resetCenter = () => { centerTop.textContent = profile.year ? `${profile.year} 年` : weekly ? `${n} 周` : `${n} 天`; centerMain.textContent = String(profile.activeDays); centerSub.textContent = '天有贡献'; };
     resetCenter();
-    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: '悬停在花瓣上查看某一天，点击打开日明细。' });
+    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: weekly ? '悬停在花瓣上查看某一周，点击打开当周贡献最高的一天。' : '悬停在花瓣上查看某一天，点击打开日明细。' });
     readout.setAttr('aria-live', 'polite');
     let current = null;
     const show = index => {
@@ -3441,7 +3492,7 @@ class CrispPulseView extends ItemView {
       current = index;
       svg.classList.add('is-inspecting');
       petals.forEach((petal, i) => petal?.classList.toggle('is-hot', i === index));
-      centerTop.textContent = `${Number(day.date.slice(5, 7))}月${Number(day.date.slice(8))}日`;
+      centerTop.textContent = weekly ? `${day.date.slice(5).replace('-', '/')}–${day.end.slice(5).replace('-', '/')}` : `${Number(day.date.slice(5, 7))}月${Number(day.date.slice(8))}日`;
       centerMain.textContent = day.status === 'included' ? Number(day.score).toLocaleString('zh-CN', { maximumFractionDigits: 1 }) : '—';
       const lead = YEAR_DIMENSIONS.find(dim => dim.key === day.dominant);
       centerSub.textContent = day.status === 'included' ? (lead ? `分 · 以${lead.label}为主` : '分') : day.status === 'future' ? '尚未到来' : day.status === 'missing' ? '未记录' : '已排除';
@@ -3458,16 +3509,18 @@ class CrispPulseView extends ItemView {
       if (angle < startAngle || angle > startAngle + arc) return null;
       return Math.min(n - 1, Math.floor((angle - startAngle) / arc * n));
     };
-    svg.addEventListener('pointermove', event => { const i = indexAt(event); if (i === null) { if (current !== null) hide(); } else if (i !== current) show(i); });
+    // Crossing the start gap or the hole keeps the last petal selected; only leaving the ring clears it.
+    svg.addEventListener('pointermove', event => { const i = indexAt(event); if (i !== null && i !== current) show(i); });
     svg.addEventListener('pointerleave', () => { if (svg.ownerDocument.activeElement !== svg) hide(); });
-    svg.addEventListener('click', event => { const i = indexAt(event); if (i !== null && days[i].status !== 'future') this.activateDay(days[i].date, () => show(i)); });
+    const targetDate = unit => unit.unit === 'week' ? unit.bestDate || unit.end : unit.date;
+    svg.addEventListener('click', event => { const i = indexAt(event); if (i !== null && days[i].status !== 'future') this.activateDay(targetDate(days[i]), () => show(i)); });
     const lastIncluded = days.findLastIndex(day => day.status === 'included');
     svg.addEventListener('focus', () => show(lastIncluded >= 0 ? lastIncluded : n - 1));
     svg.addEventListener('blur', hide);
     svg.addEventListener('keydown', event => {
       if (current === null) return;
-      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (days[current].status !== 'future') this.openAnalyticsDay(days[current].date); return; }
-      const delta = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 7, ArrowUp: -7 }[event.key];
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (days[current].status !== 'future') this.openAnalyticsDay(targetDate(days[current])); return; }
+      const delta = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: weekly ? 4 : 7, ArrowUp: weekly ? -4 : -7 }[event.key];
       const next = event.key === 'Home' ? 0 : event.key === 'End' ? n - 1 : delta === undefined ? null : Math.max(0, Math.min(n - 1, current + delta));
       if (next === null) return;
       event.preventDefault();
@@ -3479,7 +3532,7 @@ class CrispPulseView extends ItemView {
       item.createSpan({ cls: `pulse-chart-dot pulse-chart-fill-${colors[dim.key]}` });
       item.createSpan({ text: `以${dim.label}为主` });
     }
-    legend.createSpan({ cls: 'crisp-pulse-legend-note', text: '花瓣长度 = 当天贡献' });
+    legend.createSpan({ cls: 'crisp-pulse-legend-note', text: `花瓣长度 = 当${unitName}贡献` });
   }
 
   fingerprintPalette() {
@@ -3487,7 +3540,8 @@ class CrispPulseView extends ItemView {
   }
 
   renderYearFingerprint(parent, profile) {
-    const card = this.analyticsSection(parent, '知识指纹', '每天一根竖条，按写作、交互、专注、新建四个方向的相对比例分段上色，亮度随当天强度变化。每个人的都不一样，可以导出成图片。');
+    const weekly = profile.unit === 'week', unitName = weekly ? '周' : '天';
+    const card = this.analyticsSection(parent, '知识指纹', `每${unitName}一根竖条，按写作、交互、专注、新建四个方向的相对比例分段上色，亮度随当${unitName}强度变化。每个人的都不一样，可以导出成图片。${weekly ? '范围超过 120 天，按周汇总。' : ''}`);
     const palette = this.fingerprintPalette();
     card.addClass('crisp-pulse-fingerprint-card');
     card.style.background = palette.bg;
@@ -3499,7 +3553,7 @@ class CrispPulseView extends ItemView {
     const geometry = drawFingerprint(draw, profile, width, height, palette);
     const foot = card.createDiv({ cls: 'crisp-pulse-fingerprint-actions' });
     foot.style.background = palette.bg;
-    const readout = foot.createDiv({ cls: 'crisp-pulse-fp-readout', text: '悬停在竖条上查看某一天，点击打开日明细。' });
+    const readout = foot.createDiv({ cls: 'crisp-pulse-fp-readout', text: weekly ? '悬停在竖条上查看某一周，点击打开当周贡献最高的一天。' : '悬停在竖条上查看某一天，点击打开日明细。' });
     readout.style.color = palette.title;
     readout.setAttr('aria-live', 'polite');
     const button = foot.createEl('button', { text: '导出 PNG' });
@@ -3524,9 +3578,10 @@ class CrispPulseView extends ItemView {
       targets.push(target);
       target.addEventListener('pointerenter', () => show(i));
       target.addEventListener('focus', () => show(i));
-      target.addEventListener('click', () => this.activateDay(day.date, () => show(i)));
+      const date = weekly ? day.bestDate || day.end : day.date;
+      target.addEventListener('click', () => this.activateDay(date, () => show(i)));
       target.addEventListener('keydown', event => {
-        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.openAnalyticsDay(day.date); return; }
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.openAnalyticsDay(date); return; }
         const step = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
         if (!step) return;
         let next = i + step;
