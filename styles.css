@@ -1409,6 +1409,10 @@ body.theme-light .crisp-pulse-view { --pulse-ui-surface: #ffffff; --pulse-ui-sof
 .crisp-pulse-view.pulse-v2 .pulse-v2-inset > :is(.crisp-pulse-heatmap-card, .crisp-pulse-detail-card) {
   background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; margin: 0; border-radius: 0;
 }
+/* Only two layers (tray, inset): the glass rules give every card a raised shadow, so switch it off
+   for cards nested in an inset, including in translucent windows where those rules are more specific. */
+.crisp-pulse-view.pulse-v2 .pulse-v2-inset :is(.crisp-pulse-heatmap-card, .crisp-pulse-detail-card, .crisp-pulse-breakdown-card),
+body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view.pulse-v2 .pulse-v2-inset :is(.crisp-pulse-heatmap-card, .crisp-pulse-detail-card, .crisp-pulse-breakdown-card) { box-shadow: none !important; }
 .crisp-pulse-view.pulse-v2 .pulse-v2-inset > .crisp-pulse-heatmap-card > .crisp-pulse-heatmap-header,
 .crisp-pulse-view.pulse-v2 .pulse-v2-inset > .crisp-pulse-detail-card > .crisp-pulse-detail-header { display: none; }
 .crisp-pulse-view.pulse-v2 .crisp-pulse-heatmap-footer { font-family: var(--font-monospace); font-size: 11px; }
