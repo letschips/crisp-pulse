@@ -3,6 +3,21 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
+const { generateKeyPairSync, sign } = require('node:crypto');
+
+// 授权测试一律用本测试进程里临时生成的 Ed25519 密钥对：内置公钥在加载 main.js 时被替换成它，
+// 因此测试里的授权码只对本进程有效，不能是生产私钥签发的真实授权码（本文件是公开仓库的一部分）。
+const LOCAL_KEY_PAIR = generateKeyPairSync('ed25519');
+const LOCAL_PUBLIC_PEM = LOCAL_KEY_PAIR.publicKey.export({ type: 'spki', format: 'pem' }).toString().trim();
+const PUBLIC_PEM_RE = /`-----BEGIN PUBLIC KEY-----[\s\S]*?-----END PUBLIC KEY-----`/;
+function localLicenseCode(overrides = {}) {
+  const payload = Buffer.from(JSON.stringify({
+    product: 'Crisp Suite', licenseId: 'LOCAL-PULSE-TEST', userName: 'local-tester',
+    issuedAt: '2026-01-01T00:00:00.000Z', expiresAt: '2999-01-01T00:00:00.000Z', maxDevices: 3, features: ['all'], ...overrides,
+  })).toString('base64url');
+  return `${payload}.${sign(null, Buffer.from(payload), LOCAL_KEY_PAIR.privateKey).toString('base64url')}`;
+}
+
 
 function setup() {
   let time = new Date(2026, 8, 8, 12).getTime();
@@ -54,7 +69,7 @@ function setup() {
     Buffer: globalThis.Buffer
   };
   vm.runInNewContext(
-    fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8') +
+    fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8').replace(PUBLIC_PEM_RE, '`' + LOCAL_PUBLIC_PEM + '`') +
     '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined};',
     context
   );
@@ -897,7 +912,7 @@ test('an already stale session closes before the next edit begins',async()=>{
 
 test('verifyLicenseCode validates Ed25519 signature and rejects invalid codes', async () => {
   const { helpers } = setup();
-  const validCode = "eyJwcm9kdWN0IjoiQ3Jpc3AgU3VpdGUiLCJsaWNlbnNlSWQiOiJDUklTUC1NUzhTSTYxQyIsInVzZXJOYW1lIjoieGl4aSIsImlzc3VlZEF0IjoiMjAyNi0wNy0zMVQxMDoxODo0MS44MDhaIiwiZXhwaXJlc0F0IjoiMjEyNi0wNy0wN1QxMDoxODo0MS44MDhaIiwibWF4RGV2aWNlcyI6MywiZmVhdHVyZXMiOlsiYWxsIl19.qzIxKzUeMutCIcvZwIlkIyU_CUvwhqI_uW7RCvexknv_1Kp87vUgkb_TNDzH4l5rubuhhJSbSk537_fod8FqBw";
+  const validCode = localLicenseCode();
   
   // 1. Empty code
   const emptyRes = await helpers.verifyLicenseCode("");
@@ -911,18 +926,24 @@ test('verifyLicenseCode validates Ed25519 signature and rejects invalid codes', 
   // 3. Valid Crisp Suite signature
   const validRes = await helpers.verifyLicenseCode(validCode);
   assert.equal(validRes.valid, true);
-  assert.equal(validRes.payload.userName, "xixi");
+  assert.equal(validRes.payload.userName, "local-tester");
   assert.equal(validRes.payload.product, "Crisp Suite");
 
   // 4. Tampered signature
   const tamperedCode = validCode.slice(0, -6) + "xxxxxx";
   const tamperedRes = await helpers.verifyLicenseCode(tamperedCode);
   assert.equal(tamperedRes.valid, false);
+
+  // 5. Well-formed signature from a key that is not the embedded trust anchor
+  const foreignPayload = validCode.split(".")[0];
+  const foreignKey = generateKeyPairSync('ed25519').privateKey;
+  const foreignRes = await helpers.verifyLicenseCode(`${foreignPayload}.${sign(null, Buffer.from(foreignPayload), foreignKey).toString('base64url')}`);
+  assert.equal(foreignRes.valid, false);
 });
 
 test('CrispPulseLicenseManager verifies and maintains entitlement state', async () => {
   const { helpers } = setup();
-  const validCode = "eyJwcm9kdWN0IjoiQ3Jpc3AgU3VpdGUiLCJsaWNlbnNlSWQiOiJDUklTUC1NUzhTSTYxQyIsInVzZXJOYW1lIjoieGl4aSIsImlzc3VlZEF0IjoiMjAyNi0wNy0zMVQxMDoxODo0MS44MDhaIiwiZXhwaXJlc0F0IjoiMjEyNi0wNy0wN1QxMDoxODo0MS44MDhaIiwibWF4RGV2aWNlcyI6MywiZmVhdHVyZXMiOlsiYWxsIl19.qzIxKzUeMutCIcvZwIlkIyU_CUvwhqI_uW7RCvexknv_1Kp87vUgkb_TNDzH4l5rubuhhJSbSk537_fod8FqBw";
+  const validCode = localLicenseCode();
   const settings = { licenseCode: validCode, licenseLastOnlineAt: 0 };
   const lm = new helpers.CrispPulseLicenseManager(null, settings);
 
