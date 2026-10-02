@@ -18,7 +18,6 @@ function localLicenseCode(overrides = {}) {
   return `${payload}.${sign(null, Buffer.from(payload), LOCAL_KEY_PAIR.privateKey).toString('base64url')}`;
 }
 
-
 function setup() {
   let time = new Date(2026, 8, 8, 12).getTime();
   class Clock extends Date { constructor(...args) { super(...(args.length ? args : [time])); } static now() { return time; } }
@@ -947,6 +946,8 @@ test('CrispPulseLicenseManager verifies and maintains entitlement state', async 
   const settings = { licenseCode: validCode, licenseLastOnlineAt: 0 };
   const lm = new helpers.CrispPulseLicenseManager(null, settings);
 
+  assert.equal(lm.isEntitled(), false, '构造后必须先是未授权，不能在验签前放行');
+  await lm.initialize();
   assert.equal(lm.isEntitled(), true);
   assert.equal(lm.getStatus().valid, true);
 
@@ -1401,6 +1402,10 @@ test('copy and archive commands generate modern review report with reflections a
 
  const copyCmd=p.commands.find(c=>c.id==='copy-pulse-weekly-markdown');
  assert.ok(copyCmd);
+ p.licenseManager={isEntitled:()=>false};
+ await copyCmd.callback();
+ assert.equal(copiedText,'','未激活时周报命令不得输出内容');
+ p.licenseManager={isEntitled:()=>true};
  await copyCmd.callback();
  assert.ok(copiedText.includes('## 复盘反思'));
  assert.ok(copiedText.includes('本周新认识'));
@@ -1413,6 +1418,10 @@ test('copy and archive commands generate modern review report with reflections a
 
  const archiveCmd=p.commands.find(c=>c.id==='archive-weekly-review');
  assert.ok(archiveCmd);
+ p.licenseManager={isEntitled:()=>false};
+ await archiveCmd.callback();
+ assert.equal(archivedFile,null,'未激活时归档命令不得写入文件');
+ p.licenseManager={isEntitled:()=>true};
  await archiveCmd.callback();
  assert.ok(archivedFile);
  assert.ok(archivedFile.path.includes(`${start}_${today}-reliable-知识工作复盘.md`));

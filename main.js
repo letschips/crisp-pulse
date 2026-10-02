@@ -71,26 +71,21 @@ async function importEd25519PublicKey(pem, windowObj = null) {
   );
 }
 
-function discoverVaultCrispLicense(app) {
-  if (!app) return null;
-  // 1. Check in-memory active plugins
-  const crispPlugins = [
-    "crisp-focus",
-    "crisp-file-explorer",
-    "crisp-base",
-    "crisp-recall",
-    "crisp-annotations",
-    "crisp-reading-rail",
-    "crisp-asr",
-    "crisp-visual"
-  ];
-  for (const pid of crispPlugins) {
-    const p = app.plugins?.plugins?.[pid];
-    if (p?.settings?.licenseCode && typeof p.settings.licenseCode === "string" && p.settings.licenseCode.includes(".")) {
-      return p.settings.licenseCode.trim();
-    }
+// 库内其它 Crisp 插件保存的授权码，按「已加载插件 → 磁盘 data.json」顺序去重收集（不含 Pulse 自己）。
+function collectVaultCrispLicenseCandidates(app) {
+  if (!app) return [];
+  const seen = new Set();
+  const candidates = [];
+  const add = (code) => {
+    if (typeof code !== "string") return;
+    const trimmed = code.trim();
+    if (!trimmed.includes(".") || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    candidates.push(trimmed);
+  };
+  for (const [pid, instance] of Object.entries(app.plugins?.plugins || {})) {
+    if (pid.startsWith("crisp-") && pid !== "crisp-pulse") add(instance?.settings?.licenseCode);
   }
-  // 2. Check plugin data.json files on disk
   try {
     const pathMod = typeof require === "function" ? require("path") : null;
     const fsMod = typeof require === "function" ? require("fs") : null;
@@ -98,27 +93,34 @@ function discoverVaultCrispLicense(app) {
       const basePath = app.vault?.adapter?.basePath || (app.vault?.adapter?.getBasePath ? app.vault.adapter.getBasePath() : "");
       const pluginsDir = basePath ? pathMod.join(basePath, ".obsidian", "plugins") : "";
       if (pluginsDir && fsMod.existsSync(pluginsDir)) {
-        const dirs = fsMod.readdirSync(pluginsDir);
-        for (const d of dirs) {
-          if (d.startsWith("crisp-") && d !== "crisp-pulse") {
-            const dataPath = pathMod.join(pluginsDir, d, "data.json");
-            if (fsMod.existsSync(dataPath)) {
-              const raw = fsMod.readFileSync(dataPath, "utf-8");
-              const data = JSON.parse(raw);
-              const code = data?.licenseCode || data?.settings?.licenseCode;
-              if (code && typeof code === "string" && code.includes(".")) {
-                return code.trim();
-              }
-            }
+        for (const d of fsMod.readdirSync(pluginsDir)) {
+          if (!d.startsWith("crisp-") || d === "crisp-pulse") continue;
+          const dataPath = pathMod.join(pluginsDir, d, "data.json");
+          if (!fsMod.existsSync(dataPath)) continue;
+          try {
+            const data = JSON.parse(fsMod.readFileSync(dataPath, "utf-8"));
+            add(data?.licenseCode || data?.settings?.licenseCode);
+          } catch (e) {
+            // 单个损坏的 data.json 不影响其余候选
           }
         }
       }
     }
   } catch (e) {}
+  return candidates;
+}
+
+// 返回一张对本插件确实可用的授权码，找不到则返回 null。候选只做本地校验（不增加在线请求），
+// 因此作用域不含 Pulse、已过期或签名无效的码不会再挡住后面可用的全家桶码。
+async function discoverVaultCrispLicense(app) {
+  for (const code of collectVaultCrispLicenseCandidates(app)) {
+    const local = await verifyLicenseCode(code, "crisp-pulse", app, null, { skipOnline: true });
+    if (local.valid) return code;
+  }
   return null;
 }
 
-async function verifyLicenseCode(licenseCode, targetPluginId = "crisp-pulse", app = null, windowObj = null) {
+async function verifyLicenseCode(licenseCode, targetPluginId = "crisp-pulse", app = null, windowObj = null, options = {}) {
   const trimmed = (licenseCode || "").trim();
   if (!trimmed) return { valid: false, reason: "授权码为空" };
   const parts = trimmed.split(".");
@@ -157,6 +159,7 @@ async function verifyLicenseCode(licenseCode, targetPluginId = "crisp-pulse", ap
       new Encoder().encode(payloadBase64)
     );
     if (!isValid) return { valid: false, reason: "授权签名无效" };
+    if (options.skipOnline) return { valid: true, payload, message: "本地验签通过", source: "offline" };
 
     let reqUrl = null;
     try {
@@ -220,6 +223,16 @@ async function verifyLicenseCode(licenseCode, targetPluginId = "crisp-pulse", ap
   }
 }
 
+// 功能分级。要调整哪些功能需要激活，只改这一张表（以及对应的 requireEntitlement / renderGatedTab 调用点）。
+// 固定原则：数据采集、存储、备份、导出与看板视图永不上锁——用户自己的数据始终可读、可带走，
+// 未激活期间采集照常进行，激活后能看到完整历史。
+const PULSE_GATED_FEATURES = Object.freeze({
+  review: "知识复盘",
+  analytics: "数据分析",
+  yearly: "年度画像",
+  weeklyReport: "周报复制与归档",
+});
+
 class CrispPulseLicenseManager {
   constructor(app, settings, options = {}) {
     this.app = app;
@@ -227,23 +240,11 @@ class CrispPulseLicenseManager {
     this.verifier = options.verifier || verifyLicenseCode;
     this.now = options.now || (() => Date.now());
     this.windowObj = options.windowObj || (typeof window !== "undefined" ? window : null);
+    this.onEntitlementChange = options.onEntitlementChange || (() => {});
+    // 一律从「未验证」起步：只有本地验签通过才放行，不凭库内某个文件的 product 字段先授予权限。
     this.status = { valid: false, reason: "尚未验证" };
-
-    const initialCode = (this.settings && this.settings.licenseCode) || discoverVaultCrispLicense(this.app);
-    if (initialCode && typeof initialCode === "string" && initialCode.includes(".")) {
-      try {
-        const payloadBase64 = initialCode.split(".")[0];
-        const Decoder = typeof TextDecoder !== "undefined" ? TextDecoder : require("util").TextDecoder;
-        const payloadJson = new Decoder().decode(base64UrlToUint8Array(payloadBase64));
-        const payload = JSON.parse(payloadJson);
-        if (CRISP_LICENSE_PRODUCTS.includes(payload.product)) {
-          this.status = { valid: true, payload, message: "本地验证成功", source: "offline" };
-          if (this.settings && !this.settings.licenseCode) {
-            this.settings.licenseCode = initialCode;
-          }
-        }
-      } catch (e) {}
-    }
+    this.verificationId = 0;
+    this.backgroundVerification = null;
   }
 
   isEntitled() {
@@ -254,28 +255,44 @@ class CrispPulseLicenseManager {
     return this.status;
   }
 
-  async verify(code = this.settings?.licenseCode) {
-    let targetCode = (code || "").trim();
-    if (!targetCode) {
-      const discovered = discoverVaultCrispLicense(this.app);
-      if (discovered) targetCode = discovered;
-    }
-    let result;
+  async runVerifier(code, options) {
     try {
-      result = await this.verifier(targetCode, "crisp-pulse", this.app, this.windowObj);
+      return await this.verifier(code, "crisp-pulse", this.app, this.windowObj, options);
     } catch (error) {
-      result = { valid: false, reason: `授权验证失败: ${error.message || error}` };
+      return { valid: false, reason: `授权验证失败: ${error.message || error}` };
     }
+  }
 
-    if (result.valid) {
-      if (this.settings) {
-        this.settings.licenseCode = targetCode;
-        if (result.source === "online") {
-          this.settings.licenseLastOnlineAt = this.now();
-        }
-      }
-    }
+  apply(result, code) {
+    const wasEntitled = this.isEntitled();
     this.status = result;
+    if (result.valid && this.settings) {
+      this.settings.licenseCode = code;
+      if (result.source === "online") this.settings.licenseLastOnlineAt = this.now();
+    }
+    if (wasEntitled !== this.isEntitled()) this.onEntitlementChange(this.isEntitled());
+  }
+
+  // 启动时调用：只做不联网的本地验签（毫秒级），通过后在线设备校验转入后台。
+  async initialize() {
+    const id = ++this.verificationId;
+    let code = ((this.settings && this.settings.licenseCode) || "").trim();
+    if (!code) code = (await discoverVaultCrispLicense(this.app)) || "";
+    const result = await this.runVerifier(code, { skipOnline: true });
+    if (id !== this.verificationId) return result;
+    this.apply(result, code);
+    if (result.valid) this.backgroundVerification = this.verify(code);
+    return result;
+  }
+
+  async verify(code = this.settings?.licenseCode) {
+    const id = ++this.verificationId;
+    let targetCode = (code || "").trim();
+    if (!targetCode) targetCode = (await discoverVaultCrispLicense(this.app)) || "";
+    const result = await this.runVerifier(targetCode, {});
+    // 更新的校验已经开始：本次结果不再落地，避免旧结果覆盖新状态。
+    if (id !== this.verificationId) return result;
+    this.apply(result, targetCode);
     return result;
   }
 }
@@ -1306,8 +1323,11 @@ class CrispPulsePlugin extends Plugin {
 
     await this.loadPluginData();
 
-    this.licenseManager = new CrispPulseLicenseManager(this.app, this.settings);
-    void this.licenseManager.verify();
+    this.licenseManager = new CrispPulseLicenseManager(this.app, this.settings, {
+      onEntitlementChange: () => { if (this.app?.workspace) this.refreshViews(); },
+    });
+    // 本地验签只需毫秒：先等它完成再创建视图和命令，已激活用户不会先看到一帧锁定界面。
+    await this.licenseManager.initialize();
 
     if (this.settings.showStatusBarItem) {
       this.initStatusBar();
@@ -1329,6 +1349,7 @@ class CrispPulsePlugin extends Plugin {
       id: "copy-pulse-weekly-markdown",
       name: "复制本周工作复盘 Markdown 周报",
       callback: async () => {
+        if (!this.requireEntitlement("weeklyReport")) return;
         const today = new Date();
         const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
         const sKey = dateKey(start), eKey = dateKey(today);
@@ -1397,6 +1418,7 @@ class CrispPulsePlugin extends Plugin {
       id: "archive-weekly-review",
       name: "归档本周工作复盘至知识库 (ANKS Review)",
       callback: async () => {
+        if (!this.requireEntitlement("weeklyReport")) return;
         const today = new Date();
         const startWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
         const sKey = dateKey(startWeek), eKey = dateKey(today);
@@ -1563,6 +1585,27 @@ class CrispPulsePlugin extends Plugin {
     for (const record of Object.values(this.store.daily)) this.recomputeScore(record);
     await this.savePluginData({ throwOnError: true });
     this.refreshViews();
+  }
+
+  isEntitled() {
+    return this.licenseManager?.isEntitled() === true;
+  }
+
+  // 命令层门控：未激活时提示并返回 false，调用方直接 return。
+  requireEntitlement(featureKey) {
+    if (this.isEntitled()) return true;
+    new Notice(`Crisp Pulse：${PULSE_GATED_FEATURES[featureKey] || "该功能"}需要激活。请在 设置 → Crisp Pulse 输入 Crisp 授权码；数据仍在照常记录。`);
+    return false;
+  }
+
+  openLicenseSettings() {
+    const setting = this.app?.setting;
+    if (setting?.open && setting?.openTabById) {
+      setting.open();
+      setting.openTabById(this.manifest?.id || "crisp-pulse");
+    } else {
+      new Notice("请在 设置 → Crisp Pulse 输入 Crisp 授权码。");
+    }
   }
 
   async activateLicense(code) {
@@ -3147,7 +3190,9 @@ class CrispPulseView extends ItemView {
     // 1. Header with View Tabs, Scope and DateRange Selectors
     this.renderHeader(wrapper);
 
-    if (this.activeViewTab === "dashboard") {
+    if (this.renderGatedTab(wrapper, this.activeViewTab)) {
+      // 未激活：只显示锁定说明，不计算也不渲染任何统计内容。
+    } else if (this.activeViewTab === "dashboard") {
       this.renderDashboardV2(wrapper);
     } else if (this.activeViewTab === "analytics") {
       this.renderAnalytics(wrapper);
@@ -3964,6 +4009,22 @@ class CrispPulseView extends ItemView {
     }
   }
 
+  // 需要激活的标签页在未激活时显示锁定说明。返回 true 表示已渲染锁定面板。
+  renderGatedTab(parent, tab) {
+    if (!["review", "analytics", "yearly"].includes(tab) || this.plugin?.isEntitled?.()) return false;
+    const status = this.plugin?.licenseManager?.getStatus?.();
+    const hasCode = !!this.plugin?.settings?.licenseCode;
+    const panel = parent.createDiv({ cls: "crisp-pulse-locked" });
+    panel.createEl("h3", { text: `${PULSE_GATED_FEATURES[tab]}需要激活` });
+    panel.createEl("p", { text: "看板视图、数据记录、备份与导出不受影响，数据仍在照常记录；激活后可以看到全部历史。" });
+    if (hasCode && status && status.reason) {
+      panel.createEl("p", { cls: "crisp-pulse-locked-reason", text: `当前授权码未通过：${status.reason}` });
+    }
+    const button = panel.createEl("button", { cls: "mod-cta", text: "前往激活" });
+    button.addEventListener("click", () => this.plugin.openLicenseSettings());
+    return true;
+  }
+
   renderHeader(parent) {
     const header = parent.createDiv({ cls: "crisp-pulse-header" });
 
@@ -4004,6 +4065,12 @@ class CrispPulseView extends ItemView {
       text: "年度画像"
     });
     yearlyButton.addEventListener("click", () => { this.activeViewTab = "yearly"; this.containerEl.children[1].scrollTop = 0; this.render(); });
+    if (!this.plugin?.isEntitled?.()) {
+      for (const button of [reviewBtn, analyticsButton, yearlyButton]) {
+        button.classList.add("is-locked");
+        button.setAttr("title", "需要激活");
+      }
+    }
     for (const [button, key] of [[dashBtn, "dashboard"], [reviewBtn, "review"], [analyticsButton, "analytics"], [yearlyButton, "yearly"]]) button.setAttr("aria-pressed", String(this.activeViewTab === key));
 
     const actions = header.createDiv({ cls: "crisp-pulse-actions" });
@@ -4791,7 +4858,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
       } else if (this.plugin.settings.licenseCode) {
         statusSetting.setDesc(`❌ 未激活（${status?.reason || "授权码无效"}）`);
       } else {
-        statusSetting.setDesc("❌ 未激活（输入 Crisp Suite 授权码激活全功能与生态联动）");
+        statusSetting.setDesc(`❌ 未激活。看板视图、数据记录、备份与导出照常可用；${Object.values(PULSE_GATED_FEATURES).join("、")}需要激活。`);
       }
     };
 
