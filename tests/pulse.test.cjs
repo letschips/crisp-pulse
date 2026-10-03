@@ -69,7 +69,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8').replace(PUBLIC_PEM_RE, '`' + LOCAL_PUBLIC_PEM + '`') +
-    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined};',
     context
   );
   const Pulse = context.module.exports;
@@ -1776,4 +1776,60 @@ test('focus minutes use the length the session started with, not a default chang
   assert.equal(p.getOrCreateTodayRecord().activity.focusMinutes, 25);
   p.focusAdapter.detach();
   assert.equal(typeof focus.startFocusSession, 'function');
+});
+
+// 1.11: month pace against the same point of the previous month.
+function paceDay(score, quality = 'recorded') { return { quality, contribution: { score, wordsAdded: score * 10 }, activity: { focusMinutes: score / 2 } }; }
+
+test('month pace compares this month with the same day of last month and projects the month end', () => {
+  const { helpers } = setup();
+  const daily = {};
+  for (let d = 1; d <= 30; d++) daily[`2026-09-${String(d).padStart(2, '0')}`] = paceDay(10);
+  for (let d = 1; d <= 3; d++) daily[`2026-10-0${d}`] = paceDay(20);
+  const pace = helpers.buildMonthPace(daily, '2026-10-03', () => true, 'score');
+  assert.equal(pace.days, 31);assert.equal(pace.today, 3);
+  assert.equal(pace.actualToDate, 60);assert.equal(pace.baselineToDate, 30);assert.equal(pace.baselineTotal, 300);
+  assert.equal(pace.deltaPct, 100);
+  assert.deepEqual([...pace.actual], [20, 40, 60]);
+  assert.equal(pace.baseline.length, 31);assert.equal(pace.baseline[30], 300);
+  // Recent rate: the last 7 calendar days with a record (Sep 27-30 at 10, Oct 1-3 at 20).
+  assert.equal(Math.round(pace.recentRate * 100) / 100, 14.29);
+  assert.equal(Math.round(pace.projection), 60 + Math.round(100 / 7 * 28));
+  const words = helpers.buildMonthPace(daily, '2026-10-03', () => true, 'words');
+  assert.equal(words.actualToDate, 600);
+  const active = helpers.buildMonthPace({ ...daily, '2026-10-02': paceDay(0) }, '2026-10-03', () => true, 'active');
+  assert.equal(active.baselineTotal, 30);assert.deepEqual([...active.actual], [1, 1, 2]);
+});
+
+test('month pace words leave out what was written into system folders', () => {
+  const { helpers } = setup();
+  const day = (words, system) => ({ quality: 'recorded', contribution: { score: 1, wordsAdded: words }, files: { 'Sidecar/logs/a.md': { sourceWords: { system } }, 'b.md': { sourceWords: { unattributed: words - system } } } });
+  const pace = helpers.buildMonthPace({ '2026-10-01': day(1000, 800), '2026-10-02': day(50, 0), '2026-10-03': day(10, 99) }, '2026-10-03', () => true, 'words');
+  assert.deepEqual([...pace.actual], [200, 250, 250]);
+});
+
+test('month pace maps days past the end of a shorter previous month onto its total', () => {
+  const { helpers } = setup();
+  const daily = {};
+  for (let d = 1; d <= 28; d++) daily[`2026-02-${String(d).padStart(2, '0')}`] = paceDay(1);
+  for (let d = 1; d <= 31; d++) daily[`2026-03-${String(d).padStart(2, '0')}`] = paceDay(1);
+  const pace = helpers.buildMonthPace(daily, '2026-03-31', () => true, 'score');
+  assert.equal(pace.baselineTotal, 28);assert.equal(pace.baselineToDate, 28);
+  assert.equal(pace.baseline[29], 28);assert.equal(pace.baseline[30], 28);
+  assert.equal(pace.needPerDay, null);
+});
+
+test('month pace never counts excluded or missing days and reports when there is no baseline', () => {
+  const { helpers } = setup();
+  const daily = { '2026-10-01': paceDay(50, 'estimated'), '2026-10-03': paceDay(30) };
+  const pace = helpers.buildMonthPace(daily, '2026-10-03', rec => rec.quality === 'recorded', 'score');
+  assert.equal(pace.actualToDate, 30);assert.deepEqual([...pace.actual], [0, 0, 30]);
+  assert.equal(pace.missingDays, 2);
+  assert.equal(pace.prevFirstDay, null);
+  assert.equal(pace.baseline, null);assert.equal(pace.baselineTotal, 0);assert.equal(pace.deltaPct, null);
+  const behind = helpers.buildMonthPace({ ...daily, '2026-09-01': paceDay(100), '2026-09-02': paceDay(100) }, '2026-10-03', rec => rec.quality === 'recorded', 'score');
+  assert.equal(behind.deltaPct, -85);
+  assert.equal(behind.prevFirstDay, 1);
+  assert.equal(helpers.buildMonthPace({ '2026-09-08': paceDay(5) }, '2026-10-03', () => true, 'score').prevFirstDay, 8);
+  assert.equal(Math.round(behind.needPerDay * 100) / 100, Math.round(170 / 28 * 100) / 100);
 });

@@ -1495,3 +1495,35 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 @container (max-width: 340px) {
   .crisp-pulse-view.pulse-v2 :is(.crisp-pulse-review-comparison, .crisp-pulse-review-sources) > .crisp-pulse-stat-box:nth-child(n) { border-left: 0; padding-left: 2px; }
 }
+
+/* Month pace: progress against last month's total, a marker where last month stood today. */
+.crisp-pulse-view .pulse-pace-rows { display: flex; flex-direction: column; gap: 18px; margin-bottom: 24px; }
+.crisp-pulse-view .pulse-pace-head, .crisp-pulse-view .pulse-pace-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.crisp-pulse-view .pulse-pace-label { font-family: var(--font-monospace); font-size: 14px; color: var(--text-normal); }
+.crisp-pulse-view .pulse-pace-share { font-family: var(--font-monospace); font-size: 13px; color: var(--text-normal); font-variant-numeric: tabular-nums; }
+.crisp-pulse-view .pulse-pace-track { position: relative; height: 8px; margin: 8px 0 7px; border-radius: 2px; background: color-mix(in srgb, var(--text-normal) 9%, transparent); }
+.crisp-pulse-view .pulse-pace-track.is-empty { background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--text-normal) 9%, transparent) 0 6px, transparent 6px 10px); }
+.crisp-pulse-view .pulse-pace-fill { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: color-mix(in srgb, var(--pulse-ui-accent, var(--interactive-accent)) 55%, transparent); }
+.crisp-pulse-view .pulse-pace-track.is-behind .pulse-pace-fill { background: color-mix(in srgb, var(--text-normal) 30%, transparent); }
+.crisp-pulse-view .pulse-pace-mark { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--color-red, #e5484d); }
+.crisp-pulse-view .pulse-pace-delta, .crisp-pulse-view .pulse-pace-outlook { font-family: var(--font-monospace); font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.crisp-pulse-view .pulse-pace-delta.is-ahead { color: var(--pulse-ui-accent, var(--interactive-accent)); }
+.crisp-pulse-view .pulse-pace-delta.is-behind { color: var(--color-red, #e5484d); }
+.crisp-pulse-view .pulse-pace-seg { margin-bottom: 12px; }
+.pulse-pace-baseline { stroke: var(--color-red, #e5484d); stroke-width: 1.5; stroke-dasharray: 5 4; opacity: .75; }
+.pulse-pace-actual { stroke: var(--pulse-ui-accent, var(--interactive-accent)); stroke-width: 2.25; stroke-linejoin: round; }
+.pulse-pace-area { fill: var(--pulse-ui-accent, var(--interactive-accent)); fill-opacity: .1; }
+.pulse-pace-projection { stroke: var(--pulse-ui-accent, var(--interactive-accent)); stroke-width: 1.5; stroke-dasharray: 1.5 4; stroke-linecap: round; opacity: .8; }
+.pulse-pace-today { stroke: var(--text-faint); stroke-width: 1; stroke-dasharray: 2 3; }
+.pulse-pace-dot { fill: var(--pulse-ui-accent, var(--interactive-accent)); }
+.crisp-pulse-view .pulse-pace-key { display: inline-block; width: 16px; height: 0; border-top: 2px solid var(--pulse-ui-accent, var(--interactive-accent)); vertical-align: middle; }
+.crisp-pulse-view .pulse-pace-key-baseline { border-top: 2px dashed var(--color-red, #e5484d); }
+.crisp-pulse-view .pulse-pace-key-projection { border-top: 2px dotted var(--pulse-ui-accent, var(--interactive-accent)); }
+.crisp-pulse-view .pulse-pace-note { min-height: 0; padding-bottom: 0; }
+/* A deep accent (e.g. #1a35e5) disappears on a dark surface; lift the pace lines toward white there. */
+.theme-dark .crisp-pulse-view { --pulse-pace-line: color-mix(in srgb, var(--pulse-ui-accent, var(--interactive-accent)) 65%, white); }
+.theme-dark .pulse-pace-actual, .theme-dark .pulse-pace-projection { stroke: var(--pulse-pace-line); }
+.theme-dark .pulse-pace-dot, .theme-dark .pulse-pace-area { fill: var(--pulse-pace-line); }
+.theme-dark .crisp-pulse-view .pulse-pace-fill { background: color-mix(in srgb, var(--pulse-pace-line) 60%, transparent); }
+.theme-dark .crisp-pulse-view .pulse-pace-delta.is-ahead { color: var(--pulse-pace-line); }
+.theme-dark .crisp-pulse-view :is(.pulse-pace-key-actual, .pulse-pace-key-projection) { border-top-color: var(--pulse-pace-line); }

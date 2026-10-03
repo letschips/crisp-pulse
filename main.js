@@ -2992,6 +2992,74 @@ function buildWeekProfile(dayProfile) {
   return { ...dayProfile, unit: 'week', days: weeks };
 }
 
+// Words written into system folders (logs, backups, manifests) are machine output, not the author's pace.
+function paceSystemWords(record) {
+  let sum = 0;
+  for (const file of Object.values(record.files || {})) {
+    const amount = file?.sourceWords?.system;
+    if (Number.isFinite(amount) && amount > 0) sum += amount;
+  }
+  return sum;
+}
+
+const PACE_FIELDS = {
+  score: record => record.contribution?.score,
+  words: record => Math.max(0, (Number(record.contribution?.wordsAdded) || 0) - paceSystemWords(record)),
+  active: record => (record.contribution?.score > 0 ? 1 : 0),
+  focus: record => record.activity?.focusMinutes
+};
+
+// This month's running total against the same day of last month. A last-month day past this month's length
+// keeps its total; days without an included record add nothing and are counted separately, never invented.
+function buildMonthPace(daily, todayKey, includeRecord, field) {
+  const read = PACE_FIELDS[field];
+  const [y, m, today] = todayKey.split('-').map(Number);
+  const days = new Date(y, m, 0).getDate();
+  const prevYear = m === 1 ? y - 1 : y, prevMonth = m === 1 ? 12 : m - 1;
+  const prevDays = new Date(prevYear, prevMonth, 0).getDate();
+  const valueOn = key => {
+    const record = daily[key];
+    if (!record || !includeRecord(record, key)) return null;
+    const v = read(record);
+    return Number.isFinite(v) && v > 0 ? v : 0;
+  };
+  const keyOf = (yy, mm, dd) => `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+  const actual = [];
+  let running = 0, missingDays = 0;
+  for (let d = 1; d <= today; d++) {
+    const v = valueOn(keyOf(y, m, d));
+    if (v === null) missingDays++;
+    running += v || 0;
+    actual.push(Math.round(running * 10) / 10);
+  }
+  const prevCum = [];
+  let prevRunning = 0, prevRecorded = 0, prevFirstDay = null;
+  for (let d = 1; d <= prevDays; d++) {
+    const v = valueOn(keyOf(prevYear, prevMonth, d));
+    if (v !== null) { prevRecorded++; if (prevFirstDay === null) prevFirstDay = d; }
+    prevRunning += v || 0;
+    prevCum.push(prevRunning);
+  }
+  const baselineTotal = Math.round(prevRunning * 10) / 10;
+  const baseline = prevRecorded && baselineTotal > 0 ? Array.from({ length: days }, (_, i) => Math.round(prevCum[Math.min(i, prevDays - 1)] * 10) / 10) : null;
+  const actualToDate = actual[today - 1] || 0;
+  const baselineToDate = baseline ? baseline[today - 1] : 0;
+  const deltaPct = baselineToDate > 0 ? Math.round((actualToDate - baselineToDate) / baselineToDate * 100) : null;
+  // Recent pace: the last 7 calendar days, averaged over the days that actually hold a record.
+  let recentSum = 0, recentDays = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(y, m - 1, today - i);
+    const v = valueOn(keyOf(d.getFullYear(), d.getMonth() + 1, d.getDate()));
+    if (v === null) continue;
+    recentSum += v; recentDays++;
+  }
+  const recentRate = recentDays ? recentSum / recentDays : null;
+  const remaining = days - today;
+  const projection = recentRate === null ? null : actualToDate + recentRate * remaining;
+  const needPerDay = baseline && actualToDate < baselineTotal && remaining > 0 ? (baselineTotal - actualToDate) / remaining : null;
+  return { field, year: y, month: m, days, today, actual, baseline, baselineTotal, baselineToDate, actualToDate, deltaPct, recentRate, recentDays, projection, needPerDay, missingDays, prevMonth, prevFirstDay };
+}
+
 // Weekly layers (Monday-based, clipped to the given dates) split by a fixed set of project folders,
 // so a folder worked on week after week lines up into a continuous vein.
 function buildStrata(daily, dates, includeRecord, limit = 6) {
@@ -3257,6 +3325,7 @@ class CrispPulseView extends ItemView {
       { title: '时间投入', icon: 'clock', description: '交互时长按操作间隔估算，专注时长来自已有 Focus 记录。两者可能重叠，不合并计算。', type: 'line', unit: '分钟', total: 'activeMinutes', totalLabel: '交互活跃', series: [{ key: 'activeMinutes', label: '交互活跃', color: 'blue' }, { key: 'focusMinutes', label: 'Focus 记录', color: 'orange' }] }
     ];
     const include = (record, key) => this.plugin.recordMatchesScope(record, key, this.currentScope);
+    this.renderAnalyticsPace(section, include);
     this.renderAnalyticsChart(section, data, configs[0]);
     this.renderAnalyticsRhythm(section, data);
     this.renderAnalyticsChart(section, data, configs[1]);
@@ -3264,6 +3333,142 @@ class CrispPulseView extends ItemView {
     this.renderAnalyticsWritingMix(pair, buildWritingMix(this.plugin.store.daily || {}, dates, include));
     this.renderAnalyticsFolders(pair, buildFolderShare(this.plugin.store.daily || {}, dates, include));
     this.renderAnalyticsChart(section, data, configs[2]);
+  }
+
+  // Forward-looking card: where this month stands against the same day of last month, and where it is heading.
+  renderAnalyticsPace(parent, include) {
+    const daily = this.plugin.store.daily || {};
+    const todayKey = getTodayKey();
+    const metrics = [
+      { field: 'score', label: '贡献得分', unit: '分' },
+      { field: 'words', label: '新增词数', unit: '词' },
+      { field: 'active', label: '活跃天数', unit: '天' }
+    ];
+    const paces = metrics.map(metric => ({ ...metric, pace: buildMonthPace(daily, todayKey, include, metric.field) }));
+    const first = paces[0].pace;
+    const card = this.trayCard(parent, {
+      icon: 'gauge', title: '本月节奏', wrap: true,
+      subtitle: `${first.month} 月 1 日到今天，对照 ${first.prevMonth} 月同一天的累计。竖线是上月这时走到的位置；新增词数不含系统目录。`,
+      pill: `第 ${first.today} / ${first.days} 天`, pillMuted: true,
+      cls: 'crisp-pulse-analytics-section', insetCls: 'crisp-pulse-analytics-card pulse-pace'
+    });
+    const number = value => Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 0 });
+    const rows = card.createDiv({ cls: 'pulse-pace-rows' });
+    for (const { label, unit, pace } of paces) {
+      const row = rows.createDiv({ cls: 'pulse-pace-row' });
+      const head = row.createDiv({ cls: 'pulse-pace-head' });
+      head.createSpan({ cls: 'pulse-pace-label', text: label });
+      const ratio = pace.baselineTotal > 0 ? pace.actualToDate / pace.baselineTotal : null;
+      head.createSpan({
+        cls: 'pulse-pace-share',
+        text: ratio === null ? `${number(pace.actualToDate)} ${unit}` : ratio >= 1 ? `已超过上月全月 · ${number(pace.actualToDate)} ${unit}` : `上月全月的 ${Math.round(ratio * 100)}%`
+      });
+      const behind = pace.deltaPct !== null && pace.deltaPct < 0;
+      const track = row.createDiv({ cls: `pulse-pace-track${behind ? ' is-behind' : ''}` });
+      track.setAttr('role', 'img');
+      if (ratio !== null) {
+        track.createDiv({ cls: 'pulse-pace-fill' }).style.width = `${Math.min(100, ratio * 100)}%`;
+        const markAt = pace.baselineToDate / pace.baselineTotal;
+        const mark = track.createDiv({ cls: 'pulse-pace-mark' });
+        mark.style.left = `${Math.min(100, markAt * 100)}%`;
+        track.setAttr('aria-label', `${label}：本月 ${number(pace.actualToDate)} ${unit}，上月同期 ${number(pace.baselineToDate)} ${unit}，上月全月 ${number(pace.baselineTotal)} ${unit}`);
+      } else {
+        track.addClass('is-empty');
+        track.setAttr('aria-label', `${label}：上月没有可对照的记录`);
+      }
+      const foot = row.createDiv({ cls: 'pulse-pace-foot' });
+      const delta = foot.createSpan({ cls: `pulse-pace-delta${behind ? ' is-behind' : pace.deltaPct > 0 ? ' is-ahead' : ''}` });
+      if (pace.deltaPct === null) {
+        // Last month's records may start mid-month; say so rather than imply nothing happened.
+        const late = pace.baseline && pace.prevFirstDay > pace.today;
+        delta.setText(!pace.baseline ? '上月没有可对照的记录' : late ? `${pace.prevMonth} 月 ${pace.prevFirstDay} 日才开始有记录，${pace.month} 月 ${pace.prevFirstDay} 日起可对照` : '上月同期还是 0');
+      }
+      else if (pace.deltaPct === 0) delta.setText('与上月同期持平');
+      else delta.setText(`比上月同期${pace.deltaPct > 0 ? '多' : '少'} ${Math.abs(pace.deltaPct)}%`);
+      let outlook = '';
+      if (pace.projection !== null && pace.today < pace.days) outlook = `照最近节奏，月底约 ${number(pace.projection)} ${unit}`;
+      if (behind && pace.needPerDay !== null) {
+        const remaining = pace.days - pace.today;
+        const needDays = Math.ceil(pace.baselineTotal - pace.actualToDate);
+        outlook = pace.field !== 'active' ? `月底追平上月，每天约需 ${number(pace.needPerDay)} ${unit}`
+          : needDays > remaining ? `剩 ${remaining} 天，本月已追不平上月` : `月底追平上月，还需 ${needDays} 个活跃日（剩 ${remaining} 天）`;
+      }
+      if (outlook) foot.createSpan({ cls: 'pulse-pace-outlook', text: outlook });
+    }
+    this.renderPaceChart(card, paces);
+    const note = paces[0].pace.missingDays ? `本月有 ${paces[0].pace.missingDays} 天没有纳入的记录，按 0 累计。` : '';
+    card.createDiv({ cls: 'crisp-pulse-analytics-readout pulse-pace-note', text: `${note}预测用最近 7 天里有记录的日子求平均，只是估算。` });
+  }
+
+  renderPaceChart(card, paces) {
+    if (!paces.some(p => p.pace.baseline || p.pace.actualToDate > 0)) return;
+    const field = paces.some(p => p.field === this.paceField) ? this.paceField : 'score';
+    const { pace, unit, label } = paces.find(p => p.field === field);
+    const seg = card.createDiv({ cls: 'pulse-v2-seg pulse-pace-seg' });
+    seg.setAttr('role', 'tablist');
+    for (const p of paces) {
+      const b = seg.createEl('button', { text: p.label });
+      b.setAttr('role', 'tab');
+      b.setAttr('aria-selected', String(p.field === field));
+      b.addEventListener('click', () => { this.paceField = p.field; this.render(); });
+    }
+    const width = Math.max(280, Math.min(960, card.clientWidth - 48)), height = 230;
+    const scroll = card.createDiv({ cls: 'crisp-pulse-analytics-chart-scroll' });
+    const { svg, draw } = this.analyticsSvg(scroll, width, height, `${label}本月累计与上月同期对照。左右方向键逐日查看。`);
+    const left = 58, right = width - 16, top = 14, bottom = height - 30;
+    const n = pace.days;
+    const x = day => left + (day - 1) / Math.max(1, n - 1) * (right - left);
+    const top_ = Math.max(pace.baselineTotal, pace.projection || 0, pace.actualToDate);
+    // Active days count whole days: the month length is the ceiling, ticks every 10 days.
+    const scale = field === 'active' ? { max: n, ticks: [0, 10, 20, 30].filter(t => t <= n) } : analyticsScale(top_);
+    const y = v => bottom - v / scale.max * (bottom - top);
+    for (const tick of scale.ticks) {
+      draw('line', { x1: left, x2: right, y1: y(tick), y2: y(tick), class: 'pulse-chart-grid' });
+      // Six-figure word counts would overflow the axis gutter; abbreviate them (e.g. 80万).
+      draw('text', { x: left - 10, y: y(tick) + 4, 'text-anchor': 'end', class: 'pulse-chart-axis' }, Number(tick.toPrecision(6)).toLocaleString('zh-CN', scale.max >= 100000 ? { notation: 'compact', maximumFractionDigits: 1 } : { maximumFractionDigits: 1 }));
+    }
+    for (const d of [...new Set([1, Math.ceil(n / 2), n])]) draw('text', { x: x(d), y: height - 8, 'text-anchor': d === 1 ? 'start' : d === n ? 'end' : 'middle', class: 'pulse-chart-axis' }, `${pace.month}/${d}`);
+    const path = values => values.map((v, i) => `${i ? 'L' : 'M'}${x(i + 1).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    if (pace.baseline) draw('path', { d: path(pace.baseline), fill: 'none', class: 'pulse-pace-baseline' });
+    if (pace.actual.length) {
+      const area = `${path(pace.actual)} L${x(pace.today).toFixed(1)},${bottom} L${x(1).toFixed(1)},${bottom} Z`;
+      draw('path', { d: area, class: 'pulse-pace-area' });
+      draw('path', { d: path(pace.actual), fill: 'none', class: 'pulse-pace-actual' });
+    }
+    if (pace.projection !== null && pace.today < n) draw('path', { d: `M${x(pace.today).toFixed(1)},${y(pace.actualToDate).toFixed(1)} L${x(n).toFixed(1)},${y(pace.projection).toFixed(1)}`, fill: 'none', class: 'pulse-pace-projection' });
+    draw('line', { x1: x(pace.today), x2: x(pace.today), y1: top, y2: bottom, class: 'pulse-pace-today' });
+    draw('circle', { cx: x(pace.today), cy: y(pace.actualToDate), r: 3.5, class: 'pulse-pace-dot' });
+    const cursor = draw('line', { x1: 0, x2: 0, y1: top, y2: bottom, class: 'pulse-chart-cursor', visibility: 'hidden' });
+    const number = v => Number(v).toLocaleString('zh-CN', { maximumFractionDigits: 1 });
+    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: '实线是本月累计，虚线是上月同日的累计，点线是按最近节奏推算到月底。' });
+    readout.setAttr('aria-live', 'polite');
+    const legend = card.createDiv({ cls: 'crisp-pulse-analytics-legend' });
+    for (const [cls, text] of [['pulse-pace-key-actual', '本月累计'], ['pulse-pace-key-baseline', '上月同期'], ['pulse-pace-key-projection', '推算']]) {
+      const item = legend.createSpan(); item.createSpan({ cls: `pulse-pace-key ${cls}` }); item.createSpan({ text });
+    }
+    const describe = day => {
+      const base = pace.baseline ? pace.baseline[day - 1] : null;
+      if (day > pace.today) return `${pace.month}月${day}日 · 上月同日累计 ${base === null ? '—' : `${number(base)} ${unit}`}${pace.projection !== null ? ` · 推算约 ${number(pace.actualToDate + pace.recentRate * (day - pace.today))} ${unit}` : ''}`;
+      const now = pace.actual[day - 1];
+      const diff = base === null ? '' : ` · ${now >= base ? '多' : '少'} ${number(Math.abs(now - base))} ${unit}`;
+      return `${pace.month}月${day}日 · 本月累计 ${number(now)} ${unit} · 上月同日 ${base === null ? '—' : `${number(base)} ${unit}`}${diff}`;
+    };
+    const colW = (right - left) / Math.max(1, n - 1);
+    const targets = [];
+    for (let day = 1; day <= n; day++) {
+      const target = draw('rect', { x: x(day) - colW / 2, y: top, width: colW, height: bottom - top, class: 'pulse-chart-target', role: 'img', tabindex: day === pace.today ? 0 : -1, 'aria-label': describe(day) });
+      targets.push(target);
+      const show = () => { cursor.setAttribute('x1', x(day)); cursor.setAttribute('x2', x(day)); cursor.setAttribute('visibility', 'visible'); readout.textContent = describe(day); };
+      target.addEventListener('pointerenter', show);
+      target.addEventListener('focus', show);
+      target.addEventListener('keydown', event => {
+        const next = event.key === 'ArrowLeft' ? day - 2 : event.key === 'ArrowRight' ? day : null;
+        if (next === null || !targets[next]) return;
+        event.preventDefault();
+        target.setAttribute('tabindex', '-1'); targets[next].setAttribute('tabindex', '0'); targets[next].focus();
+      });
+    }
+    svg.addEventListener('pointerleave', () => cursor.setAttribute('visibility', 'hidden'));
   }
 
   // Touch has no hover: the first tap on a day shows its readout, a second tap on the same day opens it.
