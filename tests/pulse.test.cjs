@@ -1833,3 +1833,128 @@ test('month pace never counts excluded or missing days and reports when there is
   assert.equal(helpers.buildMonthPace({ '2026-09-08': paceDay(5) }, '2026-10-03', () => true, 'score').prevFirstDay, 8);
   assert.equal(Math.round(behind.needPerDay * 100) / 100, Math.round(170 / 28 * 100) / 100);
 });
+
+// Lifecycle E2E: delayed read → vault event → collection → save → reload.
+// Failure modes: deleted-file snapshots return; recreated files are skipped; moved-out notes re-enter
+// tracking; an old-path read overwrites a newer read at the destination; creation is half-counted.
+function deferredRead() {
+  let release;
+  const promise = new Promise(resolve => { release = resolve; });
+  return { promise, release };
+}
+
+test('lifecycle E2E: deleting during a read cannot resurrect a snapshot or hide a recreated note', async () => {
+  const { p, handlers } = setup();
+  await p.loadPluginData();p.registerVaultEvents();
+  const file = { path: 'notes/a.md', extension: 'md', content: 'one' };
+  await p.initializeSnapshots([file]);
+  const read = deferredRead();p.app.vault.read = () => read.promise;
+  const pending = p.handleFileModification(file);
+  await new Promise(resolve => setImmediate(resolve));
+  handlers.delete({ path: 'notes' });
+  read.release('one two');await pending;
+  assert.equal(p.fileSnapshots.has('notes/a.md'), false);
+  p.app.vault.read = async file => file.content;
+  await p.handleFileCreation({ path: 'notes/a.md', extension: 'md', content: 'new' });
+  await p.flushAllSessions();
+  p.loadData = async () => p.persisted;await p.loadPluginData();
+  const day = p.store.daily['2026-09-08'];
+  assert.equal(day.contribution.notesCreated, 1);assert.equal(day.contribution.wordsAdded, 1);
+  assert.equal(p.fileSnapshots.get('notes/a.md').words, 1);
+});
+
+test('lifecycle E2E: a read finishing after a move into an excluded folder stays excluded', async () => {
+  const { p, handlers } = setup();
+  await p.loadPluginData();p.registerVaultEvents();p.settings.excludedFolders.push('excluded');
+  const file = { path: 'notes/a.md', extension: 'md', content: 'one' };
+  await p.initializeSnapshots([file]);
+  const read = deferredRead();p.app.vault.read = () => read.promise;
+  const pending = p.handleFileModification(file);await new Promise(resolve => setImmediate(resolve));
+  file.path = 'excluded/a.md';await handlers.rename(file, 'notes/a.md');
+  read.release('one two');await pending;
+  assert.equal(p.fileSnapshots.has('excluded/a.md'), false);
+  await p.savePluginData();p.loadData = async () => p.persisted;await p.loadPluginData();
+  assert.equal(Object.values(p.store.daily).reduce((sum, day) => sum + day.contribution.wordsAdded, 0), 0);
+});
+
+test('lifecycle E2E: a stale old-path read cannot undo a newer edit after rename', async () => {
+  const { p, handlers } = setup();
+  await p.loadPluginData();p.registerVaultEvents();
+  const file = { path: 'notes/a.md', extension: 'md', content: 'one' };
+  await p.initializeSnapshots([file]);
+  const read = deferredRead();let reads = 0;
+  p.app.vault.read = () => ++reads === 1 ? read.promise : Promise.resolve('one two three');
+  const pending = p.handleFileModification(file);await new Promise(resolve => setImmediate(resolve));
+  file.path = 'notes/b.md';await handlers.rename(file, 'notes/a.md');
+  const newer = p.handleFileModification(file);await new Promise(resolve => setImmediate(resolve));
+  read.release('one two');await Promise.all([pending, newer]);
+  assert.equal(p.fileSnapshots.get('notes/b.md').words, 3);
+  await p.handleFileModification(file);await p.flushAllSessions();
+  p.loadData = async () => p.persisted;await p.loadPluginData();
+  assert.equal(p.store.daily['2026-09-08'].contribution.wordsAdded, 2);
+  assert.equal(p.store.daily['2026-09-08'].contribution.wordsRemoved, 0);
+});
+
+test('lifecycle E2E: deletion during creation never leaves a half-counted file in saved history', async () => {
+  const { p, handlers } = setup();
+  await p.loadPluginData();p.registerVaultEvents();
+  const file = { path: 'notes/a.md', extension: 'md' };
+  const read = deferredRead();p.app.vault.read = () => read.promise;
+  const pending = p.handleFileCreation(file);await new Promise(resolve => setImmediate(resolve));
+  handlers.delete(file);read.release('one two');await pending;
+  await p.savePluginData();p.loadData = async () => p.persisted;await p.loadPluginData();
+  assert.equal(p.fileSnapshots.has(file.path), false);
+  assert.equal(Object.values(p.store.daily).reduce((sum, day) => sum + day.contribution.notesCreated, 0), 0);
+});
+
+test('lifecycle E2E: deletion also invalidates reads waiting in the old file queue', async () => {
+  const { p, handlers } = setup();
+  await p.loadPluginData();p.registerVaultEvents();
+  const file = { path: 'a.md', extension: 'md', content: 'one' };
+  await p.initializeSnapshots([file]);
+  const read = deferredRead();let reads = 0;
+  p.app.vault.read = () => ++reads === 1 ? read.promise : Promise.resolve('new');
+  const first = p.handleFileModification(file);
+  const queued = p.handleFileModification(file);
+  await new Promise(resolve => setImmediate(resolve));
+  handlers.delete(file);read.release('one two');await Promise.all([first, queued]);
+  assert.equal(p.fileSnapshots.has(file.path), false);
+  await p.handleFileCreation({ path: file.path, extension: 'md', content: 'new' });
+  await p.savePluginData();p.loadData = async () => p.persisted;await p.loadPluginData();
+  assert.equal(p.store.daily['2026-09-08'].contribution.notesCreated, 1);
+});
+
+
+test('lifecycle E2E: renaming a pending new note preserves creation and subsequent edits', async () => {
+  const { p, handlers } = setup();
+  await p.loadPluginData();p.registerVaultEvents();
+  const file = { path: 'a.md', extension: 'md' };
+  const read = deferredRead();let reads = 0;
+  p.app.vault.read = () => ++reads === 1 ? read.promise : Promise.resolve('one two');
+  const created = p.handleFileCreation(file);await new Promise(resolve => setImmediate(resolve));
+  file.path = 'b.md';await handlers.rename(file, 'a.md');
+  const edited = p.handleFileModification(file);await new Promise(resolve => setImmediate(resolve));
+  read.release('one');await Promise.all([created, edited]);await p.flushAllSessions();
+  p.loadData = async () => p.persisted;await p.loadPluginData();
+  const day = p.store.daily['2026-09-08'];
+  assert.equal(day.contribution.notesCreated, 1);assert.equal(day.contribution.wordsAdded, 2);
+  assert.equal(day.files['b.md'].created, true);assert.equal(day.files['a.md'], undefined);
+  assert.equal(p.fileQueues.size, 0);
+});
+
+test('lifecycle E2E: moving out and back cannot revive a read from before the exclusion', async () => {
+  const { p, handlers } = setup();
+  await p.loadPluginData();p.registerVaultEvents();p.settings.excludedFolders.push('excluded');
+  const file = { path: 'a.md', extension: 'md', content: 'one' };
+  await p.initializeSnapshots([file]);
+  const read = deferredRead();let reads = 0;
+  p.app.vault.read = () => ++reads === 1 ? read.promise : Promise.resolve('one two three');
+  const pending = p.handleFileModification(file);await new Promise(resolve => setImmediate(resolve));
+  file.path = 'excluded/a.md';await handlers.rename(file, 'a.md');
+  file.path = 'a.md';await handlers.rename(file, 'excluded/a.md');
+  read.release('one two');await pending;
+  assert.equal(p.fileSnapshots.get('a.md').words, 3);
+  await p.handleFileModification(file);await p.savePluginData();
+  p.loadData = async () => p.persisted;await p.loadPluginData();
+  assert.equal(Object.values(p.store.daily).reduce((sum, day) => sum + day.contribution.wordsAdded, 0), 0);
+});

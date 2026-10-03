@@ -1910,8 +1910,8 @@ class CrispPulsePlugin extends Plugin {
           continue;
         }
         try {
-          const content = await this.app.vault.read(file);
-          if (this.stopped) return;
+          const content = await this.readTrackedFile(file);
+          if (content === null) continue;
           this.fileSnapshots.set(file.path, {
             words: countWords(content),
             tasks: countTasks(content),
@@ -1953,9 +1953,11 @@ class CrispPulsePlugin extends Plugin {
 
     this.registerEvent(
       this.app.vault.on("delete", (file) => {
+        this.invalidateFileReads(file.path);
         // A deleted folder takes its notes with it; stale snapshots would hide a later re-creation.
         const isGone = path => path === file.path || path.startsWith(`${file.path}/`);
         for (const path of [...this.fileSnapshots.keys()]) if (isGone(path)) this.fileSnapshots.delete(path);
+        for (const path of [...this.fileQueues.keys()]) if (isGone(path)) this.fileQueues.delete(path);
         for (const [path, session] of [...this.activeSessions.entries()]) {
           if (!isGone(path)) continue;
           this.closeSession(session);
@@ -1969,6 +1971,15 @@ class CrispPulsePlugin extends Plugin {
         const isFolder = !file.extension;
         const migratePath = path => path === oldPath || (isFolder && path.startsWith(`${oldPath}/`))
           ? file.path + path.slice(oldPath.length) : path;
+        this.invalidateFileReads(oldPath, migratePath);
+        // Keep one serial queue across an included rename: a newer destination edit must wait
+        // for the same note's earlier read instead of racing it under a different path key.
+        for (const [key, queue] of [...this.fileQueues.entries()]) {
+          const next = migratePath(key);
+          if (next === key) continue;
+          this.fileQueues.delete(key);
+          if (this.shouldTrackPath(key) && this.shouldTrackPath(next)) this.fileQueues.set(next, queue);
+        }
 
         const filesToBaseline = [];
         if (!isFolder && file.extension === 'md') {
@@ -2101,17 +2112,16 @@ class CrispPulsePlugin extends Plugin {
     if (!this.shouldTrackPath(file.path)) return Promise.resolve();
     return this.queueFileOperation(file, async () => {
       if (this.fileSnapshots.has(file.path)) return;
-        const today = this.getOrCreateTodayRecord();
-        today.contribution.notesCreated += 1;
-        if (!today.files[file.path]) {
-          today.files[file.path] = { wordsAdded: 0, created: true, tasks: 0, links: 0 };
-        } else {
-          today.files[file.path].created = true;
-        }
-
         try {
-          const content = await this.app.vault.read(file);
-          if (this.stopped) return;
+          const content = await this.readTrackedFile(file);
+          if (content === null) return;
+          const today = this.getOrCreateTodayRecord();
+          today.contribution.notesCreated += 1;
+          if (!today.files[file.path]) {
+            today.files[file.path] = { wordsAdded: 0, created: true, tasks: 0, links: 0 };
+          } else {
+            today.files[file.path].created = true;
+          }
           const words = countWords(content);
           this.fileSnapshots.set(file.path, {
             words,
@@ -2127,15 +2137,39 @@ class CrispPulsePlugin extends Plugin {
             recordSourceWords(today.files[file.path], file.path, words, words >= 500);
             if (words >= 500) today.contribution.captureWords = (today.contribution.captureWords || 0) + words;
           }
+          this.dirty = true;
+          this.recomputeScore(today);
+          await this.savePluginData();
+          this.updateStatusBar();
         } catch (e) {
           console.error("[Crisp Pulse] Error reading created file:", e);
         }
-
-        this.dirty = true;
-        this.recomputeScore(today);
-        await this.savePluginData();
-        this.updateStatusBar();
     });
+  }
+
+  // Discard deleted/excluded lifecycles even if their path is reused. Within the tracked area,
+  // keep pending reads attached to the same note through a rename.
+  invalidateFileReads(path, migratePath = null) {
+    for (const read of this.pendingFileReads || []) {
+      if (read.path !== path && !read.path.startsWith(`${path}/`)) continue;
+      const next = migratePath?.(read.path);
+      if (next && this.shouldTrackPath(read.path) && this.shouldTrackPath(next)) read.path = next;
+      else read.invalidated = true;
+    }
+  }
+
+  async readTrackedFile(file) {
+    if (this.stopped || !this.shouldTrackPath(file.path)) return null;
+    const read = { path: file.path, invalidated: false };
+    if (!this.pendingFileReads) this.pendingFileReads = new Set();
+    this.pendingFileReads.add(read);
+    try {
+      const content = await this.app.vault.read(file);
+      if (this.stopped || read.invalidated || file.path !== read.path || !this.shouldTrackPath(read.path)) return null;
+      return content;
+    } finally {
+      this.pendingFileReads.delete(read);
+    }
   }
 
   handleFileModification(file) {
@@ -2146,22 +2180,30 @@ class CrispPulsePlugin extends Plugin {
     if (this.stopped || (this.sourceFilterChanging && isSystemArtifact(file.path))) return;
     if (!this.fileQueues) this.fileQueues = new Map();
     const queuedPath = file.path;
+    // Reserve the lifecycle before joining the queue, including work not yet in vault.read().
+    const read = { path: queuedPath, invalidated: false };
+    if (!this.pendingFileReads) this.pendingFileReads = new Set();
+    this.pendingFileReads.add(read);
     const queue = (this.fileQueues.get(queuedPath) || Promise.resolve())
       .catch(() => {})
-      .then(() => { if (!this.stopped) return operation(); });
+      .then(() => {
+        if (!this.stopped && !read.invalidated && file.path === read.path && this.shouldTrackPath(read.path)) return operation();
+      });
     this.fileQueues.set(queuedPath, queue);
     try {
       await queue;
     } finally {
+      this.pendingFileReads.delete(read);
       if (this.fileQueues.get(queuedPath) === queue) this.fileQueues.delete(queuedPath);
+      if (this.fileQueues.get(read.path) === queue) this.fileQueues.delete(read.path);
     }
   }
 
   async processFileModification(file) {
     if (this.stopped || !this.shouldTrackPath(file.path)) return;
     try {
-      const content = await this.app.vault.read(file);
-      if (this.stopped) return;
+      const content = await this.readTrackedFile(file);
+      if (content === null) return;
       const newWords = countWords(content);
       const newTasks = countTasks(content);
       const newLinks = countLinks(content);
@@ -3245,8 +3287,8 @@ class CrispPulseView extends ItemView {
     const active = container.ownerDocument.activeElement;
     const formFocus = container.contains(active) && active.dataset?.reviewField
       ? { field: active.dataset.reviewField, start: active.selectionStart, end: active.selectionEnd, scroll: active.scrollTop } : null;
-    const focusedDate = active?.dataset?.date;
-    const chartFocus = active?.dataset?.analyticsDate ? { date: active.dataset.analyticsDate, chart: active.closest("svg")?.getAttribute("aria-label") } : null;
+    const focusedDate = container.contains(active) ? active?.dataset?.date : null;
+    const chartFocus = container.contains(active) && active?.dataset?.analyticsDate ? { date: active.dataset.analyticsDate, chart: active.closest("svg")?.getAttribute("aria-label") } : null;
     const controlFocus = container.contains(active) && active.matches("button, select, [role=button]")
       ? { tag: active.tagName, label: active.getAttribute("aria-label"), text: active.textContent } : null;
     container.empty();
@@ -3287,10 +3329,22 @@ class CrispPulseView extends ItemView {
         input.setSelectionRange(formFocus.start, formFocus.end); input.scrollTop = formFocus.scroll;
       }
     }
-    else if (focusedDate) container.querySelector(`[data-date="${focusedDate}"]`)?.focus({ preventScroll: true });
+    else if (focusedDate) {
+      const target = container.querySelector(`[data-date="${focusedDate}"]`);
+      if (target) {
+        container.querySelectorAll('[data-date][tabindex="0"]').forEach(el => el.setAttribute('tabindex', '-1'));
+        target.setAttribute('tabindex', '0');
+        target.focus({ preventScroll: true });
+      }
+    }
     else if (chartFocus) {
       const chart = [...container.querySelectorAll("svg")].find(el => el.getAttribute("aria-label") === chartFocus.chart);
-      chart?.querySelector(`[data-analytics-date="${chartFocus.date}"]`)?.focus({ preventScroll: true });
+      const target = chart?.querySelector(`[data-analytics-date="${chartFocus.date}"]`);
+      if (target) {
+        chart.querySelectorAll('[data-analytics-date][tabindex="0"]').forEach(el => el.setAttribute('tabindex', '-1'));
+        target.setAttribute('tabindex', '0');
+        target.focus({ preventScroll: true });
+      }
     } else if (controlFocus) {
       [...container.querySelectorAll("button, select, [role=button]")].find(el => el.tagName === controlFocus.tag && el.getAttribute("aria-label") === controlFocus.label && (controlFocus.label || el.textContent === controlFocus.text))?.focus({ preventScroll: true });
     }
@@ -3456,7 +3510,7 @@ class CrispPulseView extends ItemView {
     const colW = (right - left) / Math.max(1, n - 1);
     const targets = [];
     for (let day = 1; day <= n; day++) {
-      const target = draw('rect', { x: x(day) - colW / 2, y: top, width: colW, height: bottom - top, class: 'pulse-chart-target', role: 'img', tabindex: day === pace.today ? 0 : -1, 'aria-label': describe(day) });
+      const target = draw('rect', { x: x(day) - colW / 2, y: top, width: colW, height: bottom - top, class: 'pulse-chart-target', role: 'img', tabindex: day === pace.today ? 0 : -1, 'data-analytics-date': `${pace.year}-${String(pace.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`, 'aria-label': describe(day) });
       targets.push(target);
       const show = () => { cursor.setAttribute('x1', x(day)); cursor.setAttribute('x2', x(day)); cursor.setAttribute('visibility', 'visible'); readout.textContent = describe(day); };
       target.addEventListener('pointerenter', show);
