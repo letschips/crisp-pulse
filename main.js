@@ -3,7 +3,7 @@
    Crafted for the Crisp Plugin Suite
    ========================================================================== */
 
-const { Plugin, ItemView, Setting, PluginSettingTab, Notice, TFile, Modal, Platform = {}, addIcon = (() => {}), setIcon = (() => {}) } = require("obsidian");
+const { Plugin, ItemView, Setting, PluginSettingTab, Notice, TFile, Modal, AbstractInputSuggest = null, Platform = {}, addIcon = (() => {}), setIcon = (() => {}) } = require("obsidian");
 
 const VIEW_TYPE_PULSE = "crisp-pulse-view";
 
@@ -389,6 +389,8 @@ const DEFAULT_SETTINGS = {
   weightFocusMinute: 0.05,
   hasRunBackfill: false,
   showStatusBarItem: true,
+  showHeaderBanner: true,
+  headerBannerImage: "", // vault path of a custom banner image; empty uses the generated sky
 
   // --- 1.1 Credible Analytics Settings ---
   trackingStartDate: null, // "YYYY-MM-DD" or null
@@ -1891,6 +1893,12 @@ class CrispPulsePlugin extends Plugin {
     }
   }
 
+  getBannerImageFile() {
+    const path = this.settings.headerBannerImage;
+    const file = path ? this.app.vault.getAbstractFileByPath(path) : null;
+    return file instanceof TFile && PULSE_BANNER_IMAGE_EXTENSIONS.has(String(file.extension).toLowerCase()) ? file : null;
+  }
+
   refreshViews() {
     this.updateStatusBar();
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_PULSE);
@@ -2041,6 +2049,8 @@ class CrispPulsePlugin extends Plugin {
             if (next !== action.outcomePath) { action.originalOutcomePath ||= action.outcomePath;action.outcomePath = next;this.dirty = true; }
           }
         }
+        const banner = this.settings.headerBannerImage;
+        if (banner && migratePath(banner) !== banner) { this.settings.headerBannerImage = migratePath(banner);this.dirty = true; }
         for (const record of Object.values(this.store.daily)) {
           if (!record.files) continue;
           for (const key of Object.keys(record.files)) {
@@ -3234,6 +3244,191 @@ function drawFingerprint(draw, profile, width, height, palette) {
   return { bars, x0, step, y0, y1 };
 }
 
+// Procedural dithered banner: cloudy sky, far hills, sea and a lighthouse headland, painted at low resolution.
+const PULSE_SKY_PALETTES = {
+  night: {
+    skyTop: [8, 14, 34], skyHorizon: [46, 70, 116],
+    cloudShadow: [28, 40, 72], cloudLit: [90, 108, 148], cloudEdge: [176, 190, 220], cover: -0.44,
+    hillFar: [36, 52, 86], hillNear: [22, 32, 56],
+    seaTop: [34, 50, 84], seaBottom: [10, 16, 30], glint: [150, 172, 214],
+    rock: [16, 20, 30], rockLit: [46, 54, 70], tree: [14, 26, 30], treeLit: [30, 48, 50],
+    tower: [214, 218, 226], roof: [120, 50, 44], lamp: [255, 212, 136],
+    stars: true, beam: 0.55, window: true
+  },
+  day: {
+    skyTop: [64, 122, 194], skyHorizon: [186, 212, 236],
+    cloudShadow: [150, 176, 210], cloudLit: [228, 238, 248], cloudEdge: [255, 255, 255], cover: -0.36,
+    hillFar: [136, 166, 200], hillNear: [104, 136, 170],
+    seaTop: [112, 156, 204], seaBottom: [56, 98, 150], glint: [236, 244, 252],
+    rock: [78, 82, 86], rockLit: [150, 146, 136], tree: [46, 84, 60], treeLit: [82, 122, 80],
+    tower: [246, 246, 244], roof: [196, 72, 58], lamp: [214, 78, 60],
+    stars: false, beam: 0, window: false
+  }
+};
+
+function paintPulseSky(canvas, mode = "night", seed = 7) {
+  const w = canvas.width, h = canvas.height;
+  const p = PULSE_SKY_PALETTES[mode] || PULSE_SKY_PALETTES.night;
+  let state = seed >>> 0;
+  const rand = () => {
+    state = (state + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const perm = new Uint8Array(512), grid = new Float32Array(256);
+  for (let i = 0; i < 256; i++) { perm[i] = i; grid[i] = rand(); }
+  for (let i = 255; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; }
+  for (let i = 0; i < 256; i++) perm[i + 256] = perm[i];
+  const hash = (x, y) => grid[perm[(perm[x & 255] + y) & 511]];
+  const smooth = t => t * t * (3 - 2 * t);
+  const noise = (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), xf = smooth(x - xi), yf = smooth(y - yi);
+    const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+    return a + (b - a) * xf + (c - a) * yf + (a - b - c + d) * xf * yf;
+  };
+  const fbm = (x, y, oct = 5, gain = 0.5) => {
+    let v = 0, amp = 0.5, f = 1, norm = 0;
+    for (let i = 0; i < oct; i++) { v += amp * noise(x * f, y * f); norm += amp; f *= 2.03; amp *= gain; }
+    return v / norm;
+  };
+  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  const clamp01 = t => Math.max(0, Math.min(1, t));
+
+  const horizon = Math.round(h * 0.6), shore = horizon + Math.round(h * 0.05);
+  // Clouds: warped fbm, banded so the sky keeps open gaps; lit from the upper right.
+  const cloudAt = (x, y) => {
+    const t = y / horizon, cx = x / (h * 0.85), cy = y / (h * 0.42);
+    const warp = fbm(cx * 0.7 + 9.1, cy * 0.7 + 1.3, 3);
+    const band = 1 - Math.pow(Math.abs(t - 0.4) / 0.6, 2);
+    return (fbm(cx + warp * 1.2, cy + warp * 0.6, 6, 0.58) - 0.5) * 3 + band * 0.32 + p.cover;
+  };
+  const hill = new Float32Array(w), land = new Float32Array(w), canopy = new Float32Array(w);
+  const cliffX = h * 1.08, towerX = Math.round(h * 0.86);
+  for (let x = 0; x < w; x++) {
+    hill[x] = horizon - 1 - Math.max(0, fbm(x / (h * 0.8) + 3, 3.3, 4) - 0.35) * h * 0.32;
+    const k = x < cliffX ? 1 : Math.max(0, 1 - Math.pow((x - cliffX) / (h * 0.16), 1.2));
+    const crown = 1 - Math.pow(Math.abs(x - h * 0.6) / (h * 0.8), 2) * 0.4;
+    land[x] = k <= 0 ? h + 1 : horizon + 3 - (h * 0.19 * crown + fbm(x / 6, 8.1, 3) * 4) * Math.sqrt(k);
+    const tuft = fbm(x / 3.2, 4.4, 2);
+    canopy[x] = x < towerX - 5 && k > 0.9 ? land[x] - Math.max(0, tuft - 0.36) * h * 0.24 - 1 : land[x] - (k > 0.3 ? 1 : 0);
+  }
+  const tw = Math.max(3, Math.round(h / 32)), towerBase = Math.round(land[towerX]);
+  const towerTop = towerBase - Math.round(h * 0.17), lampY = towerTop - 2;
+  const houseL = towerX + tw + 1, houseR = houseL + Math.round(h * 0.09), houseTop = Math.round(land[houseL]) - Math.round(h * 0.05);
+  const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  const step = 255 / 7;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(w, h);
+  const clouds = new Float32Array(w * horizon);
+  for (let y = 0; y < horizon; y++) for (let x = 0; x < w; x++) clouds[y * w + x] = cloudAt(x, y);
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let c;
+      if (y < horizon) {
+        const t = y / horizon;
+        c = mix(p.skyTop, p.skyHorizon, Math.pow(t, 1.5));
+        if (p.stars && hash(x * 7 + 3, y * 13 + 5) > 0.992) c = mix(c, [226, 232, 255], 0.75 * (1 - t));
+        const d = clouds[y * w + x];
+        if (d > 0) {
+          const lit = clamp01(0.45 + (d - clouds[Math.max(0, y - 2) * w + Math.min(w - 1, x + 1)]) * 3.2);
+          let cloud = mix(p.cloudShadow, p.cloudLit, lit);
+          if (d < 0.12) cloud = mix(cloud, p.cloudEdge, (1 - d / 0.12) * lit * 0.8);
+          c = mix(c, cloud, clamp01(d * 6));
+        }
+        if (y > hill[x]) c = mix(p.hillFar, p.hillNear, clamp01((y - hill[x]) / (h * 0.12)));
+      } else {
+        const t = (y - horizon) / (h - horizon);
+        c = mix(p.seaTop, p.seaBottom, Math.sqrt(t));
+        const ripple = noise(x / (6 + t * 14), y * 1.1 + 7);
+        if (ripple > 0.74) c = mix(c, p.glint, (ripple - 0.74) * 3 * (1 - t * 0.7));
+        if (p.beam && Math.abs(x - towerX) < 3 + t * 12 && ripple > 0.5) c = mix(c, p.lamp, 0.45 * (1 - t));
+      }
+      if (y >= canopy[x] && y < land[x]) {
+        c = mix(p.tree, p.treeLit, clamp01((fbm(x / 2, y / 2, 2) - 0.45) * 3));
+      } else if (y >= land[x] && y < shore) {
+        const depth = clamp01((y - land[x]) / (h * 0.16));
+        const strata = fbm(x / 1.6, y / 7, 3), face = clamp01((land[x + 1] ?? land[x]) - land[x]) * 0.5;
+        c = mix(p.rockLit, p.rock, clamp01(depth * 1.2 + (0.5 - strata) * 1.4 + face));
+        if (y > horizon && land[x] > horizon - 2) c = mix(c, p.seaBottom, 0.3);
+      } else if (y >= shore && land[x] < shore && noise(x / 4, y * 0.9) > 0.3) {
+        c = mix(c, p.rock, 0.45 * (1 - (y - shore) / (h - shore))); // cliff reflection
+      }
+      // Cottage next to the tower.
+      if (x >= houseL && x <= houseR && y >= houseTop && y < land[x] + 1) {
+        c = mix(p.tower, p.rock, 0.35);
+        if (p.window && y === houseTop + 2 && (x === houseL + 2 || x === houseR - 2)) c = p.lamp;
+      }
+      const roofRow = houseTop - y;
+      if (roofRow >= 1 && roofRow <= 3 && x >= houseL - 1 + roofRow && x <= houseR + 1 - roofRow) c = p.roof;
+      // Tower, gallery and lantern.
+      const dxT = x - towerX;
+      if (y >= towerTop && y < towerBase + 1) {
+        const half = tw / 2 + (y - towerTop) / (h * 0.17) * 0.8;
+        if (Math.abs(dxT) <= half) {
+          const stripe = mode === "day" && Math.floor((y - towerTop) / 3) % 2 === 1;
+          c = stripe ? p.roof : mix(p.tower, p.rock, clamp01((dxT + half) / (half * 3)));
+        }
+      }
+      if (y === towerTop - 1 && Math.abs(dxT) <= tw / 2 + 1) c = p.rock;
+      if (y >= towerTop - 4 && y < towerTop - 1 && Math.abs(dxT) <= tw / 2 - 0.5) c = p.lamp;
+      if (y === towerTop - 5 && Math.abs(dxT) <= tw / 2 - 0.5) c = p.roof;
+      if (p.beam) {
+        const dx = x - towerX, dy = y - lampY, dist = Math.hypot(dx, dy * 1.4);
+        c = mix(c, p.lamp, clamp01(1 - dist / 9) * 0.6);
+        if (dx > 2 && Math.abs(dy) < dx * 0.045 + 1) c = mix(c, p.lamp, p.beam * (1 - Math.abs(dy) / (dx * 0.045 + 1)) * Math.pow(clamp01(1 - dx / (w * 0.42)), 2));
+      }
+      const th = (bayer[(y & 3) * 4 + (x & 3)] + 0.5) / 16 - 0.5;
+      const o = (y * w + x) * 4;
+      for (let k = 0; k < 3; k++) img.data[o + k] = Math.max(0, Math.min(255, Math.round(c[k] / step + th) * step));
+      img.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+// Custom banner images fill the banner box (object-fit: cover): about 6:1 survives both wide and narrow panes.
+const PULSE_BANNER_IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "avif"]);
+const PULSE_BANNER_IMAGE_HINT = "建议 3000×500 像素左右：宽高比 5:1 到 7:1，至少 1600×300。主体放在上半部分，下半部分会渐隐并被标题压住。";
+function checkBannerImageSize(width, height) {
+  const issues = [];
+  const ratio = width / height;
+  if (ratio < 4) issues.push(`比例偏高（约 ${ratio.toFixed(1)}:1），上下会被裁掉大半`);
+  else if (ratio > 9) issues.push(`比例过宽（约 ${ratio.toFixed(1)}:1），窄面板里两侧会裁掉很多`);
+  if (width < 1600 || height < 300) issues.push(`分辨率偏低（${width}×${height}），高分屏上会发虚`);
+  return issues;
+}
+
+function createBannerImageSuggest(app, inputEl, onPick) {
+  if (!AbstractInputSuggest) return null;
+  class BannerImageSuggest extends AbstractInputSuggest {
+    getSuggestions(query) {
+      const q = query.trim().toLowerCase();
+      return app.vault.getFiles()
+        .filter(file => PULSE_BANNER_IMAGE_EXTENSIONS.has(file.extension.toLowerCase()) && file.path.toLowerCase().includes(q))
+        .slice(0, 50);
+    }
+    renderSuggestion(file, el) { el.setText(file.path); }
+    selectSuggestion(file) { this.setValue(file.path); onPick(file.path); this.close(); }
+  }
+  return new BannerImageSuggest(app, inputEl);
+}
+
+// One painted canvas per mode; each render copies it instead of repainting.
+const PULSE_SKY_WIDTH = 900, PULSE_SKY_HEIGHT = 112;
+const pulseSkyCache = {};
+function getPulseSky(doc, mode) {
+  if (!pulseSkyCache[mode]) {
+    const canvas = doc.createElement("canvas");
+    canvas.width = PULSE_SKY_WIDTH;
+    canvas.height = PULSE_SKY_HEIGHT;
+    paintPulseSky(canvas, mode);
+    pulseSkyCache[mode] = canvas;
+  }
+  return pulseSkyCache[mode];
+}
+
 class CrispPulseView extends ItemView {
   constructor(leaf, plugin) {
     super(leaf);
@@ -3262,6 +3457,9 @@ class CrispPulseView extends ItemView {
   async onOpen() {
     this.render();
     const container = this.containerEl.children[1];
+    this.registerEvent(this.app.workspace.on("css-change", () => {
+      if (this.plugin.settings.showHeaderBanner && this.bannerMode !== "image" && this.bannerMode !== this.currentBannerMode()) this.render();
+    }));
     this.registerDomEvent(container, 'pointerdown', event => { this.lastPointerType = event.pointerType; }, { capture: true });
     const win = container.ownerDocument.defaultView;
     this.analyticsResizeObserver = new win.ResizeObserver(() => {
@@ -3295,6 +3493,8 @@ class CrispPulseView extends ItemView {
     container.empty();
     container.classList.add("crisp-pulse-view");
     container.classList.add("pulse-v2");
+    container.classList.toggle("has-banner", !!this.plugin.settings.showHeaderBanner);
+    if (this.plugin.settings.showHeaderBanner) this.renderBanner(container);
 
     const wrapper = container.createDiv({ cls: "crisp-pulse-wrapper" });
 
@@ -4283,6 +4483,24 @@ class CrispPulseView extends ItemView {
     const button = panel.createEl("button", { cls: "mod-cta", text: "前往激活" });
     button.addEventListener("click", () => this.plugin.openLicenseSettings());
     return true;
+  }
+
+  currentBannerMode() {
+    return this.containerEl.ownerDocument.body.classList.contains("theme-dark") ? "night" : "day";
+  }
+
+  // Banner above the header: the user's image, else a pixel sky (night in dark themes, daytime in light ones).
+  // The bottom fades into the view background.
+  renderBanner(parent) {
+    const file = this.plugin.getBannerImageFile();
+    this.bannerMode = file ? "image" : this.currentBannerMode();
+    const banner = parent.createDiv({ cls: "crisp-pulse-banner", attr: { "aria-hidden": "true" } });
+    if (file) {
+      banner.createEl("img", { attr: { src: this.app.vault.getResourcePath(file), alt: "" } });
+      return;
+    }
+    const canvas = banner.createEl("canvas", { attr: { width: PULSE_SKY_WIDTH, height: PULSE_SKY_HEIGHT } });
+    canvas.getContext("2d").drawImage(getPulseSky(parent.ownerDocument, this.bannerMode), 0, 0);
   }
 
   renderHeader(parent) {
@@ -5294,6 +5512,52 @@ class CrispPulseSettingTab extends PluginSettingTab {
           }
         })
       );
+
+    new Setting(containerEl)
+      .setName("看板顶部横幅")
+      .setDesc("在 Pulse 视图顶部显示横幅。默认是本地绘制的像素风天空（深色主题为夜景，浅色主题为白天），也可以换成下面的自定义图片。")
+      .addToggle(toggle => toggle.setValue(!!this.plugin.settings.showHeaderBanner).onChange(async value => {
+        this.plugin.settings.showHeaderBanner = value;
+        await this.plugin.savePluginData();
+        this.plugin.refreshViews();
+      }));
+
+    const bannerImage = new Setting(containerEl)
+      .setName("自定义横幅图片")
+      .setDesc(`用库内的一张图片代替像素天空，留空则用像素天空。${PULSE_BANNER_IMAGE_HINT}`);
+    const bannerStatus = bannerImage.descEl.createDiv({ cls: "crisp-pulse-banner-status" });
+    const showBannerStatus = () => {
+      const path = this.plugin.settings.headerBannerImage;
+      bannerStatus.removeClass("is-warning");
+      if (!path) { bannerStatus.setText(""); return; }
+      const file = this.plugin.getBannerImageFile();
+      if (!file) { bannerStatus.addClass("is-warning");bannerStatus.setText("找不到这张图片，或格式不支持（png / jpg / webp / gif / avif），暂时显示像素天空。");return; }
+      const probe = new Image();
+      probe.onload = () => {
+        if (this.plugin.settings.headerBannerImage !== path) return;
+        const issues = checkBannerImageSize(probe.naturalWidth, probe.naturalHeight);
+        bannerStatus.toggleClass("is-warning", issues.length > 0);
+        bannerStatus.setText(issues.length
+          ? `当前图片：${issues.join("；")}。`
+          : `当前图片 ${probe.naturalWidth}×${probe.naturalHeight}，尺寸合适。`);
+      };
+      probe.src = this.app.vault.getResourcePath(file);
+    };
+    const saveBannerImage = async value => {
+      this.plugin.settings.headerBannerImage = value.trim();
+      await this.plugin.savePluginData();
+      this.plugin.refreshViews();
+      showBannerStatus();
+    };
+    bannerImage.addText(text => {
+      text.setPlaceholder("例如 Assets/banner.jpg").setValue(this.plugin.settings.headerBannerImage || "").onChange(saveBannerImage);
+      createBannerImageSuggest(this.app, text.inputEl, saveBannerImage);
+    });
+    bannerImage.addExtraButton(button => button.setIcon("x").setTooltip("清除，改用像素天空").onClick(async () => {
+      await saveBannerImage("");
+      this.display();
+    }));
+    showBannerStatus();
 
     new Setting(containerEl)
       .setName("周起始日")

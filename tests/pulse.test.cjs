@@ -69,7 +69,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8').replace(PUBLIC_PEM_RE, '`' + LOCAL_PUBLIC_PEM + '`') +
-    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined};',
     context
   );
   const Pulse = context.module.exports;
@@ -1957,4 +1957,31 @@ test('lifecycle E2E: moving out and back cannot revive a read from before the ex
   await p.handleFileModification(file);await p.savePluginData();
   p.loadData = async () => p.persisted;await p.loadPluginData();
   assert.equal(Object.values(p.store.daily).reduce((sum, day) => sum + day.contribution.wordsAdded, 0), 0);
+});
+
+test('banner image size check flags tall, overly wide and low-resolution images', () => {
+  const { helpers } = setup();
+  const check = helpers.checkBannerImageSize;
+  assert.equal(typeof check, 'function');
+  assert.deepEqual(Array.from(check(3000, 500)), []);
+  assert.deepEqual(Array.from(check(2400, 400)), []);
+  assert.match(check(1920, 1080).join(' '), /比例偏高/);
+  assert.match(check(6000, 400).join(' '), /比例过宽/);
+  assert.match(check(1200, 200).join(' '), /分辨率偏低/);
+  assert.equal(check(1200, 1200).length, 2);
+});
+
+test('renaming the custom banner image keeps the setting pointed at it', async () => {
+  const { p, handlers } = setup();
+  await p.loadPluginData();
+  p.settings.headerBannerImage = 'assets/sky.png';
+  p.registerVaultEvents();
+  await handlers.rename({ path: 'assets/banners/sky.png', extension: 'png' }, 'assets/sky.png');
+  assert.equal(p.settings.headerBannerImage, 'assets/banners/sky.png');
+  await handlers.rename({ path: 'assets/x.png', extension: 'png' }, 'assets/banners/sky.png.bak');
+  assert.equal(p.settings.headerBannerImage, 'assets/banners/sky.png');
+  await handlers.rename({ path: 'media' }, 'assets');
+  assert.equal(p.settings.headerBannerImage, 'media/banners/sky.png');
+  await handlers.rename({ path: 'pics' }, 'media/banners');
+  assert.equal(p.settings.headerBannerImage, 'pics/sky.png');
 });

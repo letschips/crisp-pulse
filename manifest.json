@@ -1,7 +1,7 @@
 {
   "id": "crisp-pulse",
   "name": "Crisp Pulse",
-  "version": "1.11.2",
+  "version": "1.12.0",
   "minAppVersion": "1.6.0",
   "description": "Your knowledge work, visualized. Local-first activity and contribution analytics with GitHub-style heatmap.",
   "author": "letschips",

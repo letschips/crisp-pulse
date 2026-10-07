@@ -1527,3 +1527,27 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 .theme-dark .crisp-pulse-view .pulse-pace-fill { background: color-mix(in srgb, var(--pulse-pace-line) 60%, transparent); }
 .theme-dark .crisp-pulse-view .pulse-pace-delta.is-ahead { color: var(--pulse-pace-line); }
 .theme-dark .crisp-pulse-view :is(.pulse-pace-key-actual, .pulse-pace-key-projection) { border-top-color: var(--pulse-pace-line); }
+
+/* Header banner: full-bleed pixel sky; the header overlaps its faded lower edge. */
+.crisp-pulse-view .crisp-pulse-banner {
+  height: 210px;
+  margin: -20px -28px -92px;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 42%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 42%, transparent 100%);
+}
+.crisp-pulse-view .crisp-pulse-banner :is(canvas, img) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.crisp-pulse-view .crisp-pulse-banner canvas { object-position: left center; image-rendering: pixelated; }
+.crisp-pulse-view .crisp-pulse-banner img { object-position: center 35%; }
+.crisp-pulse-banner-status { margin-top: 6px; }
+.crisp-pulse-banner-status.is-warning { color: var(--text-warning); }
+.crisp-pulse-view.has-banner .crisp-pulse-wrapper { position: relative; }
+@container (max-width: 500px) {
+  .crisp-pulse-view .crisp-pulse-banner { height: 150px; margin-bottom: -56px; }
+}
+.crisp-pulse-banner-status:empty { display: none; }
