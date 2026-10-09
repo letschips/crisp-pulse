@@ -1642,6 +1642,22 @@
   --icon-size: 14px;
 }
 
+/* Tempo 任务状态 */
+.crisp-pulse-memo-tempo {
+  display: flex;
+  margin-top: 8px;
+}
+
+.crisp-pulse-memo-view button.crisp-pulse-memo-tempo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.crisp-pulse-memo-view button.crisp-pulse-memo-tempo-chip.is-done {
+  color: var(--text-success, var(--color-green));
+}
+
 /* 回收站 */
 .crisp-pulse-memo-item.is-trashed .crisp-pulse-memo-text {
   color: var(--text-muted);
@@ -1660,6 +1676,21 @@
   gap: 4px;
   color: var(--text-error);
   background: color-mix(in srgb, var(--text-error) 12%, transparent);
+}
+
+/* 长按听写：不弹系统菜单、不选中文字，按住时显示状态 */
+.crisp-pulse-memo-view button.crisp-pulse-memo-mic {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.crisp-pulse-memo-view button.crisp-pulse-memo-mic.is-dictating {
+  width: auto;
+  gap: 4px;
+  color: var(--text-accent);
+  background: var(--memo-accent-soft);
 }
 
 .crisp-pulse-memo-mic-time {

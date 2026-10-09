@@ -1,6 +1,6 @@
 {
   "name": "crisp-pulse",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "description": "Your knowledge work, visualized. Local-first activity and contribution analytics with GitHub-style heatmap for Obsidian.",
   "author": "letschips",
   "authorUrl": "https://github.com/letschips",
@@ -8,11 +8,12 @@
   "private": true,
   "scripts": {
     "test": "node --test tests/*.test.cjs",
-    "check": "node --check main.js && node --test tests/*.test.cjs tests/memo-workflow.e2e.cjs tests/memo-safety.e2e.cjs tests/memo-asr.e2e.cjs",
+    "check": "node --check main.js && node --test tests/*.test.cjs tests/memo-workflow.e2e.cjs tests/memo-safety.e2e.cjs tests/memo-asr.e2e.cjs tests/memo-tempo.e2e.cjs",
     "test:e2e:license-config": "node tests/config-dir.e2e.cjs",
     "test:e2e:memo": "node --test tests/memo-workflow.e2e.cjs",
     "test:e2e:safety": "node --test tests/memo-safety.e2e.cjs",
-    "test:e2e:asr": "node --test tests/memo-asr.e2e.cjs"
+    "test:e2e:asr": "node --test tests/memo-asr.e2e.cjs",
+    "test:e2e:tempo": "node --test tests/memo-tempo.e2e.cjs"
   },
   "keywords": [
     "obsidian",
