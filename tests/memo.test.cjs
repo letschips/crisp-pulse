@@ -419,3 +419,132 @@ test('ANKS 模式：当天第一条新建采集件后，Obsidian 还没解析出
   const list = await s.list();
   assert.deepEqual(plain(list.map((m) => [m.text, m.date])), [['刚记下的', '2026-10-09']]);
 });
+
+/* ---------- 速记配图与「有链接 / 有图片」筛选 ---------- */
+
+test('识别图片：wiki 嵌入图片和 Markdown 图片算有图；嵌入笔记、普通文字里的路径不算', () => {
+  assert.equal(memo.memoHasImage('看 ![[Pasted image 20261009.png]] 这张'), true);
+  assert.equal(memo.memoHasImage('![[photo.JPG|300]]'), true);
+  assert.equal(memo.memoHasImage('![截图](assets/a.webp)'), true);
+  assert.equal(memo.memoHasImage('![[某篇笔记]]'), false);
+  assert.equal(memo.memoHasImage('/Users/me/Desktop/a.jpg 图片测试'), false);
+});
+
+test('识别链接：双链、网址、Markdown 链接算有链接；图片嵌入本身不算链接', () => {
+  assert.equal(memo.memoHasLink('参考 [[卡片笔记写作法]]'), true);
+  assert.equal(memo.memoHasLink('https://flomoapp.com 看看'), true);
+  assert.equal(memo.memoHasLink('[官网](https://obsidian.md)'), true);
+  assert.equal(memo.memoHasLink('只有图 ![[a.png]]'), false);
+  assert.equal(memo.memoHasLink('只有图 ![x](a.png)'), false);
+  assert.equal(memo.memoHasLink('普通一句话'), false);
+});
+
+test('筛选：有链接、有图片可单独或同时勾选，转化回链不算正文链接', () => {
+  const ms = [
+    { date: '2026-10-09', text: '纯文字', tags: [], links: ['已转化笔记'] },
+    { date: '2026-10-09', text: '看 [[A]]', tags: [], links: [] },
+    { date: '2026-10-09', text: '![[a.png]]', tags: [], links: [] },
+    { date: '2026-10-09', text: '![[a.png]] 和 https://x.com', tags: [], links: [] },
+  ];
+  const texts = (opts) => plain(memo.filterMemos(ms, opts).map((m) => m.text));
+  assert.deepEqual(texts({ hasLink: true }), ['看 [[A]]', '![[a.png]] 和 https://x.com']);
+  assert.deepEqual(texts({ hasImage: true }), ['![[a.png]]', '![[a.png]] 和 https://x.com']);
+  assert.deepEqual(texts({ hasLink: true, hasImage: true }), ['![[a.png]] 和 https://x.com']);
+});
+
+test('保存图片：按 Obsidian 附件设置存进库，返回相对速记文件的嵌入链接；不依赖 ANKS', async () => {
+  const { app, store } = fakeApp();
+  const written = [];
+  app.vault.createBinary = async (p, data) => { const f = new TFile(p); f.data = data; store.set(p, f); written.push(p); return f; };
+  app.fileManager.getAvailablePathForAttachment = async (name, source) => { assert.equal(source, 'Daily/2026-10-09.md'); return `assets/${name}`; };
+  app.fileManager.generateMarkdownLink = (file, source) => `[[${file.path.split('/').pop()}]]`;
+  const s = new memo.MemoStore(app, () => ({ memoMode: 'general', memoHeading: '## 速记' }));
+  const link = await s.saveAttachment('Pasted image 20261009161300.png', new Uint8Array([1, 2]).buffer, D(2026, 10, 9, 16, 13));
+  assert.equal(link, '![[Pasted image 20261009161300.png]]');
+  assert.deepEqual(plain(written), ['assets/Pasted image 20261009161300.png']);
+  assert.equal(memo.memoAttachmentName('', 'image/png', new Date(2026, 9, 9, 16, 13, 5)), 'Pasted image 20261009161305.png');
+  assert.equal(memo.memoAttachmentName('CleanShot.jpg', 'image/jpeg', D(2026, 10, 9)), 'CleanShot.jpg');
+});
+
+/* ---------- 回收站、语音、快捷筛选 ---------- */
+
+test('识别语音：嵌入的音频文件算有语音，图片和笔记嵌入不算', () => {
+  assert.equal(memo.memoHasAudio('![[录音 20261009163241.webm]]'), true);
+  assert.equal(memo.memoHasAudio('听 ![[会议.M4A]]'), true);
+  assert.equal(memo.memoHasAudio('![[a.png]] ![[笔记]]'), false);
+  assert.equal(memo.memoHasAudio('文字里提到 a.mp3'), false);
+});
+
+test('录音文件名：带时间戳，扩展名跟随实际录音格式', () => {
+  const t = new Date(2026, 9, 9, 16, 32, 41);
+  assert.equal(memo.memoRecordingName('audio/webm;codecs=opus', t), '录音 20261009163241.webm');
+  assert.equal(memo.memoRecordingName('audio/mp4', t), '录音 20261009163241.m4a');
+  assert.equal(memo.memoRecordingName('', t), '录音 20261009163241.webm');
+});
+
+test('快捷筛选：有语音、那年今日（往年同月同日，不含今年）', () => {
+  const ms = [
+    { date: '2026-10-09', text: '今天', tags: [], links: [] },
+    { date: '2025-10-09', text: '去年今天 ![[录音 1.webm]]', tags: [], links: [] },
+    { date: '2024-10-09', text: '前年今天', tags: [], links: [] },
+    { date: '2025-10-08', text: '去年昨天', tags: [], links: [] },
+  ];
+  const texts = (opts) => plain(memo.filterMemos(ms, opts).map((m) => m.text));
+  assert.deepEqual(texts({ hasAudio: true }), ['去年今天 ![[录音 1.webm]]']);
+  assert.deepEqual(texts({ onThisDay: '2026-10-09' }), ['去年今天 ![[录音 1.webm]]', '前年今天']);
+});
+
+function trashApp() {
+  const env = fakeApp({ files: { 'Daily/2026-10-09.md': '# 日记\n\n## 速记\n\n> [!memo] 08:00\n> 第一条\n\n> [!memo] 09:00\n> 第二条 #想法\n' } });
+  const disk = {};
+  env.app.vault.adapter.exists = async (p) => p in disk || env.store.has(p);
+  env.app.vault.adapter.read = async (p) => { if (!(p in disk)) throw new Error('missing'); return disk[p]; };
+  env.app.vault.adapter.write = async (p, c) => { disk[p] = c; };
+  return { ...env, disk };
+}
+
+test('删除进回收站：从笔记移除这一块，回收站记下原文、来源和时间，可原样恢复到原笔记', async () => {
+  const { app, store, disk } = trashApp();
+  const s = new memo.MemoStore(app, () => ({ memoMode: 'general', memoHeading: '## 速记' }), null, { trashPath: 'plugin/memo-trash.json' });
+  const [second] = await s.list();
+  assert.equal(second.text, '第二条 #想法');
+  await s.remove(second, new Date(2026, 9, 9, 10, 0));
+  assert.doesNotMatch(store.get('Daily/2026-10-09.md').content, /第二条/);
+  const trash = await s.listTrash(new Date(2026, 9, 9, 10, 0));
+  assert.equal(trash.length, 1);
+  assert.equal(trash[0].path, 'Daily/2026-10-09.md');
+  assert.equal(trash[0].date, '2026-10-09');
+  assert.match(trash[0].raw, /^> \[!memo\] 09:00\n> 第二条 #想法$/);
+  assert.ok(disk['plugin/memo-trash.json']);
+  await s.restore(trash[0].id);
+  assert.deepEqual(plain((await s.list()).map((m) => m.text)).sort(), ['第一条', '第二条 #想法']);
+  assert.equal((await s.listTrash()).length, 0);
+});
+
+test('回收站：原笔记已不存在时恢复到那一天的速记文件；超过 30 天自动清除；可彻底删除', async () => {
+  const { app, store } = trashApp();
+  const s = new memo.MemoStore(app, () => ({ memoMode: 'general', memoHeading: '## 速记' }), null, { trashPath: 'plugin/memo-trash.json' });
+  const [second, first] = await s.list();
+  await s.remove(first, new Date(2026, 9, 1));
+  await s.remove(second, new Date(2026, 9, 9));
+  store.delete('Daily/2026-10-09.md');
+  let trash = await s.listTrash(new Date(2026, 9, 20));
+  assert.equal(trash.length, 2);
+  await s.restore(trash.find((t) => t.text === '第二条 #想法').id);
+  assert.match(store.get('Daily/2026-10-09.md').content, /> \[!memo\] 09:00\n> 第二条 #想法/);
+  trash = await s.listTrash(new Date(2026, 10, 2));
+  assert.equal(trash.length, 0, '10-01 删除的那条在 31 天后被清除');
+  await s.remove((await s.list())[0], new Date(2026, 10, 2));
+  const [entry] = await s.listTrash(new Date(2026, 10, 2));
+  await s.purge(entry.id);
+  assert.equal((await s.listTrash(new Date(2026, 10, 2))).length, 0);
+});
+
+test('回收站文件损坏时拒绝删除，不能让速记删掉却没进回收站', async () => {
+  const { app, store, disk } = trashApp();
+  disk['plugin/memo-trash.json'] = '{坏了';
+  const s = new memo.MemoStore(app, () => ({ memoMode: 'general', memoHeading: '## 速记' }), null, { trashPath: 'plugin/memo-trash.json' });
+  const [second] = await s.list();
+  await assert.rejects(() => s.remove(second), /回收站/);
+  assert.match(store.get('Daily/2026-10-09.md').content, /第二条/);
+});

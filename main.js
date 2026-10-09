@@ -1366,7 +1366,9 @@ class CrispPulsePlugin extends Plugin {
     }
 
     this.registerView(VIEW_TYPE_PULSE, (leaf) => new CrispPulseView(leaf, this));
-    this.memoStore = new MemoStore(this.app, () => this.settings, typeof moment === "function" ? moment : null);
+    this.memoStore = new MemoStore(this.app, () => this.settings, typeof moment === "function" ? moment : null, {
+      trashPath: `${this.manifest?.dir || `${this.app.vault?.configDir || ".obsidian"}/plugins/crisp-pulse`}/memo-trash.json`
+    });
     this.registerView(VIEW_TYPE_MEMO, (leaf) => new CrispPulseMemoView(leaf, this));
     this.addRibbonIcon("feather", "打开 Crisp Pulse 速记", () => this.activateMemoView());
     this.addCommand({ id: "open-memo-view", name: "打开速记", callback: () => this.activateMemoView() });
@@ -3106,6 +3108,21 @@ class CrispPulsePlugin extends Plugin {
     }
   }
 
+  confirmAction(title, message, confirmText, onConfirm, onCancel) {
+    const modal = new Modal(this.app);
+    let decided = false;
+    modal.onOpen = () => {
+      const { contentEl } = modal;
+      contentEl.createEl("h3", { text: title });
+      contentEl.createEl("p", { cls: "crisp-pulse-memo-muted", text: message });
+      const row = contentEl.createDiv({ cls: "crisp-pulse-memo-modal-row" });
+      row.createEl("button", { text: "取消" }).addEventListener("click", () => modal.close());
+      row.createEl("button", { cls: "mod-warning", text: confirmText }).addEventListener("click", () => { decided = true; modal.close(); onConfirm(); });
+    };
+    modal.onClose = () => { modal.contentEl.empty(); if (!decided) onCancel?.(); };
+    modal.open();
+  }
+
   confirmDeleteMemo(memo, done) {
     const modal = new Modal(this.app);
     modal.onOpen = () => {
@@ -3113,7 +3130,7 @@ class CrispPulsePlugin extends Plugin {
       contentEl.createEl("h3", { text: "删除这条速记？" });
       contentEl.createEl("p", { cls: "crisp-pulse-memo-muted", text: `${memo.date} ${memo.time} · ${memo.path}` });
       contentEl.createEl("blockquote", { text: memo.text.slice(0, 200) });
-      contentEl.createEl("p", { cls: "crisp-pulse-memo-muted", text: "只从所在笔记里移除这一块；需要时可以用 Obsidian 的文件恢复找回。" });
+      contentEl.createEl("p", { cls: "crisp-pulse-memo-muted", text: `只从所在笔记里移除这一块，放进速记回收站，${MEMO_TRASH_DAYS} 天内可以恢复。` });
       const row = contentEl.createDiv({ cls: "crisp-pulse-memo-modal-row" });
       row.createEl("button", { text: "取消" }).addEventListener("click", () => modal.close());
       const del = row.createEl("button", { cls: "mod-warning", text: "删除" });
@@ -6032,7 +6049,55 @@ function memoHasTag(memo, tag) {
   return memo.tags.some((t) => t === tag || t.startsWith(`${tag}/`));
 }
 
-function filterMemos(memos, { query = "", from = "", to = "", includeTags = [], excludeTags = [], untagged = false, converted = null } = {}) {
+const MEMO_IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp|avif|heic|heif|tiff?)$/i;
+const MEMO_WIKI_EMBED_RE = /!\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]/g;
+const MEMO_MD_IMAGE_RE = /!\[[^\]]*\]\([^)]*\)/g;
+
+/** 速记里是否有图片：wiki 嵌入的图片文件或 Markdown 图片。 */
+function memoHasImage(text) {
+  const s = String(text ?? "");
+  for (const m of s.matchAll(MEMO_WIKI_EMBED_RE)) if (MEMO_IMAGE_EXT_RE.test(m[1].trim())) return true;
+  return new RegExp(MEMO_MD_IMAGE_RE.source).test(s);
+}
+
+/** 速记正文里是否有链接：双链、网址或 Markdown 链接；图片嵌入不算，转化回链不在正文里。 */
+function memoHasLink(text) {
+  const s = String(text ?? "")
+    .replace(MEMO_WIKI_EMBED_RE, (all, target) => (MEMO_IMAGE_EXT_RE.test(target.trim()) ? "" : all))
+    .replace(MEMO_MD_IMAGE_RE, "");
+  return /\[\[[^\]]+\]\]|https?:\/\/\S|\[[^\]]+\]\([^)]+\)/.test(s);
+}
+
+const MEMO_AUDIO_EXT_RE = /\.(webm|m4a|mp3|wav|ogg|oga|aac|flac|3gp)$/i;
+
+/** 速记里是否有语音：嵌入的音频文件。 */
+function memoHasAudio(text) {
+  for (const m of String(text ?? "").matchAll(MEMO_WIKI_EMBED_RE)) if (MEMO_AUDIO_EXT_RE.test(m[1].trim())) return true;
+  return false;
+}
+
+function memoStamp(now) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+}
+
+/** 录音文件名：扩展名跟随浏览器实际录出的格式（桌面多为 webm，iOS 为 m4a）。 */
+function memoRecordingName(mime, now = new Date()) {
+  const ext = /mp4|aac|m4a/.test(mime || "") ? "m4a" : /ogg/.test(mime || "") ? "ogg" : "webm";
+  return `录音 ${memoStamp(now)}.${ext}`;
+}
+
+/** 附件文件名：剪贴板截图没有像样的名字，按 Obsidian 的习惯命名为 Pasted image 时间戳。 */
+function memoAttachmentName(name, type, now = new Date()) {
+  const clean = String(name || "").replace(/[\\/:*?"<>|#^\[\]]/g, "-").trim();
+  if (clean && !/^image\.\w+$/i.test(clean)) return clean;
+  const ext = (/image\/(\w+)/.exec(type || "")?.[1] || "png").replace("jpeg", "jpg").replace("svg+xml", "svg");
+  const pad = (n) => String(n).padStart(2, "0");
+  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  return `Pasted image ${stamp}.${ext}`;
+}
+
+function filterMemos(memos, { query = "", from = "", to = "", includeTags = [], excludeTags = [], untagged = false, converted = null, hasLink = false, hasImage = false, hasAudio = false, onThisDay = "" } = {}) {
   const terms = String(query).toLowerCase().split(/\s+/).filter(Boolean);
   return memos.filter((m) => {
     if (from && m.date < from) return false;
@@ -6042,6 +6107,11 @@ function filterMemos(memos, { query = "", from = "", to = "", includeTags = [], 
     if (excludeTags.some((t) => memoHasTag(m, t))) return false;
     if (converted === true && !m.links.length) return false;
     if (converted === false && m.links.length) return false;
+    if (hasLink && !memoHasLink(m.text)) return false;
+    if (hasImage && !memoHasImage(m.text)) return false;
+    if (hasAudio && !memoHasAudio(m.text)) return false;
+    // 那年今日：往年的同月同日
+    if (onThisDay && !(m.date.slice(5) === onThisDay.slice(5) && m.date < onThisDay.slice(0, 4))) return false;
     if (terms.length) {
       const text = m.text.toLowerCase();
       if (!terms.every((term) => text.includes(term))) return false;
@@ -6280,9 +6350,12 @@ function memoSafeTitle(text) {
   return first.replace(/#[^\s#]+/g, "").replace(/[\\/:*?"<>|#^\[\]]/g, "-").replace(/\s+/g, " ").trim().slice(0, 40) || "速记";
 }
 
+const MEMO_TRASH_DAYS = 30;
+
 class MemoStore {
-  constructor(app, getSettings, momentFn = null) {
+  constructor(app, getSettings, momentFn = null, { trashPath = null } = {}) {
     this.app = app;
+    this.trashPath = trashPath;
     this.getSettings = getSettings;
     this.momentFn = momentFn;
     // 刚写过的采集件：Obsidian 异步解析 frontmatter，解析完成前靠这里认出 memo_date
@@ -6385,7 +6458,11 @@ class MemoStore {
 
   async capture(text, now = new Date()) {
     if (!String(text ?? "").trim()) throw new Error("速记内容为空");
-    const block = buildMemoBlock(text, now);
+    return this.writeBlock(buildMemoBlock(text, now), now);
+  }
+
+  /** 把一整块速记写进 now 那天的速记文件（没有就按当前模式新建）。 */
+  async writeBlock(block, now) {
     const date = dateKey(now);
     const mode = await this.resolveMode();
     const heading = mode === "anks" ? "" : (this.settings().memoHeading ?? "## 速记");
@@ -6420,6 +6497,23 @@ class MemoStore {
     }
     await this.app.vault.process(file, (content) => insertMemoBlock(content, block, heading));
     return { path, mode, date };
+  }
+
+  /** 这一刻记下的速记会写进哪个文件；附件按它算相对位置。 */
+  async memoFilePath(now = new Date()) {
+    if ((await this.resolveMode()) === "anks") return (await this.anksTarget(dateKey(now))).path;
+    return dailyNotePath(now, this.dailyOptions(), this.momentFn);
+  }
+
+  /** 图片存进库里（跟随 Obsidian 的附件位置设置），返回可插入速记的嵌入链接。 */
+  async saveAttachment(name, data, now = new Date()) {
+    const source = await this.memoFilePath(now);
+    const fm = this.app.fileManager;
+    const path = await fm.getAvailablePathForAttachment(name, source);
+    const folder = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+    if (folder) await this.ensureFolder(folder);
+    const file = await this.app.vault.createBinary(path, data);
+    return `!${fm.generateMarkdownLink(file, source)}`;
   }
 
   sourceFiles() {
@@ -6466,10 +6560,73 @@ class MemoStore {
     return { memos, files: paths.length };
   }
 
-  async remove(memo) {
+  async remove(memo, now = new Date()) {
     const file = this.app.vault.getAbstractFileByPath(memo.path);
     if (!file) throw new Error("速记所在的文件已不存在");
-    await this.app.vault.process(file, (content) => removeMemoBlock(content, memo));
+    if (!this.trashPath) {
+      await this.app.vault.process(file, (content) => removeMemoBlock(content, memo));
+      return;
+    }
+    // 先进回收站再从笔记里移除；移除失败就把回收站这条撤回
+    const items = await this.readTrash();
+    const entry = { id: reviewEntryId(), deletedAt: now.toISOString(), path: memo.path, date: memo.date, time: memo.time, text: memo.text, raw: memo.raw };
+    await this.writeTrash([...items, entry]);
+    try {
+      await this.app.vault.process(file, (content) => removeMemoBlock(content, memo));
+    } catch (error) {
+      await this.writeTrash(items);
+      throw error;
+    }
+  }
+
+  async readTrash() {
+    if (!this.trashPath) throw new Error("速记回收站不可用");
+    const adapter = this.app.vault.adapter;
+    if (!(await adapter.exists(this.trashPath))) return [];
+    try {
+      const data = JSON.parse(await adapter.read(this.trashPath));
+      if (!Array.isArray(data?.items)) throw new Error("格式不对");
+      return data.items;
+    } catch (_) {
+      throw new Error(`速记回收站文件已损坏（${this.trashPath}），为避免丢失速记，暂停删除`);
+    }
+  }
+
+  async writeTrash(items) {
+    await this.app.vault.adapter.write(this.trashPath, JSON.stringify({ version: 1, items }, null, 2));
+  }
+
+  /** 回收站里 30 天内的速记，新删的在前；过期的顺手清掉。 */
+  async listTrash(now = new Date()) {
+    const items = await this.readTrash();
+    const cutoff = now.getTime() - MEMO_TRASH_DAYS * 86400000;
+    const kept = items.filter((t) => Date.parse(t.deletedAt) >= cutoff);
+    if (kept.length !== items.length) await this.writeTrash(kept);
+    return kept.sort((a, b) => String(b.deletedAt).localeCompare(String(a.deletedAt)));
+  }
+
+  /** 恢复到原来的笔记；原笔记不在了，就写回那一天的速记文件。 */
+  async restore(id) {
+    const items = await this.readTrash();
+    const entry = items.find((t) => t.id === id);
+    if (!entry) throw new Error("回收站里已经没有这条速记");
+    const file = this.app.vault.getAbstractFileByPath(entry.path);
+    if (file) {
+      const daily = dailyDateFromPath(entry.path, this.dailyOptions(), this.momentFn);
+      const heading = daily ? (this.settings().memoHeading ?? "## 速记") : "";
+      await this.app.vault.process(file, (content) => insertMemoBlock(content, entry.raw, heading));
+    } else {
+      const [h, m] = String(entry.time || "00:00").split(":").map(Number);
+      const day = memoKeyToDay(entry.date);
+      day.setHours(h || 0, m || 0);
+      await this.writeBlock(entry.raw, day);
+    }
+    await this.writeTrash(items.filter((t) => t.id !== id));
+  }
+
+  async purge(id) {
+    const items = await this.readTrash();
+    await this.writeTrash(items.filter((t) => t.id !== id));
   }
 
   async ensureIdentity(memo) {
@@ -6593,10 +6750,17 @@ class CrispPulseMemoView extends ItemView {
   getIcon() { return "feather"; }
 
   async onOpen() {
+    this.registerDomEvent(this.containerEl.ownerDocument, "pointerdown", (event) => {
+      const box = this.dockedComposer;
+      if (!box?.isConnected || box.contains(event.target)) return;
+      if (!this.draft.trim() && !this.recording) box.removeClass("is-open");
+    });
     await this.reload();
   }
 
   async onClose() {
+    // 关掉视图时正在录的音照常保存，链接留在草稿里
+    if (this.recording) this.recording.recorder.stop();
     this.moreObserver?.disconnect();
     this.clearMemoMarkdown();
   }
@@ -6653,11 +6817,18 @@ class CrispPulseMemoView extends ItemView {
     root.addClass("crisp-pulse-memo-view");
     this.renderNavHeader(root);
     const body = root.createDiv({ cls: "crisp-pulse-memo-body" });
-    this.renderComposer(body, refocusComposer);
+    // 手机上输入栏停在底部，拇指够得着，滑动列表也不会消失；桌面端仍在顶部
+    const docked = !!(Platform.isPhone || doc?.body?.classList?.contains("is-phone"));
+    if (!docked) this.renderComposer(body, refocusComposer);
     if (this.error) body.createDiv({ cls: "crisp-pulse-memo-error", text: this.error });
     this.renderStats(body, memoStats(this.memos, getTodayKey(), { weeks: 12, weekStartsOn: this.plugin.settings.weekStartsOn }));
     this.listEl = null;
     this.renderTabs(body, searchFocus);
+    if (docked) {
+      this.renderComposer(root, refocusComposer, { docked: true });
+      // Obsidian 给侧栏视图最后一个 div 加了底部留白；交给这个占位块，不撑高输入栏
+      root.createDiv({ cls: "crisp-pulse-memo-dock-spacer" });
+    }
     root.scrollTop = scroll;
   }
 
@@ -6675,14 +6846,93 @@ class CrispPulseMemoView extends ItemView {
     navButton("refresh-cw", "刷新速记", () => this.reload());
     navButton("filter", "高级筛选", () => { this.showAdvanced = !this.showAdvanced; this.tab = "all"; this.render(); }, this.showAdvanced || this.isFiltered());
     navButton("shuffle", "随机漫步", () => { this.startWalk(); this.tab = "walk"; this.render(); }, this.tab === "walk");
+    navButton("trash-2", "速记回收站", () => { this.tab = this.tab === "trash" ? "all" : "trash"; this.render(); }, this.tab === "trash");
     navButton("settings", "速记设置", () => {
       const setting = this.app.setting;
       if (setting?.open) { setting.open(); setting.openTabById?.(this.plugin.manifest.id); }
     });
   }
 
-  renderComposer(root, refocus) {
-    const box = root.createDiv({ cls: "crisp-pulse-memo-composer" });
+  /** 把文字插到输入框光标处（输入框不在了就接到草稿末尾），并同步草稿。 */
+  insertIntoComposer(text) {
+    const input = this.containerEl.children[1]?.querySelector(".crisp-pulse-memo-input");
+    if (!input) {
+      this.draft = `${this.draft ? `${this.draft.replace(/\s+$/, "")}\n` : ""}${text}\n`;
+      this.draftRevision = (this.draftRevision || 0) + 1;
+      return;
+    }
+    const before = input.value.slice(0, input.selectionStart);
+    input.setRangeText(`${before && !/\s$/.test(before) ? "\n" : ""}${text}\n`, input.selectionStart, input.selectionEnd, "end");
+    this.draft = input.value;
+    this.draftRevision = (this.draftRevision || 0) + 1;
+    input.closest(".crisp-pulse-memo-composer")?.addClass("is-open");
+    input.focus();
+  }
+
+  /** 录音：再点一次结束；音频存进库（跟随附件位置），在速记里插入嵌入链接，卡片上可直接播放。 */
+  async toggleRecording() {
+    if (this.recording) { this.recording.recorder.stop(); return; }
+    const win = this.containerEl.win || window;
+    const Recorder = win.MediaRecorder;
+    if (!win.navigator?.mediaDevices?.getUserMedia || typeof Recorder !== "function") {
+      new Notice("Crisp Pulse 速记：当前环境不支持录音");
+      return;
+    }
+    let stream;
+    try {
+      stream = await win.navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (error) {
+      new Notice(`Crisp Pulse 速记：无法使用麦克风：${error.message || error}`, 8000);
+      return;
+    }
+    const mime = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"].find((t) => Recorder.isTypeSupported?.(t)) || "";
+    const recorder = new Recorder(stream, mime ? { mimeType: mime } : undefined);
+    const chunks = [];
+    const startedAt = new Date();
+    recorder.addEventListener("dataavailable", (e) => { if (e.data?.size) chunks.push(e.data); });
+    recorder.addEventListener("stop", async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      win.clearInterval(this.recording?.timer);
+      this.recording = null;
+      this.updateRecordingUi();
+      if (!chunks.length) return;
+      const type = recorder.mimeType || mime || "audio/webm";
+      try {
+        const blob = new Blob(chunks, { type });
+        const link = await this.plugin.memoStore.saveAttachment(memoRecordingName(type, startedAt), await blob.arrayBuffer(), startedAt);
+        this.insertIntoComposer(link);
+      } catch (error) {
+        new Notice(`Crisp Pulse 速记：录音保存失败：${error.message || error}`, 8000);
+      }
+    });
+    recorder.start();
+    this.recording = { recorder, startedAt, timer: win.setInterval(() => this.updateRecordingUi(), 1000) };
+    this.updateRecordingUi();
+  }
+
+  updateRecordingUi() {
+    const button = this.containerEl.children[1]?.querySelector(".crisp-pulse-memo-mic");
+    if (!button) return;
+    const rec = this.recording;
+    button.toggleClass("is-recording", !!rec);
+    button.setAttribute("aria-label", rec ? "结束录音" : "录音");
+    const label = button.querySelector(".crisp-pulse-memo-mic-time");
+    if (!rec) { label?.remove(); return; }
+    const sec = Math.floor((Date.now() - rec.startedAt.getTime()) / 1000);
+    const text = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+    if (label) label.setText(text); else button.createSpan({ cls: "crisp-pulse-memo-mic-time", text });
+  }
+
+  renderComposer(root, refocus, { docked = false } = {}) {
+    const box = root.createDiv({ cls: `crisp-pulse-memo-composer${docked ? " is-docked" : ""}` });
+    if (docked) {
+      // 收起时只占一行；点进来、有草稿或正在录音时展开，点到别处且没写东西就收起
+      box.toggleClass("is-open", !!(refocus || this.draft.trim() || this.recording));
+      box.addEventListener("focusin", () => box.addClass("is-open"));
+      this.dockedComposer = box;
+    } else {
+      this.dockedComposer = null;
+    }
     const input = box.createEl("textarea", { cls: "crisp-pulse-memo-input", attr: { placeholder: "现在的想法是…", rows: "3", "aria-label": "速记内容" } });
     input.value = this.draft;
     input.addEventListener("input", () => { this.draft = input.value; this.draftRevision = (this.draftRevision || 0) + 1; });
@@ -6716,6 +6966,41 @@ class CrispPulseMemoView extends ItemView {
       input.setRangeText("- ", lineStart, lineStart, "end");
     });
     tool("bold", "加粗", () => insertAt("", "**"));
+    // 图片：粘贴、拖入或从按钮选择，先存进库里，再在光标处插入嵌入链接
+    const addImages = async (files) => {
+      const images = [...files].filter((f) => /^image\//.test(f.type) || MEMO_IMAGE_EXT_RE.test(f.name || ""));
+      if (!images.length) return false;
+      const links = [];
+      try {
+        for (const file of images) {
+          links.push(await this.plugin.memoStore.saveAttachment(memoAttachmentName(file.name, file.type, new Date()), await file.arrayBuffer()));
+        }
+      } catch (error) {
+        new Notice(`Crisp Pulse 速记：图片保存失败：${error.message || error}`, 8000);
+      }
+      if (links.length) this.insertIntoComposer(links.join("\n"));
+      return true;
+    };
+    input.addEventListener("paste", (event) => {
+      const files = event.clipboardData?.files;
+      if (files?.length && [...files].some((f) => /^image\//.test(f.type))) { event.preventDefault(); addImages(files); }
+    });
+    input.addEventListener("dragover", (event) => { if (event.dataTransfer?.types?.includes("Files")) event.preventDefault(); });
+    input.addEventListener("drop", (event) => {
+      const files = event.dataTransfer?.files;
+      if (files?.length && [...files].some((f) => /^image\//.test(f.type) || MEMO_IMAGE_EXT_RE.test(f.name || ""))) { event.preventDefault(); addImages(files); }
+    });
+    const picker = box.createEl("input", { cls: "crisp-pulse-memo-file", attr: { type: "file", accept: "image/*", multiple: "", tabindex: "-1", "aria-hidden": "true" } });
+    picker.addEventListener("change", async () => { const files = [...picker.files]; picker.value = ""; await addImages(files); });
+    const imageButton = bar.createEl("button", { cls: "clickable-icon crisp-pulse-memo-tool", attr: { "aria-label": "插入图片（也可粘贴或拖入）", type: "button" } });
+    setIcon(imageButton, "image");
+    imageButton.addEventListener("mousedown", (e) => e.preventDefault());
+    imageButton.addEventListener("click", () => picker.click());
+    const mic = bar.createEl("button", { cls: "clickable-icon crisp-pulse-memo-tool crisp-pulse-memo-mic", attr: { "aria-label": "录音", type: "button" } });
+    setIcon(mic, "mic");
+    mic.addEventListener("mousedown", (e) => e.preventDefault());
+    mic.addEventListener("click", () => this.toggleRecording());
+    this.updateRecordingUi();
     const topics = this.mode === "anks" ? this.plugin.memoStore.anksTopics() : [];
     const meta = bar.createDiv({ cls: "crisp-pulse-memo-toolbar-meta" });
     if (topics.length > 1) {
@@ -6774,13 +7059,14 @@ class CrispPulseMemoView extends ItemView {
       k.createDiv({ cls: "crisp-pulse-memo-bignum-label", text: label });
     }
     const weeks = stats.cells.length / 7;
+    const todayKey = getTodayKey();
     const grid = card.createDiv({ cls: "crisp-pulse-memo-heat", attr: { role: "grid", "aria-label": "近 12 周速记热力" } });
     const max = Math.max(1, ...stats.cells.map((c) => c.count));
     for (let row = 0; row < 7; row++) {
       for (let col = 0; col < weeks; col++) {
         const cell = stats.cells[col * 7 + row];
         const level = memoHeatLevel(cell.count, max);
-        const el = grid.createDiv({ cls: `crisp-pulse-memo-heat-cell level-${level}${cell.future ? " is-future" : ""}${this.filterDate === cell.date ? " is-selected" : ""}` });
+        const el = grid.createDiv({ cls: `crisp-pulse-memo-heat-cell level-${level}${cell.future ? " is-future" : ""}${cell.date === todayKey ? " is-today" : ""}${this.filterDate === cell.date ? " is-selected" : ""}` });
         el.setAttribute("title", `${cell.date} · ${cell.count} 条`);
         if (!cell.future) el.addEventListener("click", () => { this.filterDate = this.filterDate === cell.date ? null : cell.date; this.tab = "all"; this.render(); });
       }
@@ -6827,6 +7113,7 @@ class CrispPulseMemoView extends ItemView {
     toggle.addEventListener("click", flip);
     toggle.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); } });
     if (searchShown) this.renderSearch(root, searchFocus);
+    if (this.tab === "trash") return this.renderTrash(root);
     if (this.tab === "review") return this.renderReview(root);
     if (this.tab === "walk") return this.renderWalk(root);
     if (this.tab === "tags") return this.renderTags(root);
@@ -6834,6 +7121,45 @@ class CrispPulseMemoView extends ItemView {
     this.activeChips = root.createDiv({ cls: "crisp-pulse-memo-filters" });
     this.listEl = root.createDiv({ cls: "crisp-pulse-memo-timeline" });
     this.renderList();
+  }
+
+  renderTrash(root) {
+    const head = root.createDiv({ cls: "crisp-pulse-memo-section-head" });
+    const title = head.createSpan({ cls: "crisp-pulse-memo-section-title", text: "回收站" });
+    const back = head.createEl("button", { cls: "crisp-pulse-memo-chip", text: "返回全部" });
+    back.addEventListener("click", () => { this.tab = "all"; this.render(); });
+    root.createDiv({ cls: "crisp-pulse-memo-muted", text: `删除的速记在这里保留 ${MEMO_TRASH_DAYS} 天，可以恢复到原来的笔记。` });
+    const box = root.createDiv({ cls: "crisp-pulse-memo-timeline" });
+    const store = this.plugin.memoStore;
+    store.listTrash().then((items) => {
+      if (!box.isConnected) return;
+      title.setText(`回收站 · ${items.length} 条`);
+      if (!items.length) box.createDiv({ cls: "crisp-pulse-memo-empty", text: "回收站是空的。" });
+      for (const t of items) {
+        const card = box.createDiv({ cls: "crisp-pulse-memo-item is-trashed" });
+        const meta = card.createDiv({ cls: "crisp-pulse-memo-item-head" });
+        meta.createSpan({ cls: "crisp-pulse-memo-time", text: `${t.date} ${t.time}` });
+        const left = Math.max(0, MEMO_TRASH_DAYS - Math.floor((Date.now() - Date.parse(t.deletedAt)) / 86400000));
+        meta.createSpan({ cls: "crisp-pulse-memo-muted", text: `${left} 天后清除` });
+        card.createDiv({ cls: "crisp-pulse-memo-text", text: t.text });
+        card.createDiv({ cls: "crisp-pulse-memo-muted", text: t.path });
+        const row = card.createDiv({ cls: "crisp-pulse-memo-trash-actions" });
+        const act = (label, cls, fn) => {
+          const b = row.createEl("button", { cls: `crisp-pulse-memo-chip ${cls}`, text: label });
+          b.addEventListener("click", async () => {
+            b.disabled = true;
+            try { await fn(); await this.reload(); }
+            catch (error) { new Notice(`Crisp Pulse 速记：${error.message || error}`, 8000); b.disabled = false; }
+          });
+        };
+        act("恢复", "", () => store.restore(t.id));
+        act("彻底删除", "mod-warning", () => new Promise((resolve, reject) => {
+          this.plugin.confirmAction("彻底删除这条速记？", "删除后无法恢复。", "彻底删除", () => store.purge(t.id).then(resolve, reject), () => resolve());
+        }));
+      }
+    }).catch((error) => {
+      if (box.isConnected) box.createDiv({ cls: "crisp-pulse-memo-error", text: error.message || String(error) });
+    });
   }
 
   renderSearch(root, searchFocus) {
@@ -6862,6 +7188,22 @@ class CrispPulseMemoView extends ItemView {
     });
     if (searchFocus) {
       window.setTimeout(() => { search.focus(); search.setSelectionRange?.(searchFocus.start, searchFocus.end); }, 0);
+    }
+    // 快捷筛选：一点就用，再点取消；日期和标签条件留在高级筛选
+    const quick = root.createDiv({ cls: "crisp-pulse-memo-quick", attr: { role: "group", "aria-label": "快捷筛选" } });
+    const f = this.filters;
+    const todayKey = getTodayKey();
+    for (const [icon, label, active, flip] of [
+      ["tag", "无标签", f.untagged, () => { f.untagged = !f.untagged; }],
+      ["link", "有链接", f.hasLink, () => { f.hasLink = !f.hasLink; }],
+      ["image", "有图片", f.hasImage, () => { f.hasImage = !f.hasImage; }],
+      ["audio-lines", "有语音", f.hasAudio, () => { f.hasAudio = !f.hasAudio; }],
+      ["calendar-days", "那年今日", !!f.onThisDay, () => { f.onThisDay = f.onThisDay ? "" : todayKey; }],
+    ]) {
+      const b = quick.createEl("button", { cls: `crisp-pulse-memo-quick-chip${active ? " is-active" : ""}`, attr: { type: "button", "aria-pressed": String(!!active) } });
+      setIcon(b.createSpan({ cls: "crisp-pulse-memo-quick-icon" }), icon);
+      b.createSpan({ text: label });
+      b.addEventListener("click", () => { flip(); this.tab = "all"; this.render(); });
     }
   }
 
@@ -6897,6 +7239,13 @@ class CrispPulseMemoView extends ItemView {
     untaggedBox.checked = f.untagged;
     untagged.appendText(" 只看无标签");
     untaggedBox.addEventListener("change", () => { f.untagged = untaggedBox.checked; this.renderList(); });
+    for (const [key, label] of [["hasLink", "有链接"], ["hasImage", "有图片"], ["hasAudio", "有语音"]]) {
+      const check = flags.createEl("label", { cls: "crisp-pulse-memo-check" });
+      const box = check.createEl("input", { attr: { type: "checkbox" } });
+      box.checked = !!f[key];
+      check.appendText(` ${label}`);
+      box.addEventListener("change", () => { f[key] = box.checked; this.renderList(); });
+    }
     const converted = flags.createEl("select", { cls: "dropdown", attr: { "aria-label": "转化状态" } });
     for (const [value, label] of [["", "转化状态不限"], ["yes", "已转化"], ["no", "未转化"]]) converted.createEl("option", { text: label, attr: { value } });
     converted.value = f.converted === true ? "yes" : f.converted === false ? "no" : "";
@@ -6906,14 +7255,14 @@ class CrispPulseMemoView extends ItemView {
   }
 
   resetFilters() {
-    this.filters = { query: "", from: "", to: "", includeTags: [], excludeTags: [], untagged: false, converted: null };
+    this.filters = { query: "", from: "", to: "", includeTags: [], excludeTags: [], untagged: false, converted: null, hasLink: false, hasImage: false, hasAudio: false, onThisDay: "" };
     this.filterDate = null;
     this.filterTag = null;
   }
 
   isFiltered() {
     const f = this.filters;
-    return !!(this.filterDate || this.filterTag || f.query.trim() || f.from || f.to || f.includeTags.length || f.excludeTags.length || f.untagged || f.converted !== null);
+    return !!(this.filterDate || this.filterTag || f.query.trim() || f.from || f.to || f.includeTags.length || f.excludeTags.length || f.untagged || f.converted !== null || f.hasLink || f.hasImage || f.hasAudio || f.onThisDay);
   }
 
   visibleMemos() {
@@ -6940,6 +7289,10 @@ class CrispPulseMemoView extends ItemView {
     for (const tag of f.excludeTags) chip(`排除 #${tag}`, () => { f.excludeTags = f.excludeTags.filter((t) => t !== tag); });
     if (f.untagged) chip("无标签", () => { f.untagged = false; });
     if (f.converted !== null) chip(f.converted ? "已转化" : "未转化", () => { f.converted = null; });
+    if (f.hasLink) chip("有链接", () => { f.hasLink = false; });
+    if (f.hasImage) chip("有图片", () => { f.hasImage = false; });
+    if (f.hasAudio) chip("有语音", () => { f.hasAudio = false; });
+    if (f.onThisDay) chip("那年今日", () => { f.onThisDay = ""; });
     this.containerEl.querySelector('[aria-label="高级筛选"]')?.toggleClass("is-active", this.showAdvanced || this.isFiltered());
     const list = this.visibleMemos();
     if (this.isFiltered()) chips.createSpan({ cls: "crisp-pulse-memo-muted", text: `找到 ${list.length} 条` });
@@ -6988,7 +7341,12 @@ class CrispPulseMemoView extends ItemView {
       const overflow = body.scrollHeight - body.clientHeight;
       body.removeClass("is-clamped");
       // 只多出一两行就不折叠，折了反而更麻烦
-      if (overflow < 48) return;
+      if (overflow < 48) {
+        // 图片加载完才有高度，等它撑开后再量一次
+        for (const img of body.querySelectorAll("img")) if (!img.complete) img.addEventListener("load", () => this.clampLongMemo(card, body, key), { once: true });
+        if (!body.dataset.clampRetried) { body.dataset.clampRetried = "1"; win.setTimeout(() => this.clampLongMemo(card, body, key), 400); }
+        return;
+      }
       const expanded = this.expandedMemos.has(key);
       body.toggleClass("is-clamped", !expanded);
       const toggle = createEl("button", { cls: "crisp-pulse-memo-expand", text: expanded ? "收起" : "展开" });
@@ -7886,7 +8244,7 @@ module.exports.CrispPulseEvidenceModal = CrispPulseEvidenceModal;
 module.exports.CrispPulseMemoView = CrispPulseMemoView;
 module.exports.memoHelpers = {
   buildMemoBlock, parseMemoBlocks, extractMemoTags, insertMemoBlock, removeMemoBlock, appendMemoLink,
-  memoStats, memoHeatLevel, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
+  memoStats, memoHeatLevel, memoHasImage, memoHasLink, memoHasAudio, memoAttachmentName, memoRecordingName, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
   buildMemoQuestionNote, buildMemoNote, buildMemoNowLine, MemoStore,
   filterMemos, buildTagTree, renameTagInText, renameTagInContent, selectDailyReview, onThisDay, parseMemoUrlParams,
   tokenizeMemo, buildMemoIndex, relatedMemos, walkStep, explainShared,

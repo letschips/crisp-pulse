@@ -1365,6 +1365,7 @@
 .crisp-pulse-memo-heat-cell.level-3 { background-color: color-mix(in srgb, var(--color-accent, #3b82f6) 72%, transparent); }
 .crisp-pulse-memo-heat-cell.level-4 { background-color: var(--color-accent, #3b82f6); }
 .crisp-pulse-memo-heat-cell.is-future { opacity: 0.15; cursor: default; }
+.crisp-pulse-memo-heat-cell.is-today { box-shadow: inset 0 0 0 1.5px var(--color-accent, #3b82f6); }
 .crisp-pulse-memo-heat-cell.is-selected { outline: 2px solid var(--text-normal); outline-offset: 1px; }
 
 .crisp-pulse-memo-heat-foot {
@@ -1576,6 +1577,93 @@
   line-height: 1.75;
   overflow-wrap: anywhere;
   font-size: var(--font-ui-medium);
+}
+
+.crisp-pulse-memo-file {
+  display: none;
+}
+
+.crisp-pulse-memo-text .image-embed img {
+  border-radius: 8px;
+}
+
+/* 快捷筛选：搜索框下的一排按钮 */
+.crisp-pulse-memo-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.crisp-pulse-memo-view button.crisp-pulse-memo-quick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: auto;
+  padding: 4px 10px;
+  border-radius: 8px;
+  box-shadow: none;
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.crisp-pulse-memo-view button.crisp-pulse-memo-quick-chip.is-active {
+  background: var(--memo-accent-soft);
+  color: var(--text-accent);
+}
+
+.crisp-pulse-memo-quick-icon {
+  display: inline-flex;
+  --icon-size: 14px;
+}
+
+/* 回收站 */
+.crisp-pulse-memo-item.is-trashed .crisp-pulse-memo-text {
+  color: var(--text-muted);
+  white-space: pre-wrap;
+}
+
+.crisp-pulse-memo-trash-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* 录音中：按钮变红并显示时长 */
+.crisp-pulse-memo-view button.crisp-pulse-memo-mic.is-recording {
+  width: auto;
+  gap: 4px;
+  color: var(--text-error);
+  background: color-mix(in srgb, var(--text-error) 12%, transparent);
+}
+
+.crisp-pulse-memo-mic-time {
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 手机：输入栏停在底部；收起时只露一行，点进来再展开工具栏 */
+.crisp-pulse-memo-composer.is-docked {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: auto 12px 12px;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* 只为接住 Obsidian 给最后一个 div 的底部留白，本身不占位 */
+.crisp-pulse-memo-dock-spacer {
+  display: none;
+}
+
+.crisp-pulse-memo-composer.is-docked:not(.is-open) .crisp-pulse-memo-toolbar {
+  display: none;
+}
+
+.crisp-pulse-memo-composer.is-docked:not(.is-open) .crisp-pulse-memo-input {
+  min-height: 0;
+  height: 2.4em;
+  resize: none;
 }
 
 /* 长速记折叠：约 8 行，底部渐隐提示还有内容 */

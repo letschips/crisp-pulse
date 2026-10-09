@@ -15,3 +15,6 @@ coverage/
 AUDIT*.md
 UPGRADE-REPORT.md
 ANALYTICS*.md
+
+# Deleted memos (personal content)
+memo-trash.json
