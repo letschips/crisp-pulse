@@ -2924,6 +2924,48 @@ class CrispPulsePlugin extends Plugin {
 
   /* ---------- 速记 ---------- */
 
+  memoAsr() {
+    const asr = this.app.plugins?.plugins?.["crisp-asr"];
+    if (!asr || asr.unloaded || typeof asr.transcribeMemoAudio !== "function" || typeof asr.getMemoTranscriptionJobs !== "function") return null;
+    return asr;
+  }
+
+  async transcribeMemoAudio(memo, sourcePath) {
+    const asr = this.memoAsr();
+    if (!asr) throw new Error("请先启用 Crisp ASR 0.8.0 或更高版本");
+    const file = this.app.vault.getAbstractFileByPath(sourcePath);
+    if (!file || !memoAudioFiles(memo, this.app).some((audio) => audio.path === file.path)) throw new Error("速记中的录音已不存在，请刷新后再试");
+    const key = `${memo.path}:${memo.id || memo.startLine}:${file.path}`;
+    this.memoTranscriptionStarting ||= new Set();
+    if (this.memoTranscriptionStarting.has(key)) return;
+    this.memoTranscriptionStarting.add(key);
+    this.app.workspace.trigger?.("crisp-asr:state");
+    let identityKey;
+    try {
+      const current = await this.memoStore.ensureIdentity(memo);
+      if (memoHasTranscriptFor(current, file.path)) return;
+      identityKey = `${current.path}:${current.id}:${file.path}`;
+      this.memoTranscriptionStarting.add(identityKey);
+      await asr.transcribeMemoAudio(file, { memoId: current.id, path: current.path });
+    } finally {
+      this.memoTranscriptionStarting.delete(key);
+      if (identityKey) this.memoTranscriptionStarting.delete(identityKey);
+      this.app.workspace.trigger?.("crisp-asr:state");
+    }
+  }
+
+  async validateMemoTranscriptionTarget(job) {
+    const { file, memo } = await this.memoStore.findMemoIdentity(job.memoId, job.path);
+    if (!memoAudioFiles({ ...memo, path: file.path }, this.app).some((audio) => audio.path === job.sourcePath)) throw new Error("原速记中的录音已被移除，请检查后重试");
+    return { path: file.path };
+  }
+
+  async applyMemoTranscript(job) {
+    const result = await this.memoStore.applyTranscript(job);
+    this.refreshMemoViews();
+    return result;
+  }
+
   async activateMemoView() {
     const { workspace } = this.app;
     let leaf = workspace.getLeavesOfType(VIEW_TYPE_MEMO)[0];
@@ -5734,6 +5776,8 @@ const MEMO_PAGE_SIZE = 30;
 const MEMO_HEADER_RE = /^>\s*\[!memo\][+-]?\s*(\d{1,2}:\d{2})?\s*$/i;
 const MEMO_LINK_RE = /^→\s*\[\[([^\]]+)\]\]\s*$/;
 const MEMO_ID_RE = /^<!-- crisp-pulse-memo-id: ([a-zA-Z0-9-]+) -->$/;
+const MEMO_RESTORE_RE = /^<!-- crisp-pulse-memo-restored: ([a-zA-Z0-9-]+) -->$/;
+const MEMO_ASR_RE = /^<!-- crisp-pulse-asr: ([a-zA-Z0-9-]+)(?: audio: ([^\s]+))? -->$/;
 const ANKS_CAPTURE_CONTRACT_PATH = "Sidecar/tools/capture-metadata/contract.json";
 const ANKS_ROUTE_CONTRACT_PATH = ".runtime/snapshot/route-contract.json";
 const ANKS_NOW_FILE = "Now/行动.md";
@@ -5786,7 +5830,18 @@ function parseMemoBlocks(content) {
     const links = [];
     const textLines = [];
     let id;
+    let restoredId;
+    const transcriptJobs = [];
+    const transcriptAudio = [];
     for (const line of body) {
+      const transcript = MEMO_ASR_RE.exec(line.trim());
+      if (transcript) {
+        transcriptJobs.push(transcript[1]);
+        if (transcript[2]) { try { transcriptAudio.push(decodeURIComponent(transcript[2])); } catch (_) { /* damaged receipt is not proof */ } }
+        continue;
+      }
+      const restored = MEMO_RESTORE_RE.exec(line.trim());
+      if (restored) { restoredId = restored[1]; continue; }
       const identity = MEMO_ID_RE.exec(line.trim());
       if (identity) { id = identity[1]; continue; }
       const link = MEMO_LINK_RE.exec(line.trim());
@@ -5796,6 +5851,9 @@ function parseMemoBlocks(content) {
     const text = textLines.join("\n").trim();
     memos.push({
       ...(id ? { id } : {}),
+      ...(restoredId ? { restoredId } : {}),
+      ...(transcriptJobs.length ? { transcriptJobs } : {}),
+      ...(transcriptAudio.length ? { transcriptAudio } : {}),
       time: header[1] ? header[1].padStart(5, "0") : "",
       text,
       tags: extractMemoTags(text),
@@ -6072,8 +6130,42 @@ const MEMO_AUDIO_EXT_RE = /\.(webm|m4a|mp3|wav|ogg|oga|aac|flac|3gp)$/i;
 
 /** 速记里是否有语音：嵌入的音频文件。 */
 function memoHasAudio(text) {
-  for (const m of String(text ?? "").matchAll(MEMO_WIKI_EMBED_RE)) if (MEMO_AUDIO_EXT_RE.test(m[1].trim())) return true;
-  return false;
+  return memoAudioLinks(text).length > 0;
+}
+
+function memoAudioLinks(text) {
+  const clean = String(text ?? "").replace(/(`{3,}|~{3,})[^\n]*\n[\s\S]*?\1/g, "").replace(/`[^`\n]*`/g, "");
+  const links = [...clean.matchAll(MEMO_WIKI_EMBED_RE)].map((m) => m[1].trim());
+  for (const m of clean.matchAll(/!\[[^\]]*\]\(\s*(?:<([^>]+)>|([^\s)]+))(?:\s+"[^"]*")?\s*\)/g)) {
+    let link = m[1] || m[2];
+    try { link = decodeURIComponent(link); } catch (_) { /* preserve invalid escapes */ }
+    if (!/^[a-z]+:\/\//i.test(link)) links.push(link.split("#")[0]);
+  }
+  return [...new Set(links.filter((link) => MEMO_AUDIO_EXT_RE.test(link)))];
+}
+
+/** 速记里是否已有这段录音的转写。录音可能被资产整理挪到别的文件夹，路径对不上时按文件名认（录音名带秒级时间戳）。 */
+function memoHasTranscriptFor(memo, filePath) {
+  const name = String(filePath || "").split("/").pop();
+  return !!memo.transcriptAudio?.some((p) => p === filePath || p.split("/").pop() === name);
+}
+
+/** 录音卡片上转写按钮的状态。「已转写」只认速记里的隐藏凭据：用户删掉转写段落后可以重新转。 */
+function memoTranscriptionState({ memo, job, starting = false, hasAsr = true, filePath }) {
+  const complete = memoHasTranscriptFor(memo, filePath) || !!(job && memo.transcriptJobs?.includes(job.id));
+  const live = job && job.status !== "completed" && job.status !== "failed";
+  const labels = { queued: "排队中", preparing: "准备中", transcribing: job?.transcriptText ? "写回中" : "转写中", "retry-wait": "等待重试", failed: job?.transcriptText ? "重试写回" : "重试转写" };
+  const label = complete ? "已转写" : starting ? "提交中" : (live || job?.status === "failed") ? labels[job.status] || "转写中" : "转文字";
+  return { label, complete, disabled: !hasAsr || starting || complete || !!live, error: !complete && job?.status === "failed" ? (job.lastError || "转写失败") : "" };
+}
+
+function memoAudioFiles(memo, app) {
+  const files = new Map();
+  for (const link of memoAudioLinks(memo.text)) {
+    const file = app.metadataCache.getFirstLinkpathDest?.(link, memo.path) || app.vault.getAbstractFileByPath(link);
+    if (file && MEMO_AUDIO_EXT_RE.test(file.path)) files.set(file.path, file);
+  }
+  return [...files.values()];
 }
 
 function memoStamp(now) {
@@ -6462,7 +6554,7 @@ class MemoStore {
   }
 
   /** 把一整块速记写进 now 那天的速记文件（没有就按当前模式新建）。 */
-  async writeBlock(block, now) {
+  async writeBlock(block, now, beforeWrite = null) {
     const date = dateKey(now);
     const mode = await this.resolveMode();
     const heading = mode === "anks" ? "" : (this.settings().memoHeading ?? "## 速记");
@@ -6484,6 +6576,7 @@ class MemoStore {
         initial = await this.newDailyContent(now);
       }
     }
+    if (beforeWrite) await beforeWrite(path, initial || "", heading);
     if (mode === "anks") this.capturedSources.set(path, date);
     let file = this.app.vault.getAbstractFileByPath(path);
     if (!file) {
@@ -6560,7 +6653,18 @@ class MemoStore {
     return { memos, files: paths.length };
   }
 
-  async remove(memo, now = new Date()) {
+  // 同一个插件的所有面板共用队列，整个读改写事务（含失败回滚）按顺序完成。
+  queueTrash(operation) {
+    const job = (this.trashQueue || Promise.resolve()).then(operation);
+    this.trashQueue = job.catch(() => {});
+    return job;
+  }
+
+  remove(memo, now = new Date()) {
+    return this.queueTrash(() => this.removeToTrash(memo, now));
+  }
+
+  async removeToTrash(memo, now) {
     const file = this.app.vault.getAbstractFileByPath(memo.path);
     if (!file) throw new Error("速记所在的文件已不存在");
     if (!this.trashPath) {
@@ -6585,7 +6689,20 @@ class MemoStore {
     if (!(await adapter.exists(this.trashPath))) return [];
     try {
       const data = JSON.parse(await adapter.read(this.trashPath));
-      if (!Array.isArray(data?.items)) throw new Error("格式不对");
+      if (data?.version !== 1 || !Array.isArray(data.items)) throw new Error("格式不对");
+      const ids = new Set();
+      for (const entry of data.items) {
+        if (!entry || typeof entry.id !== "string" || !/^[a-zA-Z0-9-]+$/.test(entry.id) || ids.has(entry.id)
+          || typeof entry.deletedAt !== "string" || !Number.isFinite(Date.parse(entry.deletedAt))
+          || typeof entry.path !== "string" || !entry.path.endsWith(".md")
+          || typeof entry.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(entry.date)
+          || typeof entry.time !== "string" || typeof entry.text !== "string" || typeof entry.raw !== "string"
+          || parseMemoBlocks(entry.raw).length !== 1
+          || (entry.restorePath !== undefined && (typeof entry.restorePath !== "string" || !entry.restorePath.endsWith(".md")))
+          || (entry.restoreInitial !== undefined && typeof entry.restoreInitial !== "string")
+          || (entry.restoreHeading !== undefined && typeof entry.restoreHeading !== "string")) throw new Error("条目损坏");
+        ids.add(entry.id);
+      }
       return data.items;
     } catch (_) {
       throw new Error(`速记回收站文件已损坏（${this.trashPath}），为避免丢失速记，暂停删除`);
@@ -6593,40 +6710,81 @@ class MemoStore {
   }
 
   async writeTrash(items) {
-    await this.app.vault.adapter.write(this.trashPath, JSON.stringify({ version: 1, items }, null, 2));
+    const adapter = this.app.vault.adapter;
+    const payload = JSON.stringify({ version: 1, items }, null, 2);
+    await adapter.write(this.trashPath, payload);
+    if (await adapter.read(this.trashPath) !== payload) throw new Error("速记回收站保存未通过读回核对，已暂停本次操作");
   }
 
   /** 回收站里 30 天内的速记，新删的在前；过期的顺手清掉。 */
-  async listTrash(now = new Date()) {
-    const items = await this.readTrash();
-    const cutoff = now.getTime() - MEMO_TRASH_DAYS * 86400000;
-    const kept = items.filter((t) => Date.parse(t.deletedAt) >= cutoff);
-    if (kept.length !== items.length) await this.writeTrash(kept);
-    return kept.sort((a, b) => String(b.deletedAt).localeCompare(String(a.deletedAt)));
+  listTrash(now = new Date()) {
+    return this.queueTrash(async () => {
+      const items = await this.readTrash();
+      const cutoff = now.getTime() - MEMO_TRASH_DAYS * 86400000;
+      // 部分恢复还没确认完成时保留凭据，不能由自动过期清理抹掉重试入口。
+      const kept = items.filter((t) => t.restorePath || Date.parse(t.deletedAt) >= cutoff);
+      if (kept.length !== items.length) await this.writeTrash(kept);
+      return kept.sort((a, b) => String(b.deletedAt).localeCompare(String(a.deletedAt)));
+    });
   }
 
   /** 恢复到原来的笔记；原笔记不在了，就写回那一天的速记文件。 */
-  async restore(id) {
+  restore(id) {
+    return this.queueTrash(() => this.restoreFromTrash(id));
+  }
+
+  async restoreFromTrash(id) {
     const items = await this.readTrash();
     const entry = items.find((t) => t.id === id);
     if (!entry) throw new Error("回收站里已经没有这条速记");
-    const file = this.app.vault.getAbstractFileByPath(entry.path);
+    const restored = parseMemoBlocks(entry.raw)[0];
+    const block = `${entry.raw.split("\n").filter((line) => !MEMO_RESTORE_RE.test(line.replace(/^>\s?/, "").trim())).join("\n")}\n> <!-- crisp-pulse-memo-restored: ${entry.id} -->`;
+    const rememberTarget = async (path, initial, heading) => {
+      entry.restorePath = path;
+      if (initial !== undefined) {
+        entry.restoreInitial = initial;
+        entry.restoreHeading = heading;
+      }
+      await this.writeTrash(items);
+    };
+    let file = this.app.vault.getAbstractFileByPath(entry.restorePath || entry.path);
+    if (!file && entry.restorePath && entry.restoreInitial !== undefined) {
+      // 首次回写的新文件创建失败：按已落盘的目标与模板重试，不跟随后来改动的设置。
+      const folder = entry.restorePath.includes("/") ? entry.restorePath.slice(0, entry.restorePath.lastIndexOf("/")) : "";
+      if (folder) await this.ensureFolder(folder);
+      try {
+        await this.app.vault.create(entry.restorePath, insertMemoBlock(entry.restoreInitial, block, entry.restoreHeading));
+      } catch (error) {
+        file = this.app.vault.getAbstractFileByPath(entry.restorePath);
+        if (!file) throw error;
+      }
+      file = this.app.vault.getAbstractFileByPath(entry.restorePath);
+    }
     if (file) {
-      const daily = dailyDateFromPath(entry.path, this.dailyOptions(), this.momentFn);
-      const heading = daily ? (this.settings().memoHeading ?? "## 速记") : "";
-      await this.app.vault.process(file, (content) => insertMemoBlock(content, entry.raw, heading));
+      if (!entry.restorePath) await rememberTarget(file.path);
+      const daily = dailyDateFromPath(file.path, this.dailyOptions(), this.momentFn);
+      const heading = entry.restoreHeading ?? (daily ? (this.settings().memoHeading ?? "## 速记") : "");
+      await this.app.vault.process(file, (content) => {
+        const blocks = parseMemoBlocks(content);
+        const hits = blocks.filter((m) => m.restoredId === entry.id || (restored.id && m.id === restored.id));
+        if (hits.length > 1) throw new Error("恢复标识重复，请先检查原笔记");
+        return hits.length ? content : insertMemoBlock(content, block, heading);
+      });
     } else {
+      if (entry.restorePath) throw new Error("上次恢复的目标笔记已不存在，请先检查回收站中的来源");
       const [h, m] = String(entry.time || "00:00").split(":").map(Number);
       const day = memoKeyToDay(entry.date);
       day.setHours(h || 0, m || 0);
-      await this.writeBlock(entry.raw, day);
+      await this.writeBlock(block, day, rememberTarget);
     }
     await this.writeTrash(items.filter((t) => t.id !== id));
   }
 
-  async purge(id) {
-    const items = await this.readTrash();
-    await this.writeTrash(items.filter((t) => t.id !== id));
+  purge(id) {
+    return this.queueTrash(async () => {
+      const items = await this.readTrash();
+      await this.writeTrash(items.filter((t) => t.id !== id));
+    });
   }
 
   async ensureIdentity(memo) {
@@ -6654,6 +6812,55 @@ class MemoStore {
     });
     Object.assign(memo, current);
     return { ...current, path: memo.path, date: memo.date, identityCreated };
+  }
+
+  async findMemoIdentity(id, preferredPath) {
+    if (!/^[a-zA-Z0-9-]+$/.test(id || "")) throw new Error("速记标识无效");
+    const preferred = this.app.vault.getAbstractFileByPath(preferredPath);
+    if (preferred) {
+      const hits = parseMemoBlocks(await this.app.vault.read(preferred)).filter((memo) => memo.id === id);
+      if (hits.length > 1) throw new Error("速记标识重复，请先检查来源");
+      if (hits.length === 1) return { file: preferred, memo: hits[0] };
+    }
+    // 笔记重命名或路由后按隐藏标识定位，不依赖当前页面或原来的行号。
+    const hits = [];
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      if (file === preferred) continue;
+      // 先用缓存粗筛，命中的文件再读磁盘最新内容
+      if (!(await this.app.vault.cachedRead(file)).includes(`crisp-pulse-memo-id: ${id}`)) continue;
+      const content = await this.app.vault.read(file);
+      for (const memo of parseMemoBlocks(content)) if (memo.id === id) hits.push({ file, memo });
+    }
+    if (hits.length !== 1) throw new Error(hits.length ? "速记标识重复，请先检查来源" : "原速记已不存在，转写结果已保留在 ASR 队列，请检查后重试");
+    return hits[0];
+  }
+
+  async applyTranscript({ memoId, path, sourcePath, jobId, text }) {
+    if (!/^[a-zA-Z0-9-]+$/.test(jobId || "") || !String(text || "").trim()) throw new Error("转写结果为空或任务标识无效");
+    const { file } = await this.findMemoIdentity(memoId, path);
+    const receipt = `> <!-- crisp-pulse-asr: ${jobId} audio: ${encodeURIComponent(sourcePath)} -->`;
+    await this.app.vault.process(file, (content) => {
+      const hits = parseMemoBlocks(content).filter((memo) => memo.id === memoId);
+      if (hits.length !== 1) throw new Error("原速记已不存在或标识重复，无法写回转写");
+      const current = hits[0];
+      // 同一段录音已经有转写（含被挪动过的录音）就不再插入第二段
+      if (current.transcriptJobs?.includes(jobId) || memoHasTranscriptFor(current, sourcePath)) return content;
+      if (!memoAudioFiles({ ...current, path: file.path }, this.app).some((audio) => audio.path === sourcePath)) throw new Error("原速记中的录音已被移除，转写结果已保留在 ASR 队列");
+      const transcript = String(text).replace(/\r\n?/g, "\n").trim().split("\n").map((line) => {
+        // 识别文字恰好是 callout 标题时，不能让它解析成第二条速记。
+        let safe = MEMO_HEADER_RE.test(`> ${line}`) ? line.replace("[", "\\[") : line;
+        // 形如「→ [[笔记]]」的识别文字不能被当成转化回链
+        if (MEMO_LINK_RE.test(safe.trim())) safe = safe.replace("[[", "\\[\\[");
+        if (MEMO_ID_RE.test(line.trim()) || MEMO_RESTORE_RE.test(line.trim()) || MEMO_ASR_RE.test(line.trim())) safe = safe.replace("<", "&lt;");
+        return safe ? `> ${safe}` : ">";
+      });
+      const lines = content.split("\n");
+      lines.splice(current.endLine + 1, 0, ">", "> **录音转写**", ...transcript, receipt);
+      return lines.join("\n");
+    });
+    const stored = parseMemoBlocks(await this.app.vault.read(file)).filter((memo) => memo.id === memoId && (memo.transcriptJobs?.includes(jobId) || memoHasTranscriptFor(memo, sourcePath)));
+    if (stored.length !== 1) throw new Error("转写未通过写回核对，请重试");
+    return { path: file.path };
   }
 
   async linkBack(memo, linkText) {
@@ -6750,6 +6957,8 @@ class CrispPulseMemoView extends ItemView {
   getIcon() { return "feather"; }
 
   async onOpen() {
+    this.memoClosed = false;
+    this.registerEvent(this.app.workspace.on("crisp-asr:state", () => this.refreshMemoTranscriptionControls()));
     this.registerDomEvent(this.containerEl.ownerDocument, "pointerdown", (event) => {
       const box = this.dockedComposer;
       if (!box?.isConnected || box.contains(event.target)) return;
@@ -6759,8 +6968,13 @@ class CrispPulseMemoView extends ItemView {
   }
 
   async onClose() {
+    this.memoClosed = true;
+    this.memoTranscriptionControls?.clear();
     // 关掉视图时正在录的音照常保存，链接留在草稿里
-    if (this.recording) this.recording.recorder.stop();
+    if (this.recording) {
+      (this.containerEl.win || window).clearInterval(this.recording.timer);
+      if (this.recording.recorder.state !== "inactive") this.recording.recorder.stop();
+    }
     this.moreObserver?.disconnect();
     this.clearMemoMarkdown();
   }
@@ -6813,6 +7027,8 @@ class CrispPulseMemoView extends ItemView {
     const searchFocus = root.contains(active) && active.classList?.contains("crisp-pulse-memo-search") ? { start: active.selectionStart, end: active.selectionEnd } : null;
     const scroll = root.scrollTop;
     this.clearMemoMarkdown();
+    this.memoTranscriptionControls = new Map();
+    this.memoAsrSignature = null;
     root.empty();
     root.addClass("crisp-pulse-memo-view");
     this.renderNavHeader(root);
@@ -6871,7 +7087,11 @@ class CrispPulseMemoView extends ItemView {
 
   /** 录音：再点一次结束；音频存进库（跟随附件位置），在速记里插入嵌入链接，卡片上可直接播放。 */
   async toggleRecording() {
-    if (this.recording) { this.recording.recorder.stop(); return; }
+    if (this.memoClosed || this.recordingStarting || this.recordingSaving) return;
+    if (this.recording) {
+      if (this.recording.recorder.state !== "inactive") this.recording.recorder.stop();
+      return;
+    }
     const win = this.containerEl.win || window;
     const Recorder = win.MediaRecorder;
     if (!win.navigator?.mediaDevices?.getUserMedia || typeof Recorder !== "function") {
@@ -6879,41 +7099,54 @@ class CrispPulseMemoView extends ItemView {
       return;
     }
     let stream;
+    this.recordingStarting = true;
+    this.updateRecordingUi();
     try {
       stream = await win.navigator.mediaDevices.getUserMedia({ audio: true });
+      // 权限弹窗可能停留很久；视图已关闭时不启动录音，也不遗留麦克风。
+      if (this.memoClosed) { stream.getTracks().forEach((t) => t.stop()); return; }
+      const mime = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"].find((t) => Recorder.isTypeSupported?.(t)) || "";
+      const recorder = new Recorder(stream, mime ? { mimeType: mime } : undefined);
+      const chunks = [];
+      const startedAt = new Date();
+      const session = { recorder, startedAt, timer: null };
+      recorder.addEventListener("dataavailable", (e) => { if (e.data?.size) chunks.push(e.data); });
+      recorder.addEventListener("stop", async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        win.clearInterval(session.timer);
+        if (this.recording === session) this.recording = null;
+        this.recordingSaving = true;
+        this.updateRecordingUi();
+        const type = recorder.mimeType || mime || "audio/webm";
+        try {
+          if (!chunks.length) return;
+          const blob = new Blob(chunks, { type });
+          const link = await this.plugin.memoStore.saveAttachment(memoRecordingName(type, startedAt), await blob.arrayBuffer(), startedAt);
+          this.insertIntoComposer(link);
+        } catch (error) {
+          new Notice(`Crisp Pulse 速记：录音保存失败：${error.message || error}`, 8000);
+        } finally {
+          this.recordingSaving = false;
+          this.updateRecordingUi();
+        }
+      });
+      recorder.start();
+      session.timer = win.setInterval(() => this.updateRecordingUi(), 1000);
+      this.recording = session;
     } catch (error) {
-      new Notice(`Crisp Pulse 速记：无法使用麦克风：${error.message || error}`, 8000);
-      return;
-    }
-    const mime = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"].find((t) => Recorder.isTypeSupported?.(t)) || "";
-    const recorder = new Recorder(stream, mime ? { mimeType: mime } : undefined);
-    const chunks = [];
-    const startedAt = new Date();
-    recorder.addEventListener("dataavailable", (e) => { if (e.data?.size) chunks.push(e.data); });
-    recorder.addEventListener("stop", async () => {
-      stream.getTracks().forEach((t) => t.stop());
-      win.clearInterval(this.recording?.timer);
-      this.recording = null;
+      stream?.getTracks().forEach((t) => t.stop());
+      new Notice(`Crisp Pulse 速记：无法开始录音：${error.message || error}`, 8000);
+    } finally {
+      this.recordingStarting = false;
       this.updateRecordingUi();
-      if (!chunks.length) return;
-      const type = recorder.mimeType || mime || "audio/webm";
-      try {
-        const blob = new Blob(chunks, { type });
-        const link = await this.plugin.memoStore.saveAttachment(memoRecordingName(type, startedAt), await blob.arrayBuffer(), startedAt);
-        this.insertIntoComposer(link);
-      } catch (error) {
-        new Notice(`Crisp Pulse 速记：录音保存失败：${error.message || error}`, 8000);
-      }
-    });
-    recorder.start();
-    this.recording = { recorder, startedAt, timer: win.setInterval(() => this.updateRecordingUi(), 1000) };
-    this.updateRecordingUi();
+    }
   }
 
   updateRecordingUi() {
     const button = this.containerEl.children[1]?.querySelector(".crisp-pulse-memo-mic");
     if (!button) return;
     const rec = this.recording;
+    button.disabled = !!(this.recordingStarting || this.recordingSaving);
     button.toggleClass("is-recording", !!rec);
     button.setAttribute("aria-label", rec ? "结束录音" : "录音");
     const label = button.querySelector(".crisp-pulse-memo-mic-time");
@@ -7537,6 +7770,12 @@ class CrispPulseMemoView extends ItemView {
       body.setText(m.text);
       this.clampLongMemo(card, body, key);
     }
+    if (memoAudioLinks(m.text).length) {
+      const row = card.createDiv({ cls: "crisp-pulse-memo-audio-actions" });
+      this.memoTranscriptionControls ||= new Map();
+      this.memoTranscriptionControls.set(row, m);
+      this.renderMemoTranscriptionControls(row, m);
+    }
     for (const link of m.links) {
       const l = card.createDiv({ cls: "crisp-pulse-memo-link" });
       setIcon(l.createSpan({ cls: "crisp-pulse-memo-link-icon" }), "corner-down-right");
@@ -7544,6 +7783,44 @@ class CrispPulseMemoView extends ItemView {
       l.addEventListener("click", () => this.app.workspace.openLinkText(link, m.path));
     }
     if (related || this.expanded === key) this.renderRelated(card, m, walk);
+  }
+
+  refreshMemoTranscriptionControls() {
+    if (this.memoClosed) return;
+    const asr = this.plugin.memoAsr();
+    const signature = JSON.stringify([!!asr, [...(this.plugin.memoTranscriptionStarting || [])], (asr?.getMemoTranscriptionJobs() || []).map((j) => [j.id, j.status, j.lastError || "", !!j.transcriptText])]);
+    if (signature === this.memoAsrSignature) return;
+    this.memoAsrSignature = signature;
+    for (const [row, memo] of this.memoTranscriptionControls || []) {
+      if (!row.isConnected) { this.memoTranscriptionControls.delete(row); continue; }
+      this.renderMemoTranscriptionControls(row, memo);
+    }
+  }
+
+  renderMemoTranscriptionControls(row, memo) {
+    row.empty();
+    const asr = this.plugin.memoAsr();
+    const files = memoAudioFiles(memo, this.app);
+    if (!files.length) { row.createSpan({ cls: "crisp-pulse-memo-muted", text: "录音文件已不存在" }); return; }
+    const jobs = asr?.getMemoTranscriptionJobs() || [];
+    for (const file of files) {
+      const item = row.createDiv({ cls: "crisp-pulse-memo-audio-action" });
+      if (files.length > 1) item.createSpan({ cls: "crisp-pulse-memo-audio-name", text: file.name || file.path });
+      const job = [...jobs].reverse().find((job) => job.memoId === memo.id && job.sourcePath === file.path);
+      const starting = !!this.plugin.memoTranscriptionStarting?.has(`${memo.path}:${memo.id || memo.startLine}:${file.path}`);
+      const state = memoTranscriptionState({ memo, job, starting, hasAsr: !!asr, filePath: file.path });
+      const button = item.createEl("button", { cls: "crisp-pulse-memo-chip", text: state.label, attr: { type: "button", "aria-label": `${state.label}：${file.name || file.path}` } });
+      button.disabled = state.disabled;
+      button.title = !asr ? "请启用 Crisp ASR 0.8.0 或更高版本" : "通过 Crisp ASR 转写，使用其语音识别服务设置";
+      if (state.error) item.createSpan({ cls: "crisp-pulse-memo-audio-error", text: state.error });
+      if (!asr) item.createSpan({ cls: "crisp-pulse-memo-muted", text: "转文字需要 Crisp ASR 0.8.0 或更高版本" });
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try { await this.plugin.transcribeMemoAudio(memo, file.path); }
+        catch (error) { new Notice(`Crisp Pulse 速记：${error.message || error}`, 8000); }
+        finally { if (row.isConnected) this.renderMemoTranscriptionControls(row, memo); }
+      });
+    }
   }
 
   renderRelated(card, m, walk) {
@@ -8244,7 +8521,7 @@ module.exports.CrispPulseEvidenceModal = CrispPulseEvidenceModal;
 module.exports.CrispPulseMemoView = CrispPulseMemoView;
 module.exports.memoHelpers = {
   buildMemoBlock, parseMemoBlocks, extractMemoTags, insertMemoBlock, removeMemoBlock, appendMemoLink,
-  memoStats, memoHeatLevel, memoHasImage, memoHasLink, memoHasAudio, memoAttachmentName, memoRecordingName, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
+  memoStats, memoHeatLevel, memoHasImage, memoHasLink, memoHasAudio, memoTranscriptionState, memoHasTranscriptFor, memoAttachmentName, memoRecordingName, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
   buildMemoQuestionNote, buildMemoNote, buildMemoNowLine, MemoStore,
   filterMemos, buildTagTree, renameTagInText, renameTagInContent, selectDailyReview, onThisDay, parseMemoUrlParams,
   tokenizeMemo, buildMemoIndex, relatedMemos, walkStep, explainShared,

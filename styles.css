@@ -1549,6 +1549,31 @@
   margin-bottom: 4px;
 }
 
+.crisp-pulse-memo-audio-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.crisp-pulse-memo-audio-action {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.crisp-pulse-memo-audio-name {
+  overflow-wrap: anywhere;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+.crisp-pulse-memo-audio-error {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-error);
+}
+
 .crisp-pulse-memo-view button.crisp-pulse-memo-time {
   height: auto;
   padding: 0;
