@@ -822,6 +822,10 @@ function generateReviewReport(model) {
 const SYSTEM_ARTIFACT_FOLDERS = ['Sidecar/logs', 'Sidecar/backups', 'Sidecar/manifests'];
 // Obsidian saves the editor about 2s after the last keystroke, so a save shortly after switching away is still typing.
 const BACKGROUND_WRITE_GRACE_MS = 10000;
+// 新建笔记前这么久内有过键盘或点击，才算本人新建（Cmd+N、点新建按钮、点未创建的链接）
+const CREATE_ACTION_WINDOW_MS = 3000;
+// editor-change 紧跟在一次键盘 / 输入事件之后才算本人编辑；外部改文件后编辑器重载也会触发 editor-change
+const EDITOR_INPUT_LINK_MS = 2000;
 const REVIEW_SOURCE_LABELS = { system: '系统目录新增', capture: '大段捕获（估算）', unattributed: '其他新增（来源未确认）', historical: '历史未分类' };
 const REVIEW_ACTION_STATES = { pending: '待办', done: '完成', deferred: '延期', cancelled: '取消' };
 function isSystemArtifact(path) {
@@ -1367,8 +1371,11 @@ class CrispPulsePlugin extends Plugin {
 
     this.registerView(VIEW_TYPE_PULSE, (leaf) => new CrispPulseView(leaf, this));
     this.memoStore = new MemoStore(this.app, () => this.settings, typeof moment === "function" ? moment : null, {
+      // 速记是在 Pulse 输入框里写的：提交时记一笔本人写作证据，统计照常计入
+      onOwnWrite: (path) => this.markWritingEvidence(path),
       trashPath: `${this.manifest?.dir || `${this.app.vault?.configDir || ".obsidian"}/plugins/crisp-pulse`}/memo-trash.json`
     });
+    this.memoDrafts = new MemoDraftStore(this.app.vault?.adapter, this.manifest?.dir || `${this.app.vault?.configDir || ".obsidian"}/plugins/crisp-pulse`);
     this.registerView(VIEW_TYPE_MEMO, (leaf) => new CrispPulseMemoView(leaf, this));
     this.addRibbonIcon("feather", "打开 Crisp Pulse 速记", () => this.activateMemoView());
     this.addCommand({ id: "open-memo-view", name: "打开速记", callback: () => this.activateMemoView() });
@@ -1534,6 +1541,7 @@ class CrispPulsePlugin extends Plugin {
     if (this.snapshotSyncTimer) clearTimeout(this.snapshotSyncTimer);
     this.focusAdapter?.detach();
     this.flushAllSessions();
+    void this.memoDrafts?.flush();
   }
 
   storeFilePath() {
@@ -2165,18 +2173,67 @@ class CrispPulsePlugin extends Plugin {
     this.registerDomEvent(window, "focus", () => { this.windowBlurredAt = null; });
     this.registerDomEvent(window, "keydown", recordActivity, { passive: true });
     this.registerDomEvent(window, "pointerdown", recordActivity, { passive: true });
+    this.registerWritingEvidence(window);
+    if (this.app?.workspace?.on) {
+      this.registerEvent(this.app.workspace.on("window-open", (_workspaceWindow, win) => { if (win) this.registerWritingEvidence(win); }));
+      // 画布节点、悬浮编辑器里的编辑：按编辑器报告的文件记，但要紧跟一次真实输入
+      this.registerEvent(this.app.workspace.on("editor-change", (_editor, info) => {
+        const path = info?.file?.path;
+        if (path && this.lastWritingInputAt && Date.now() - this.lastWritingInputAt <= EDITOR_INPUT_LINK_MS) this.markWritingEvidence(path);
+      }));
+    }
   }
 
   noteWindowBlur() {
     this.windowBlurredAt = Date.now();
   }
 
-  // Writes to system folders, or made while Obsidian is in the background (agents, scripts, sync),
-  // are not the user's writing here: they are tallied as externalWords and never scored.
-  isExternalWrite(path) {
+  /* 本人写作的证据：在某篇笔记的标签页里键入、粘贴、拖入、剪切，或点了任务复选框。
+     只看窗口在前台不够：Agent、同步或别的插件在前台写文件时也是前台。 */
+  registerWritingEvidence(win) {
+    const handler = (event) => this.noteWritingEvidence(event);
+    for (const type of ["keydown", "beforeinput", "paste", "drop", "cut", "click", "pointerdown"]) {
+      this.registerDomEvent(win, type, handler, { capture: true, passive: true });
+    }
+  }
+
+  noteWritingEvidence(event) {
+    const now = Date.now();
+    this.lastUserActionAt = now;
+    if (event?.type === "pointerdown") return;
+    const target = event?.target;
+    if (event?.type === "click" && !target?.closest?.('input[type="checkbox"], .task-list-item-checkbox')) return;
+    this.lastWritingInputAt = now;
+    const leafEl = target?.closest?.(".workspace-leaf");
+    if (!leafEl) return;
+    let path = null;
+    this.app?.workspace?.iterateAllLeaves?.((leaf) => { if (!path && leaf.containerEl === leafEl) path = leaf.view?.file?.path || null; });
+    if (path) this.markWritingEvidence(path);
+  }
+
+  markWritingEvidence(path) {
+    if (!this.writingEvidence) this.writingEvidence = new Map();
+    this.writingEvidence.set(path, Date.now());
+  }
+
+  hasWritingEvidence(path, at = Date.now()) {
+    const t = this.writingEvidence?.get(path);
+    return t != null && at - t <= BACKGROUND_WRITE_GRACE_MS && t - at <= 1000;
+  }
+
+  hasCreationEvidence(path, at = Date.now()) {
+    if (this.hasWritingEvidence(path, at)) return true;
+    const t = this.lastUserActionAt;
+    return t != null && at - t <= CREATE_ACTION_WINDOW_MS && t - at <= 1000;
+  }
+
+  // Writes to system folders, or without evidence of the user's own input (agents, scripts, sync, other
+  // plugins — in the background or the foreground), are not the user's writing here: they are tallied as
+  // externalWords and never scored. An editor save landing after switching away still counts, because the
+  // typing that caused it happened within the grace window.
+  isExternalWrite(path, at = Date.now(), { creation = false } = {}) {
     if (isSystemArtifact(path)) return true;
-    if (typeof document === "undefined" || typeof document.hasFocus !== "function" || document.hasFocus()) return false;
-    return !(this.windowBlurredAt && Date.now() - this.windowBlurredAt < BACKGROUND_WRITE_GRACE_MS);
+    return !(creation ? this.hasCreationEvidence(path, at) : this.hasWritingEvidence(path, at));
   }
 
   recordExternalWords(words) {
@@ -2188,13 +2245,14 @@ class CrispPulsePlugin extends Plugin {
 
   handleFileCreation(file) {
     if (!this.shouldTrackPath(file.path)) return Promise.resolve();
+    const at = Date.now();
     return this.queueFileOperation(file, async () => {
       if (this.fileSnapshots.has(file.path)) return;
         try {
           const content = await this.readTrackedFile(file);
           if (content === null) return;
           const words = countWords(content);
-          const external = this.isExternalWrite(file.path);
+          const external = this.isExternalWrite(file.path, at, { creation: true });
           this.fileSnapshots.set(file.path, {
             words,
             tasks: countTasks(content),
@@ -2257,7 +2315,8 @@ class CrispPulsePlugin extends Plugin {
   }
 
   handleFileModification(file) {
-    return this.queueFileOperation(file, () => this.processFileModification(file));
+    const at = Date.now();
+    return this.queueFileOperation(file, () => this.processFileModification(file, at));
   }
 
   async queueFileOperation(file, operation) {
@@ -2283,7 +2342,7 @@ class CrispPulsePlugin extends Plugin {
     }
   }
 
-  async processFileModification(file) {
+  async processFileModification(file, at = Date.now()) {
     if (this.stopped || !this.shouldTrackPath(file.path)) return;
     try {
       const content = await this.readTrackedFile(file);
@@ -2357,7 +2416,7 @@ class CrispPulsePlugin extends Plugin {
         return;
       }
 
-      if (this.isExternalWrite(file.path)) {
+      if (this.isExternalWrite(file.path, at)) {
         this.recordExternalWords(wordsDelta);
         return;
       }
@@ -2943,7 +3002,7 @@ class CrispPulsePlugin extends Plugin {
     let identityKey;
     try {
       const current = await this.memoStore.ensureIdentity(memo);
-      if (memoHasTranscriptFor(current, file.path)) return;
+      if (memoHasTranscriptFor(current, file.path, this.memoStore.transcriptMatch(current))) return;
       identityKey = `${current.path}:${current.id}:${file.path}`;
       this.memoTranscriptionStarting.add(identityKey);
       await asr.transcribeMemoAudio(file, { memoId: current.id, path: current.path });
@@ -4358,7 +4417,7 @@ class CrispPulseView extends ItemView {
       { key: 'system', label: '系统目录', hint: '1.13.1 之前记下的日志、备份；之后不再计入新增', color: 'gray' },
       { key: 'historical', label: '未分类', hint: '早期记录没有来源信息', color: 'faint' }
     ];
-    const card = this.analyticsSection(parent, '写作来源', '新增词数只算 Obsidian 在前台时的写入，按保存方式拆分。大段捕获按单次新增量推断，粘贴、导入都落在这里。', 'pen-line');
+    const card = this.analyticsSection(parent, '写作来源', '新增词数只算你在笔记里键入、粘贴或在速记里提交的内容，按保存方式拆分。大段捕获按单次新增量推断，粘贴、导入都落在这里。', 'pen-line');
     card.addClass('crisp-pulse-mix-card');
     const number = value => Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 0 });
     const pct = value => mix.total ? Math.round(value / mix.total * 1000) / 10 : 0;
@@ -4368,7 +4427,7 @@ class CrispPulseView extends ItemView {
     big.createSpan({ cls: 'crisp-pulse-analytics-total', text: mix.total ? `${number(mix.total)} 词` : '—' });
     const lead = parts.filter(part => part.key !== 'historical').sort((a, b) => mix.parts[b.key] - mix.parts[a.key])[0];
     if (mix.total && mix.parts[lead.key] > 0) big.createSpan({ cls: 'crisp-pulse-mix-of', text: `${lead.label}最多，占 ${pct(mix.parts[lead.key])}%` });
-    if (mix.external > 0) head.createDiv({ cls: 'crisp-pulse-mix-note', text: `另有 ${number(mix.external)} 词来自后台或系统目录（Agent、脚本、同步），已记下但不计入` });
+    if (mix.external > 0) head.createDiv({ cls: 'crisp-pulse-mix-note', text: `另有 ${number(mix.external)} 词没有你的输入记录或来自系统目录（Agent、脚本、同步、其他插件），已记下但不计入` });
     const bar = card.createDiv({ cls: 'crisp-pulse-mix-bar' });
     bar.setAttr('role', 'img');
     bar.setAttr('aria-label', parts.map(part => `${part.label} ${pct(mix.parts[part.key])}%`).join('，'));
@@ -6244,15 +6303,22 @@ function memoTempoLabel(task) {
   return { todo: "待办", in_progress: "进行中", waiting: "等待中", done: "已完成", canceled: "已取消" }[task.status] || "待办";
 }
 
-/** 速记里是否已有这段录音的转写。录音可能被资产整理挪到别的文件夹，路径对不上时按文件名认（录音名带秒级时间戳）。 */
-function memoHasTranscriptFor(memo, filePath) {
+/** 速记里是否已有这段录音的转写。路径一致才算；录音被资产整理挪到别的文件夹时，凭据里的旧路径已不存在，
+    且速记里只有这一段同名、还没有凭据的录音，才按文件名认。不同目录的同名录音各算各的。
+    audioPaths：速记里现有录音的路径；exists：库里是否还有这个路径。 */
+function memoHasTranscriptFor(memo, filePath, { audioPaths = null, exists = null } = {}) {
+  const receipts = memo.transcriptAudio || [];
+  if (receipts.includes(filePath)) return true;
   const name = String(filePath || "").split("/").pop();
-  return !!memo.transcriptAudio?.some((p) => p === filePath || p.split("/").pop() === name);
+  const current = audioPaths || [filePath];
+  const moved = receipts.some((p) => p.split("/").pop() === name && !current.includes(p) && !(exists ? exists(p) : true));
+  if (!moved) return false;
+  return current.filter((p) => p.split("/").pop() === name && !receipts.includes(p)).length === 1;
 }
 
 /** 录音卡片上转写按钮的状态。「已转写」只认速记里的隐藏凭据：用户删掉转写段落后可以重新转。 */
-function memoTranscriptionState({ memo, job, starting = false, hasAsr = true, filePath }) {
-  const complete = memoHasTranscriptFor(memo, filePath) || !!(job && memo.transcriptJobs?.includes(job.id));
+function memoTranscriptionState({ memo, job, starting = false, hasAsr = true, filePath, audioPaths = null, exists = null }) {
+  const complete = memoHasTranscriptFor(memo, filePath, { audioPaths, exists }) || !!(job && memo.transcriptJobs?.includes(job.id));
   const live = job && job.status !== "completed" && job.status !== "failed";
   const labels = { queued: "排队中", preparing: "准备中", transcribing: job?.transcriptText ? "写回中" : "转写中", "retry-wait": "等待重试", failed: job?.transcriptText ? "重试写回" : "重试转写" };
   const label = complete ? "已转写" : starting ? "提交中" : (live || job?.status === "failed") ? labels[job.status] || "转写中" : "转文字";
@@ -6544,9 +6610,138 @@ function memoSafeTitle(text) {
 }
 
 const MEMO_TRASH_DAYS = 30;
+const MEMO_DRAFT_SAVE_DELAY = 500;
+
+/** 输入框里还没提交的草稿和没存进库的录音，存在插件目录（memo-drafts.json、memo-pending/）。
+    关闭面板、停用重载、退出重开后能找回；每个速记面板按自己的标签页分开存，不互相覆盖。
+    文件损坏时只读不写，免得把能修复的内容覆盖掉。 */
+class MemoDraftStore {
+  constructor(adapter, dir) {
+    this.adapter = adapter;
+    this.path = dir ? `${dir}/memo-drafts.json` : null;
+    this.pendingDir = dir ? `${dir}/memo-pending` : null;
+    this.drafts = {};
+    this.recordings = [];
+    this.listeners = new Set();
+    this.broken = false;
+    this.timer = null;
+    this.writing = Promise.resolve();
+    this.lastPayload = null;
+  }
+
+  load() {
+    this.ready ||= (async () => {
+      if (!this.path || !this.adapter || !(await this.adapter.exists(this.path))) return;
+      try {
+        const raw = await this.adapter.read(this.path);
+        const data = JSON.parse(raw);
+        if (data?.version !== 1 || typeof data.drafts !== "object" || !data.drafts || Array.isArray(data.drafts) || !Array.isArray(data.recordings)) throw new Error("格式不对");
+        for (const [key, entry] of Object.entries(data.drafts)) {
+          if (typeof entry?.text === "string" && entry.text.trim()) this.drafts[key] = { text: entry.text, updatedAt: Number(entry.updatedAt) || 0 };
+        }
+        for (const r of data.recordings) {
+          if (!r || !/^[a-zA-Z0-9-]+$/.test(r.id || "") || typeof r.name !== "string" || r.name.includes("/") || typeof r.stash !== "string" || !r.stash.startsWith(`${this.pendingDir}/`)) continue;
+          if (!(await this.adapter.exists(r.stash))) continue;
+          this.recordings.push({ id: r.id, name: r.name, type: String(r.type || ""), startedAt: String(r.startedAt || ""), stash: r.stash, error: String(r.error || "") });
+        }
+        this.lastPayload = raw;
+      } catch (error) {
+        this.broken = true;
+        console.warn(`[Crisp Pulse] 速记草稿文件无法读取（${this.path}），本次不再写入草稿`, error);
+      }
+    })();
+    return this.ready;
+  }
+
+  onChange(fn) {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  changed() {
+    for (const fn of [...this.listeners]) { try { fn(); } catch (error) { console.error(error); } }
+  }
+
+  /** 这个面板的草稿；没有就认领一份已关闭面板留下的（最近的那份）。 */
+  claimDraft(key, liveKeys = []) {
+    if (this.drafts[key]?.text) return this.drafts[key].text;
+    const orphan = Object.entries(this.drafts)
+      .filter(([k, v]) => k !== key && !liveKeys.includes(k) && v?.text?.trim())
+      .sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0))[0];
+    if (!orphan) return "";
+    delete this.drafts[orphan[0]];
+    this.drafts[key] = orphan[1];
+    this.schedule();
+    return orphan[1].text;
+  }
+
+  setDraft(key, text) {
+    if (!key) return;
+    if (String(text || "").trim()) this.drafts[key] = { text, updatedAt: Date.now() };
+    else if (this.drafts[key]) delete this.drafts[key];
+    else return;
+    this.schedule();
+  }
+
+  schedule() {
+    if (this.broken || !this.path) return;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => { void this.flush(); }, MEMO_DRAFT_SAVE_DELAY);
+  }
+
+  flush() {
+    clearTimeout(this.timer);
+    this.timer = null;
+    if (this.broken || !this.path) return this.writing;
+    const payload = JSON.stringify({
+      version: 1,
+      drafts: this.drafts,
+      recordings: this.recordings.filter((r) => r.stash).map(({ id, name, type, startedAt, stash, error }) => ({ id, name, type, startedAt, stash, error })),
+    }, null, 2);
+    if (payload === this.lastPayload) return this.writing;
+    this.lastPayload = payload;
+    this.writing = this.writing.then(() => this.adapter.write(this.path, payload)).catch((error) => {
+      this.lastPayload = null;
+      console.warn("[Crisp Pulse] 速记草稿保存失败", error);
+      if (!this.warned) { this.warned = true; new Notice(`Crisp Pulse 速记：草稿恢复文件保存失败（${error.message || error}），关闭面板前请先提交或复制草稿`, 8000); }
+    });
+    return this.writing;
+  }
+
+  /** 录音没能存进附件：留在待保存列表，并尽量在插件目录存一份，重载后也能重试。 */
+  async keepRecording(rec) {
+    if (!this.recordings.includes(rec)) this.recordings.push(rec);
+    if (!rec.stash && this.pendingDir && !this.broken) {
+      try {
+        if (!(await this.adapter.exists(this.pendingDir))) await this.adapter.mkdir(this.pendingDir);
+        const stash = `${this.pendingDir}/${rec.id}-${rec.name}`;
+        await this.adapter.writeBinary(stash, rec.data);
+        rec.stash = stash;
+      } catch (error) {
+        console.warn("[Crisp Pulse] 待保存录音暂存失败，只保留在内存里", error);
+      }
+    }
+    await this.flush();
+    this.changed();
+  }
+
+  async recordingData(rec) {
+    if (!rec.data) rec.data = await this.adapter.readBinary(rec.stash);
+    return rec.data;
+  }
+
+  async dropRecording(rec) {
+    this.recordings = this.recordings.filter((r) => r !== rec);
+    if (rec.stash) { try { await this.adapter.remove(rec.stash); } catch (_) { /* 暂存文件已不在 */ } }
+    await this.flush();
+    this.changed();
+  }
+}
+
 
 class MemoStore {
-  constructor(app, getSettings, momentFn = null, { trashPath = null } = {}) {
+  constructor(app, getSettings, momentFn = null, { trashPath = null, onOwnWrite = null } = {}) {
+    this.onOwnWrite = onOwnWrite;
     this.app = app;
     this.trashPath = trashPath;
     this.getSettings = getSettings;
@@ -6651,7 +6846,7 @@ class MemoStore {
 
   async capture(text, now = new Date()) {
     if (!String(text ?? "").trim()) throw new Error("速记内容为空");
-    return this.writeBlock(buildMemoBlock(text, now), now);
+    return this.writeBlock(buildMemoBlock(text, now), now, (path) => this.onOwnWrite?.(path));
   }
 
   /** 把一整块速记写进 now 那天的速记文件（没有就按当前模式新建）。 */
@@ -6953,6 +7148,14 @@ class MemoStore {
     return { path: file.path };
   }
 
+  /** 判断「已转写」用的上下文：速记里现有的录音，以及凭据里的旧路径是否还在库里。 */
+  transcriptMatch(memo, notePath = memo.path) {
+    return {
+      audioPaths: memoAudioFiles({ ...memo, path: notePath }, this.app).map((f) => f.path),
+      exists: (p) => !!this.app.vault.getAbstractFileByPath(p),
+    };
+  }
+
   async applyTranscript({ memoId, path, sourcePath, jobId, text }) {
     if (!/^[a-zA-Z0-9-]+$/.test(jobId || "") || !String(text || "").trim()) throw new Error("转写结果为空或任务标识无效");
     const { file } = await this.findMemoIdentity(memoId, path);
@@ -6962,7 +7165,7 @@ class MemoStore {
       if (hits.length !== 1) throw new Error("原速记已不存在或标识重复，无法写回转写");
       const current = hits[0];
       // 同一段录音已经有转写（含被挪动过的录音）就不再插入第二段
-      if (current.transcriptJobs?.includes(jobId) || memoHasTranscriptFor(current, sourcePath)) return content;
+      if (current.transcriptJobs?.includes(jobId) || memoHasTranscriptFor(current, sourcePath, this.transcriptMatch(current, file.path))) return content;
       if (!memoAudioFiles({ ...current, path: file.path }, this.app).some((audio) => audio.path === sourcePath)) throw new Error("原速记中的录音已被移除，转写结果已保留在 ASR 队列");
       const transcript = String(text).replace(/\r\n?/g, "\n").trim().split("\n").map((line) => {
         // 识别文字恰好是 callout 标题时，不能让它解析成第二条速记。
@@ -6976,7 +7179,7 @@ class MemoStore {
       lines.splice(current.endLine + 1, 0, ">", "> **录音转写**", ...transcript, receipt);
       return lines.join("\n");
     });
-    const stored = parseMemoBlocks(await this.app.vault.read(file)).filter((memo) => memo.id === memoId && (memo.transcriptJobs?.includes(jobId) || memoHasTranscriptFor(memo, sourcePath)));
+    const stored = parseMemoBlocks(await this.app.vault.read(file)).filter((memo) => memo.id === memoId && (memo.transcriptJobs?.includes(jobId) || memoHasTranscriptFor(memo, sourcePath, this.transcriptMatch(memo, file.path))));
     if (stored.length !== 1) throw new Error("转写未通过写回核对，请重试");
     return { path: file.path };
   }
@@ -7076,6 +7279,15 @@ class CrispPulseMemoView extends ItemView {
 
   async onOpen() {
     this.memoClosed = false;
+    const drafts = this.plugin.memoDrafts;
+    if (drafts) {
+      await drafts.load();
+      this.draftKey = this.leaf?.id || reviewEntryId();
+      const live = this.app.workspace.getLeavesOfType?.(VIEW_TYPE_MEMO)?.map((leaf) => leaf.id) || [];
+      const restored = drafts.claimDraft(this.draftKey, live);
+      if (restored && !this.draft) this.draft = restored;
+      this.register(drafts.onChange(() => this.renderPendingRecordings()));
+    }
     this.registerEvent(this.app.workspace.on("crisp-asr:state", () => this.refreshMemoTranscriptionControls()));
     this.registerEvent(this.app.workspace.on("crisp-tempo:state", () => this.refreshTempoChips()));
     this.registerDomEvent(this.containerEl.ownerDocument, "pointerdown", (event) => {
@@ -7090,13 +7302,19 @@ class CrispPulseMemoView extends ItemView {
     this.memoClosed = true;
     this.memoTranscriptionControls?.clear();
     if (this.dictation) void this.stopDictation();
-    // 关掉视图时正在录的音照常保存，链接留在草稿里
+    // 关掉视图时正在录的音照常保存，链接留在草稿里；草稿存进恢复文件，下次打开速记面板时找回
     if (this.recording) {
       (this.containerEl.win || window).clearInterval(this.recording.timer);
       if (this.recording.recorder.state !== "inactive") this.recording.recorder.stop();
     }
+    this.persistDraft();
+    void this.plugin?.memoDrafts?.flush();
     this.moreObserver?.disconnect();
     this.clearMemoMarkdown();
+  }
+
+  persistDraft() {
+    this.plugin?.memoDrafts?.setDraft(this.draftKey, this.draft);
   }
 
   clearMemoMarkdown(parent = null) {
@@ -7192,16 +7410,14 @@ class CrispPulseMemoView extends ItemView {
 
   /** 把文字插到输入框光标处（输入框不在了就接到草稿末尾），并同步草稿。 */
   insertIntoComposer(text) {
-    const input = this.containerEl.children[1]?.querySelector(".crisp-pulse-memo-input");
+    const input = this.composerInput();
     if (!input) {
-      this.draft = `${this.draft ? `${this.draft.replace(/\s+$/, "")}\n` : ""}${text}\n`;
-      this.draftRevision = (this.draftRevision || 0) + 1;
+      this.setDraft(`${this.draft ? `${this.draft.replace(/\s+$/, "")}\n` : ""}${text}\n`);
       return;
     }
     const before = input.value.slice(0, input.selectionStart);
     input.setRangeText(`${before && !/\s$/.test(before) ? "\n" : ""}${text}\n`, input.selectionStart, input.selectionEnd, "end");
-    this.draft = input.value;
-    this.draftRevision = (this.draftRevision || 0) + 1;
+    this.setDraft(input.value, input.selectionEnd);
     input.closest(".crisp-pulse-memo-composer")?.addClass("is-open");
     input.focus();
   }
@@ -7210,21 +7426,59 @@ class CrispPulseMemoView extends ItemView {
     return this.containerEl.children[1]?.querySelector(".crisp-pulse-memo-input") || null;
   }
 
-  /** 长按麦克风：通过 Crisp ASR 实时听写，文字边说边出现在开始时的光标处，松开结束。 */
+  /** 草稿变了（键入、粘贴、工具按钮、插入附件、听写）：同步草稿和修订号，听写占用的那一段跟着挪，并存一份恢复用的草稿。 */
+  setDraft(next, caret = null) {
+    if (this.dictation && next !== this.draft) this.mapDictationRange(this.dictation, this.draft, next, caret);
+    this.draft = next;
+    this.draftRevision = (this.draftRevision || 0) + 1;
+    this.persistDraft();
+  }
+
+  /** 听写期间输入框被别的方式改动：改在那一段之前就跟着挪，之后不受影响；改到那一段里面，听写不再覆盖。 */
+  mapDictationRange(d, prev, next, caret) {
+    if (d.detached) return;
+    const max = Math.min(prev.length, next.length);
+    let p = 0;
+    while (p < max && prev[p] === next[p]) p++;
+    let tail = 0;
+    while (tail < max - p && prev[prev.length - 1 - tail] === next[next.length - 1 - tail]) tail++;
+    let oldEnd = prev.length - tail;
+    let newEnd = next.length - tail;
+    // 插入或删除相同的字时位置有歧义，按光标往前挪到真正改动的地方
+    if (caret != null && oldEnd === p) {
+      while (p > 0 && newEnd > caret && next[p - 1] === next[newEnd - 1]) { p--; newEnd--; oldEnd--; }
+    } else if (caret != null && newEnd === p) {
+      while (p > caret && prev[p - 1] === prev[oldEnd - 1]) { p--; oldEnd--; newEnd--; }
+    }
+    const end = d.start + d.shown.length;
+    if (oldEnd <= d.start) d.start += (newEnd - p) - (oldEnd - p);
+    else if (p < end) this.detachDictation(d);
+  }
+
+  detachDictation(d) {
+    if (d.detached) return;
+    d.detached = true;
+    if (this.dictation === d) void this.stopDictation();
+  }
+
+  /** 长按麦克风：通过 Crisp ASR 实时听写，文字边说边出现在开始时的光标处，松开结束。
+      听写只改写自己写入的那一段；那段之外的手动输入和插入的附件都保留。 */
   async startDictation() {
     const asr = this.plugin.memoDictationAsr?.();
     if (!asr || this.dictation || this.memoClosed) return;
     const input = this.composerInput();
     const value = input ? input.value : this.draft;
+    if (value !== this.draft) this.setDraft(value);
     const start = input ? input.selectionStart : value.length;
     const end = input ? input.selectionEnd : value.length;
-    const d = { before: value.slice(0, start), after: value.slice(end), text: "", preview: "", state: "connecting", stopRequested: false, done: false };
+    // 选中的文字由听写结果替换；什么都没听到时原样保留
+    const d = { start, shown: value.slice(start, end), text: "", preview: "", state: "connecting", stopRequested: false, done: false, detached: false };
     this.dictation = d;
     this.updateRecordingUi();
     const sink = {
       onState: (state) => { if (this.dictation !== d) return; d.state = state; this.updateRecordingUi(); },
       onText: (text, preview) => {
-        if (this.dictation !== d) return;
+        if (this.dictation !== d || d.done) return;
         d.text = text;
         d.preview = preview;
         this.applyDictation(d, `${text}${preview}`);
@@ -7233,12 +7487,13 @@ class CrispPulseMemoView extends ItemView {
         if (d.done) return;
         d.done = true;
         const heard = d.state !== "connecting";
-        if (this.dictation === d) this.dictation = null;
         // 定稿文字取代过程中的预览；没有定稿时保留已经显示的定稿部分
         const final = text || d.text;
-        if (final || d.preview) this.applyDictation(d, final);
+        if (!d.detached && (final || d.preview)) this.applyDictation(d, final);
+        if (this.dictation === d) this.dictation = null;
         this.updateRecordingUi();
-        if (error) new Notice(`Crisp Pulse 速记：实时听写中断：${error}${final ? "。已识别的文字已保留" : ""}`, 8000);
+        if (d.detached) new Notice("Crisp Pulse 速记：你改动了正在听写的文字，听写已结束，之后识别的内容没有写入输入框", 8000);
+        else if (error) new Notice(`Crisp Pulse 速记：实时听写中断：${error}${final ? "。已识别的文字已保留" : ""}`, 8000);
         else if (!final && heard) new Notice("Crisp Pulse 速记：这次没有识别到文字");
       },
     };
@@ -7247,6 +7502,8 @@ class CrispPulseMemoView extends ItemView {
       // 连接期间已经松开：连上后立即结束
       if (d.stopRequested && !d.done) await asr.stopMemoDictation();
     } catch (error) {
+      // 启动失败后不再接受这一轮的任何回调，免得改到之后的草稿
+      d.done = true;
       if (this.dictation === d) this.dictation = null;
       this.updateRecordingUi();
       new Notice(`Crisp Pulse 速记：无法开始实时听写：${error.message || error}`, 8000);
@@ -7261,14 +7518,24 @@ class CrispPulseMemoView extends ItemView {
   }
 
   applyDictation(d, middle) {
-    const value = `${d.before}${middle}${d.after}`;
-    this.draft = value;
-    this.draftRevision = (this.draftRevision || 0) + 1;
+    if (d.detached) return;
+    const value = this.draft;
+    const end = d.start + d.shown.length;
+    // 那一段已经不是听写写进去的样子（不该发生，兜底）：不再覆盖
+    if (value.slice(d.start, end) !== d.shown) { this.detachDictation(d); return; }
+    const next = `${value.slice(0, d.start)}${middle}${value.slice(end)}`;
+    const delta = middle.length - d.shown.length;
     const input = this.composerInput();
+    // 光标在听写那段末尾（或里面）就跟着走；在用户自己的文字里就留在原处
+    const map = (pos) => (pos >= end ? pos + delta : pos <= d.start ? pos : d.start + middle.length);
+    const selection = input ? [map(input.selectionStart), map(input.selectionEnd)] : null;
+    d.shown = middle;
+    this.draft = next;
+    this.draftRevision = (this.draftRevision || 0) + 1;
+    this.persistDraft();
     if (!input) return;
-    input.value = value;
-    const caret = d.before.length + middle.length;
-    input.setSelectionRange?.(caret, caret);
+    input.value = next;
+    input.setSelectionRange?.(selection[0], selection[1]);
     input.closest?.(".crisp-pulse-memo-composer")?.addClass("is-open");
   }
 
@@ -7305,13 +7572,22 @@ class CrispPulseMemoView extends ItemView {
         this.recordingSaving = true;
         this.updateRecordingUi();
         const type = recorder.mimeType || mime || "audio/webm";
+        let rec = null;
         try {
           if (!chunks.length) return;
-          const blob = new Blob(chunks, { type });
-          const link = await this.plugin.memoStore.saveAttachment(memoRecordingName(type, startedAt), await blob.arrayBuffer(), startedAt);
+          rec = { id: reviewEntryId(), name: memoRecordingName(type, startedAt), type, startedAt: startedAt.toISOString(), data: await new Blob(chunks, { type }).arrayBuffer(), error: "" };
+          const link = await this.plugin.memoStore.saveAttachment(rec.name, rec.data, startedAt);
           this.insertIntoComposer(link);
         } catch (error) {
-          new Notice(`Crisp Pulse 速记：录音保存失败：${error.message || error}`, 8000);
+          const message = error.message || String(error);
+          if (rec && this.plugin.memoDrafts) {
+            // 录音留着：输入框下方可以重试、另存或丢弃，不用重录
+            rec.error = message;
+            await this.plugin.memoDrafts.keepRecording(rec);
+            new Notice(`Crisp Pulse 速记：录音没能存进库（${message}）。录音已保留，可在输入框下方重试或另存`, 10000);
+          } else {
+            new Notice(`Crisp Pulse 速记：录音保存失败：${message}`, 8000);
+          }
         } finally {
           this.recordingSaving = false;
           this.updateRecordingUi();
@@ -7329,7 +7605,77 @@ class CrispPulseMemoView extends ItemView {
     }
   }
 
+  /** 没能存进库的录音：留在输入框下方，可重试、另存为文件或丢弃。 */
+  renderPendingRecordings() {
+    const el = this.pendingEl;
+    if (!el?.isConnected) return;
+    el.empty();
+    const store = this.plugin.memoDrafts;
+    for (const rec of store?.recordings || []) {
+      const row = el.createDiv({ cls: "crisp-pulse-memo-pending-row", attr: { role: "alert" } });
+      const at = Number.isFinite(Date.parse(rec.startedAt)) ? memoClock(new Date(rec.startedAt)) : "";
+      row.createDiv({ cls: "crisp-pulse-memo-pending-text", text: `${at ? `${at} 的` : ""}录音还没存进库${rec.error ? `：${rec.error}` : ""}` });
+      const actions = row.createDiv({ cls: "crisp-pulse-memo-pending-actions" });
+      const action = (text, fn) => {
+        const b = actions.createEl("button", { cls: "crisp-pulse-memo-chip", text, attr: { type: "button" } });
+        b.disabled = !!rec.busy;
+        b.addEventListener("click", fn);
+        return b;
+      };
+      action(rec.busy ? "保存中…" : "重试保存", () => this.retryRecording(rec));
+      action("另存为文件", () => this.exportRecording(rec));
+      const drop = action(rec.confirmDrop ? "确认丢弃" : "丢弃", async () => {
+        if (!rec.confirmDrop) { rec.confirmDrop = true; drop.setText("确认丢弃"); return; }
+        await store.dropRecording(rec);
+      });
+      if (rec.confirmDrop) drop.addClass("mod-warning");
+    }
+    el.toggleClass("is-empty", !store?.recordings?.length);
+  }
+
+  async retryRecording(rec) {
+    const store = this.plugin.memoDrafts;
+    if (rec.busy || !store) return;
+    rec.busy = true;
+    store.changed();
+    try {
+      const data = await store.recordingData(rec);
+      const startedAt = Number.isFinite(Date.parse(rec.startedAt)) ? new Date(rec.startedAt) : new Date();
+      const link = await this.plugin.memoStore.saveAttachment(rec.name, data, startedAt);
+      rec.busy = false;
+      await store.dropRecording(rec);
+      this.insertIntoComposer(link);
+      new Notice("Crisp Pulse 速记：录音已存进库");
+    } catch (error) {
+      rec.error = error.message || String(error);
+      new Notice(`Crisp Pulse 速记：录音仍没能保存：${rec.error}`, 8000);
+    } finally {
+      rec.busy = false;
+      store.changed();
+    }
+  }
+
+  async exportRecording(rec) {
+    try {
+      const data = await this.plugin.memoDrafts.recordingData(rec);
+      const doc = this.containerEl.ownerDocument || document;
+      const win = doc.defaultView || window;
+      const url = win.URL.createObjectURL(new win.Blob([data], { type: rec.type || "audio/webm" }));
+      const a = doc.createElement("a");
+      a.href = url;
+      a.download = rec.name;
+      doc.body.appendChild(a);
+      a.click();
+      a.remove();
+      win.setTimeout(() => win.URL.revokeObjectURL(url), 60000);
+    } catch (error) {
+      new Notice(`Crisp Pulse 速记：录音另存失败：${error.message || error}`, 8000);
+    }
+  }
+
   updateRecordingUi() {
+    const send = this.containerEl.children[1]?.querySelector(".crisp-pulse-memo-send");
+    if (send) send.disabled = !!(this.memoSubmitting || this.dictation);
     const button = this.containerEl.children[1]?.querySelector(".crisp-pulse-memo-mic");
     if (!button) return;
     const rec = this.recording;
@@ -7355,7 +7701,7 @@ class CrispPulseMemoView extends ItemView {
     const box = root.createDiv({ cls: `crisp-pulse-memo-composer${docked ? " is-docked" : ""}` });
     if (docked) {
       // 收起时只占一行；点进来、有草稿或正在录音时展开，点到别处且没写东西就收起
-      box.toggleClass("is-open", !!(refocus || this.draft.trim() || this.recording));
+      box.toggleClass("is-open", !!(refocus || this.draft.trim() || this.recording || this.plugin.memoDrafts?.recordings?.length));
       box.addEventListener("focusin", () => box.addClass("is-open"));
       this.dockedComposer = box;
     } else {
@@ -7363,11 +7709,11 @@ class CrispPulseMemoView extends ItemView {
     }
     const input = box.createEl("textarea", { cls: "crisp-pulse-memo-input", attr: { placeholder: "现在的想法是…", rows: "3", "aria-label": "速记内容" } });
     input.value = this.draft;
-    input.addEventListener("input", () => { this.draft = input.value; this.draftRevision = (this.draftRevision || 0) + 1; });
+    input.addEventListener("input", () => this.setDraft(input.value, input.selectionEnd));
     input.addEventListener("compositionstart", () => { this.composerComposing = true; });
     input.addEventListener("compositionend", () => {
       this.composerComposing = false;
-      this.draft = input.value;
+      if (input.value !== this.draft) this.setDraft(input.value, input.selectionEnd);
       if (this.memoRenderPending) { this.memoRenderPending = false; this.render(); }
     });
     const bar = box.createDiv({ cls: "crisp-pulse-memo-toolbar" });
@@ -7375,7 +7721,7 @@ class CrispPulseMemoView extends ItemView {
       const b = bar.createEl("button", { cls: "clickable-icon crisp-pulse-memo-tool", attr: { "aria-label": label, type: "button" } });
       setIcon(b, icon);
       b.addEventListener("mousedown", (e) => e.preventDefault());
-      b.addEventListener("click", () => { fn(); this.draft = input.value; this.draftRevision = (this.draftRevision || 0) + 1; input.focus(); });
+      b.addEventListener("click", () => { fn(); this.setDraft(input.value, input.selectionEnd); input.focus(); });
     };
     const insertAt = (text, wrap = "") => {
       const { selectionStart: s, selectionEnd: e, value } = input;
@@ -7436,6 +7782,8 @@ class CrispPulseMemoView extends ItemView {
       onHoldEnd: () => { void this.stopDictation(); },
     });
     this.updateRecordingUi();
+    this.pendingEl = box.createDiv({ cls: "crisp-pulse-memo-pending" });
+    this.renderPendingRecordings();
     const topics = this.mode === "anks" ? this.plugin.memoStore.anksTopics() : [];
     const meta = bar.createDiv({ cls: "crisp-pulse-memo-toolbar-meta" });
     if (topics.length > 1) {
@@ -7452,16 +7800,18 @@ class CrispPulseMemoView extends ItemView {
     }
     const send = bar.createEl("button", { cls: "crisp-pulse-memo-send", attr: { "aria-label": "记录（⏎）· 换行（⇧⏎）", type: "button" } });
     setIcon(send, "send");
-    send.disabled = !!this.memoSubmitting;
+    send.disabled = !!(this.memoSubmitting || this.dictation);
     const submit = async () => {
       if (this.memoSubmitting || !input.value.trim()) return;
+      // 听写还没定稿就提交，会存下未定稿的文字，迟到的定稿又会改到下一条草稿
+      if (this.dictation) { new Notice("Crisp Pulse 速记：实时听写还没结束，等文字定稿后再记录"); return; }
       const submitted = input.value;
       const revision = this.draftRevision;
       this.memoSubmitting = true;
       send.disabled = true;
       try {
         await this.plugin.memoStore.capture(submitted, new Date());
-        if (!this.composerComposing && this.draftRevision === revision && this.draft === submitted) this.draft = "";
+        if (!this.composerComposing && this.draftRevision === revision && this.draft === submitted) this.setDraft("");
         await this.reload();
         this.containerEl.children[1].querySelector(".crisp-pulse-memo-input")?.focus();
       } catch (error) {
@@ -7469,7 +7819,7 @@ class CrispPulseMemoView extends ItemView {
       } finally {
         this.memoSubmitting = false;
         const button = this.containerEl.children[1].querySelector(".crisp-pulse-memo-send");
-        if (button) button.disabled = false;
+        if (button) button.disabled = !!this.dictation;
       }
     };
     send.addEventListener("click", submit);
@@ -8013,28 +8363,43 @@ class CrispPulseMemoView extends ItemView {
   }
 
   /** 向 Tempo 一次性查回所有可见卡片的任务状态。 */
+  /** 并发刷新时只让最新一次请求落到界面；读取失败时保留上次读到的状态，不当成任务被删。 */
   async refreshTempoChips() {
     if (this.memoClosed || !this.memoTempoRows?.size) return;
-    for (const row of [...this.memoTempoRows.keys()]) if (!row.isConnected) this.memoTempoRows.delete(row);
+    const rows = this.memoTempoRows;
+    const generation = (this.tempoRefreshGeneration || 0) + 1;
+    this.tempoRefreshGeneration = generation;
+    for (const row of [...rows.keys()]) if (!row.isConnected) rows.delete(row);
     const tempo = this.plugin.memoTempo();
     let snapshots = null;
+    let failed = false;
     if (tempo) {
-      try { snapshots = await tempo.getTasksBySource([...this.memoTempoRows.values()].map((m) => `crisp-pulse:${m.id}`)); }
-      catch (error) { console.warn("[Crisp Pulse] Tempo 任务状态读取失败", error); }
+      try { snapshots = await tempo.getTasksBySource([...rows.values()].map((m) => `crisp-pulse:${m.id}`)); }
+      catch (error) { failed = true; console.warn("[Crisp Pulse] Tempo 任务状态读取失败", error); }
+    }
+    if (generation !== this.tempoRefreshGeneration || this.memoClosed || rows !== this.memoTempoRows) return;
+    if (failed) {
+      for (const [row, m] of rows) if (row.isConnected) this.renderTempoChip(row, m, this.tempoSnapshots || null, { stale: true });
+      return;
     }
     this.tempoSnapshots = snapshots || {};
-    for (const [row, m] of this.memoTempoRows) this.renderTempoChip(row, m, tempo ? snapshots : undefined);
+    for (const [row, m] of rows) if (row.isConnected) this.renderTempoChip(row, m, tempo ? snapshots : undefined);
   }
 
-  renderTempoChip(row, m, snapshots = null) {
+  renderTempoChip(row, m, snapshots = null, { stale = false } = {}) {
     row.empty();
     const chip = row.createEl("button", { cls: "crisp-pulse-memo-chip crisp-pulse-memo-tempo-chip", attr: { type: "button" } });
     setIcon(chip.createSpan({ cls: "crisp-pulse-memo-quick-icon" }), "list-checks");
     if (snapshots === undefined) { chip.createSpan({ text: "Tempo 任务（Tempo 未启用）" }); chip.disabled = true; return; }
-    if (snapshots === null) { chip.createSpan({ text: "Tempo 任务" }); chip.disabled = true; return; }
-    const task = snapshots[`crisp-pulse:${m.id}`];
+    const key = `crisp-pulse:${m.id}`;
+    if (snapshots === null || (stale && !(key in snapshots))) {
+      chip.createSpan({ text: stale ? "Tempo 任务（状态读取失败）" : "Tempo 任务" });
+      chip.disabled = true;
+      return;
+    }
+    const task = snapshots[key];
     const label = memoTempoLabel(task);
-    chip.createSpan({ text: `Tempo · ${label}` });
+    chip.createSpan({ text: `Tempo · ${label}${stale ? "（读取失败，显示上次状态）" : ""}` });
     chip.toggleClass("is-done", task?.status === "done");
     chip.setAttribute("aria-label", task ? `在 Tempo 中打开：${task.title}` : "这条任务在 Tempo 里已删除，可以从菜单重新转为任务");
     chip.disabled = !task;
@@ -8067,7 +8432,7 @@ class CrispPulseMemoView extends ItemView {
       if (files.length > 1) item.createSpan({ cls: "crisp-pulse-memo-audio-name", text: file.name || file.path });
       const job = [...jobs].reverse().find((job) => job.memoId === memo.id && job.sourcePath === file.path);
       const starting = !!this.plugin.memoTranscriptionStarting?.has(`${memo.path}:${memo.id || memo.startLine}:${file.path}`);
-      const state = memoTranscriptionState({ memo, job, starting, hasAsr: !!asr, filePath: file.path });
+      const state = memoTranscriptionState({ memo, job, starting, hasAsr: !!asr, filePath: file.path, ...this.plugin.memoStore.transcriptMatch(memo) });
       const button = item.createEl("button", { cls: "crisp-pulse-memo-chip", text: state.label, attr: { type: "button", "aria-label": `${state.label}：${file.name || file.path}` } });
       button.disabled = state.disabled;
       button.title = !asr ? "请启用 Crisp ASR 0.8.0 或更高版本" : "通过 Crisp ASR 转写，使用其语音识别服务设置";

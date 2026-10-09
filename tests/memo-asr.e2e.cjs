@@ -93,7 +93,7 @@ test('moving the audio file after transcription (asset routing) keeps it transcr
  // 资产整理把录音挪到别的文件夹；按文件名嵌入的链接仍然有效
  const old=f.audio.path;f.files.delete(old);fs.mkdirSync(path.join(f.root,'Assets/video'),{recursive:true});fs.renameSync(path.join(f.root,old),path.join(f.root,'Assets/video/test.wav'));f.audio.path='Assets/video/test.wav';f.files.set(f.audio.path,f.audio);
  const moved=f.memo();const job=f.asr.getMemoTranscriptionJobs().at(-1);
- assert.equal(f.Pulse.memoHelpers.memoTranscriptionState({memo:moved,job:undefined,starting:false,hasAsr:true,filePath:f.audio.path}).label,'已转写');
+ assert.equal(f.Pulse.memoHelpers.memoTranscriptionState({memo:moved,job:undefined,starting:false,hasAsr:true,filePath:f.audio.path,...f.pulse.memoStore.transcriptMatch(moved)}).label,'已转写');
  await f.pulse.transcribeMemoAudio(moved,f.audio.path);await f.asr.fileQueue.whenIdle();
  assert.equal(f.requests(),1,'不再上传');
  // 即使绕过界面直接提交写回，也不能出现第二段转写

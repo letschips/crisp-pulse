@@ -128,3 +128,70 @@ test('without ASR dictation support a long press does nothing extra', async () =
   await v.startDictation();
   assert.equal(input.value, '买牛奶。'); assert.equal(v.dictation ?? null, null);
 });
+
+/* 1.16.1：听写只改写自己写进去的那一段。
+   - 手动补在听写文字后面的内容，不能被下一次识别更新抹掉。
+   - 在听写文字前面插字，听写那段跟着挪；插入的字和那段开头相同也不能误判。
+   - 改到听写那段里面：听写结束，之后的识别结果不再覆盖。
+   - 这一轮结束后迟到的回调，不能改到之后的新草稿。 */
+const typeAt = (v, input, pos, text) => {
+  input.value = `${input.value.slice(0, pos)}${text}${input.value.slice(pos)}`;
+  input.selectionStart = input.selectionEnd = pos + text.length;
+  v.setDraft(input.value, input.selectionEnd);
+};
+
+test('text typed after the dictated words survives the next recognition update', async () => {
+  const asr = fakeAsr(); const { v, input } = dictationView({ asr, value: '原文', caret: 2 });
+  await v.startDictation();
+  asr.sink.onText('听写', '');
+  typeAt(v, input, input.value.length, '手动补充');
+  asr.sink.onText('听写定稿', '');
+  assert.equal(input.value, '原文听写定稿手动补充');
+  assert.equal(input.selectionStart, input.value.length, '光标留在用户自己的文字后面');
+  asr.final = '听写定稿'; await v.stopDictation();
+  assert.equal(v.draft, '原文听写定稿手动补充');
+});
+
+test('text typed before the dictated words shifts the dictation range, even when the typed character matches', async () => {
+  const asr = fakeAsr(); const { v, input } = dictationView({ asr, value: 'ab', caret: 2 });
+  await v.startDictation();
+  asr.sink.onText('cd', '');
+  typeAt(v, input, 0, 'X');
+  typeAt(v, input, 3, 'c'); // 插在听写那段开头，和它的第一个字相同
+  asr.sink.onText('cde', '');
+  assert.equal(input.value, 'Xabccde');
+  assert.equal(v.dictation.detached, false);
+});
+
+test('editing inside the dictated words ends dictation and later results never overwrite the edit', async () => {
+  notices.length = 0;
+  const asr = fakeAsr(); const { v, input } = dictationView({ asr, value: '', caret: 0 });
+  await v.startDictation();
+  asr.sink.onText('今天', '下午');
+  input.value = '今天上午'; input.selectionStart = input.selectionEnd = 4; v.setDraft(input.value, 4);
+  assert.equal(asr.stops, 1, '改到听写文字里面就结束听写');
+  assert.equal(input.value, '今天上午');
+  assert.equal(v.dictation, null);
+  assert.match(notices.join('\n'), /改动了正在听写的文字/);
+});
+
+test('callbacks arriving after a round ends never touch the next draft', async () => {
+  const asr = fakeAsr(); const { v, input } = dictationView({ asr, value: '', caret: 0 });
+  await v.startDictation();
+  const old = asr.sink;
+  asr.sink.onText('第一条识别结果', '');
+  asr.final = '第一条识别结果'; await v.stopDictation();
+  input.value = '下一条新想法'; input.selectionStart = input.selectionEnd = 6; v.setDraft(input.value, 6);
+  old.onText('第一条最终结果', '');
+  old.onDone({ text: '第一条最终结果' });
+  assert.equal(input.value, '下一条新想法');
+  assert.equal(v.draft, '下一条新想法');
+});
+
+test('a failed start ignores any late callbacks from that round', async () => {
+  const asr = fakeAsr({ failStart: '网络错误' }); const { v, input } = dictationView({ asr });
+  await v.startDictation();
+  asr.sink.onText('迟到的文字', '');
+  asr.sink.onDone({ text: '迟到的文字' });
+  assert.equal(input.value, '买牛奶。');
+});

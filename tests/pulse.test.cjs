@@ -95,6 +95,10 @@ function setup() {
   p.activeSessions = new Map();
   p.fileQueues = new Map();
   p.lastInteractionTime = time;
+  // 多数统计测试模拟本人在编辑器里写；归因测试用 realEvidence() 换回真实判断
+  p.hasWritingEvidence = () => true;
+  p.hasCreationEvidence = () => true;
+  p.realEvidence = () => { delete p.hasWritingEvidence; delete p.hasCreationEvidence; };
   const handlers = {};
   p.app.vault.on = (name, fn) => { handlers[name] = fn; };
   return { p, handlers, helpers: Pulse.helpers, events, context, registeredIcons, advance: ms => time += ms, cleanup: () => cleanup.forEach(fn => fn()) };
@@ -2117,35 +2121,93 @@ test('system directory writes never count as writing, created notes or score, ev
   assert.equal(p.activeSessions.size, 0);
 });
 
-test('writes while Obsidian is in the background are kept out of writing; typed edits after refocus count', async () => {
-  const { p, context, advance } = setup();await p.loadPluginData();
-  let focused = false;context.document.hasFocus = () => focused;
-  await p.handleFileCreation({ path: 'Topics/a/raw/article.md', extension: 'md', content: 'word '.repeat(300) });
-  const file = { path: 'notes/draft.md', extension: 'md', content: 'one' };
+/* 本人写作要有输入证据：在这篇笔记的标签页里键入 / 粘贴 / 点任务框，或 Pulse 自己的速记提交。
+   失败模式：前台脚本、同步、别的插件写文件被算成本人写作（窗口在前台不能证明是本人键入）。 */
+function leafFor(p, path) {
+  const leafEl = { closest: () => leafEl };
+  const target = { closest: (sel) => (sel === '.workspace-leaf' ? leafEl : sel.includes('checkbox') ? target : null) };
+  const leaves = (p.app.workspace.leaves ||= []);
+  leaves.push({ containerEl: leafEl, view: { file: { path } } });
+  p.app.workspace.iterateAllLeaves = (fn) => leaves.forEach(fn);
+  return target;
+}
+
+test('a foreground write with no input evidence is not counted as the user\'s writing', async () => {
+  const { p } = setup();await p.loadPluginData();p.realEvidence();
+  const file = { path: 'Topics/self-media/raw/inbox/script-generated.md', extension: 'md', content: '原有内容' };
   p.fileSnapshots.set(file.path, baseline(file.content));
-  file.content = 'one ' + 'agent '.repeat(40);await p.handleFileModification(file);
-  let record = p.getOrCreateTodayRecord();
-  assert.equal(record.contribution.wordsAdded, 0);
-  assert.equal(record.contribution.notesCreated, 0);
-  assert.equal(record.contribution.externalWords, 340);
-  focused = true;
-  file.content += ' typed here';await p.handleFileModification(file);
-  record = p.getOrCreateTodayRecord();
-  assert.equal(record.contribution.wordsAdded, 2);
-  assert.equal(record.files['notes/draft.md'].sourceWords.unattributed, 2);
-  advance(1);
+  file.content += '\n完全由脚本写入的二十个文字不是用户键入';await p.handleFileModification(file);
+  const record = p.getOrCreateTodayRecord();
+  assert.equal(record.contribution.wordsAdded, 0, '窗口在前台不能证明是本人键入');
+  assert.ok(record.contribution.externalWords > 0);
+  await p.handleFileCreation({ path: 'notes/agent-made.md', extension: 'md', content: 'agent '.repeat(30) });
+  assert.equal(p.getOrCreateTodayRecord().contribution.notesCreated, 0, '没有键盘或点击时新建的笔记不算本人新建');
 });
 
-test('an editor save landing just after switching away still counts as writing', async () => {
-  const { p, context, events, advance } = setup();await p.loadPluginData();p.registerActivityListeners();
-  let focused = true;context.document.hasFocus = () => focused;
-  p.noteWindowBlur();focused = false;advance(3000);
+test('typing in a note\'s tab counts; another note written meanwhile does not', async () => {
+  const { p, advance } = setup();await p.loadPluginData();p.realEvidence();
+  const typed = { path: 'notes/draft.md', extension: 'md', content: 'one' };
+  const other = { path: 'notes/synced.md', extension: 'md', content: 'one' };
+  p.fileSnapshots.set(typed.path, baseline(typed.content));p.fileSnapshots.set(other.path, baseline(other.content));
+  const target = leafFor(p, typed.path);
+  p.noteWritingEvidence({ type: 'keydown', target });
+  advance(2000);
+  typed.content += ' typed here';await p.handleFileModification(typed);
+  other.content += ' synced in';await p.handleFileModification(other);
+  const record = p.getOrCreateTodayRecord();
+  assert.equal(record.contribution.wordsAdded, 2);
+  assert.equal(record.files['notes/draft.md'].sourceWords.unattributed, 2);
+  assert.equal(record.contribution.externalWords, 2);
+});
+
+test('an editor save landing just after switching away still counts as writing; a later write does not', async () => {
+  const { p, context, advance } = setup();await p.loadPluginData();p.realEvidence();
   const file = { path: 'notes/a.md', extension: 'md', content: 'one' };
   p.fileSnapshots.set(file.path, baseline(file.content));
+  p.noteWritingEvidence({ type: 'keydown', target: leafFor(p, file.path) });
+  context.document.hasFocus = () => false;p.noteWindowBlur();advance(3000);
   file.content = 'one two three';await p.handleFileModification(file);
   assert.equal(p.getOrCreateTodayRecord().contribution.wordsAdded, 2);
   advance(60000);
   file.content += ' four';await p.handleFileModification(file);
   assert.equal(p.getOrCreateTodayRecord().contribution.wordsAdded, 2);
-  void events;
+  assert.equal(p.getOrCreateTodayRecord().contribution.externalWords, 1);
+});
+
+test('clicking a task checkbox counts; a plain click in the note does not', async () => {
+  const { p } = setup();await p.loadPluginData();p.realEvidence();
+  const file = { path: 'notes/tasks.md', extension: 'md', content: '- [ ] a' };
+  p.fileSnapshots.set(file.path, baseline(file.content));
+  const target = leafFor(p, file.path);
+  const plain = { closest: (sel) => (sel === '.workspace-leaf' ? target.closest('.workspace-leaf') : null) };
+  p.noteWritingEvidence({ type: 'click', target: plain });
+  assert.equal(p.hasWritingEvidence(file.path), false);
+  p.noteWritingEvidence({ type: 'click', target });
+  file.content = '- [x] a';await p.handleFileModification(file);
+  assert.equal(p.getOrCreateTodayRecord().contribution.tasksCompleted, 1);
+});
+
+test('editor-change counts only right after real input, not when an external write reloads the editor', async () => {
+  const { p, advance } = setup();await p.loadPluginData();p.realEvidence();
+  const listeners = {};p.app.workspace.on = (name, fn) => { listeners[name] = fn; return {}; };
+  p.registerActivityListeners();
+  listeners['editor-change'](null, { file: { path: 'canvas/embedded.md' } });
+  assert.equal(p.hasWritingEvidence('canvas/embedded.md'), false, '外部写入导致的编辑器重载不算');
+  p.noteWritingEvidence({ type: 'keydown', target: null });
+  advance(100);
+  listeners['editor-change'](null, { file: { path: 'canvas/embedded.md' } });
+  assert.equal(p.hasWritingEvidence('canvas/embedded.md'), true);
+});
+
+test('a new note right after a click or keypress counts as created; Pulse memo capture marks its own write', async () => {
+  const { p, advance } = setup();await p.loadPluginData();p.realEvidence();
+  p.noteWritingEvidence({ type: 'pointerdown', target: null });
+  advance(500);
+  await p.handleFileCreation({ path: 'notes/new.md', extension: 'md', content: '' });
+  assert.equal(p.getOrCreateTodayRecord().contribution.notesCreated, 1);
+  p.markWritingEvidence('Daily/2026-09-08.md');
+  const daily = { path: 'Daily/2026-09-08.md', extension: 'md', content: 'x' };
+  p.fileSnapshots.set(daily.path, baseline(daily.content));
+  daily.content += '\n> [!memo] 12:00\n> 一条 速记';await p.handleFileModification(daily);
+  assert.ok(p.getOrCreateTodayRecord().contribution.wordsAdded > 0);
 });

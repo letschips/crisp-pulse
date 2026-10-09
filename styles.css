@@ -1574,6 +1574,38 @@
   color: var(--text-error);
 }
 
+/* 没能存进库的录音：输入框下方提示，可重试、另存或丢弃 */
+.crisp-pulse-memo-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+.crisp-pulse-memo-pending.is-empty {
+  display: none;
+}
+.crisp-pulse-memo-pending-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--radius-s);
+  background: rgba(var(--color-red-rgb), 0.08);
+}
+.crisp-pulse-memo-pending-text {
+  flex: 1 1 160px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-error);
+}
+.crisp-pulse-memo-pending-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
 .crisp-pulse-memo-view button.crisp-pulse-memo-time {
   height: auto;
   padding: 0;

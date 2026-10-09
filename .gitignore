@@ -16,5 +16,7 @@ AUDIT*.md
 UPGRADE-REPORT.md
 ANALYTICS*.md
 
-# Deleted memos (personal content)
+# Deleted memos, unsent drafts and unsaved recordings (personal content)
 memo-trash.json
+memo-drafts.json
+memo-pending/
