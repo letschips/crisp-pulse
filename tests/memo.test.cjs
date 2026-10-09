@@ -405,3 +405,17 @@ test('速记热力图按条数分深浅：零星几条是浅色，记得多才�
   assert.equal(level(40, 40), 4);
   assert.ok(level(12, 40) >= 2, '重度用户的中等日子也要有中间档');
 });
+
+test('ANKS 模式：当天第一条新建采集件后，Obsidian 还没解析出 frontmatter 时列表也要立刻显示', async () => {
+  const adapterFiles = {
+    'Sidecar/bin/anks': '#!/bin/sh',
+    'Sidecar/tools/capture-metadata/contract.json': JSON.stringify({ contract: 'anks-capture-v2', routing: { 'pulse-memo': { inbox_type: 'scratch' } } }),
+  };
+  const { app } = fakeApp({ adapterFiles });
+  // 真实 Obsidian 的元数据缓存是异步的：新文件刚建好时 getFileCache 还是空的
+  app.metadataCache.getFileCache = () => null;
+  const s = new memo.MemoStore(app, () => ({ memoMode: 'anks', memoAnksTopic: 'self-media', memoHeading: '## 速记' }));
+  await s.capture('刚记下的', D(2026, 10, 9, 8, 0));
+  const list = await s.list();
+  assert.deepEqual(plain(list.map((m) => [m.text, m.date])), [['刚记下的', '2026-10-09']]);
+});

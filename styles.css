@@ -1207,7 +1207,7 @@
    速记（flomo 式）：右侧栏视图。
    版式参考 flomo（大数字统计、带工具栏的输入卡片、卡片式速记、标签胶囊），
    颜色、边框、圆角沿用 Crisp：强调色取主题 accent，跟随明暗主题。
-   顶部 nav-header 与搜索框使用 Obsidian 原生类，和左侧文件列表同高同样式。
+   顶部 nav-header 使用 Obsidian 原生类，和左侧文件列表同高同样式；搜索在页签行右侧。
    ========================================================================== */
 .crisp-pulse-memo-view {
   --memo-radius: 12px;
@@ -1223,17 +1223,6 @@
   flex-direction: column;
   gap: var(--memo-gap);
   padding: 4px 12px 24px;
-}
-
-/* 搜索框与左侧文件列表一致：透明、无边框；聚焦时用内嵌描边，不撑开布局 */
-.crisp-pulse-memo-nav .search-input-container > input.crisp-pulse-memo-search {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-}
-
-.crisp-pulse-memo-nav .search-input-container > input.crisp-pulse-memo-search:focus {
-  box-shadow: inset 0 0 0 2px var(--interactive-accent);
 }
 
 .crisp-pulse-memo-nav .nav-action-button.is-active {
@@ -1420,8 +1409,29 @@
 /* 页签 */
 .crisp-pulse-memo-tabs {
   display: flex;
+  align-items: center;
   gap: 4px;
   border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.crisp-pulse-memo-tablist {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+.crisp-pulse-memo-search-toggle {
+  margin-inline-start: auto;
+  margin-bottom: 2px;
+}
+
+.crisp-pulse-memo-search-toggle.is-active {
+  color: var(--icon-color-active, var(--text-accent));
+  background-color: var(--background-modifier-hover);
+}
+
+.crisp-pulse-memo-searchbox {
+  margin: 0;
 }
 
 .crisp-pulse-memo-view button.crisp-pulse-memo-tab {
@@ -1566,6 +1576,32 @@
   line-height: 1.75;
   overflow-wrap: anywhere;
   font-size: var(--font-ui-medium);
+}
+
+/* 长速记折叠：约 8 行，底部渐隐提示还有内容 */
+.crisp-pulse-memo-text.is-clamped {
+  max-height: 14em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent);
+  mask-image: linear-gradient(to bottom, #000 72%, transparent);
+}
+
+.crisp-pulse-memo-view button.crisp-pulse-memo-expand {
+  display: block;
+  margin-top: 4px;
+  height: auto;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--text-accent);
+  font-size: var(--font-ui-smaller);
+}
+
+.crisp-pulse-memo-end {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  text-align: center;
+  padding: 4px 0 8px;
 }
 
 .crisp-pulse-memo-text > :first-child { margin-top: 0; }
