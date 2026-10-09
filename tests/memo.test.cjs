@@ -392,3 +392,16 @@ test('相关理由：相连的中文双字拼回完整片段，标签和英文�
   assert.deepEqual(plain(memo.explainShared(m, ['方法'])), ['方法']);
   assert.deepEqual(plain(memo.explainShared(m, [])), []);
 });
+
+test('速记热力图按条数分深浅：零星几条是浅色，记得多才变深，不因只有一天数据就满格', () => {
+  const level = memo.memoHeatLevel;
+  assert.equal(level(0, 1), 0);
+  assert.equal(level(1, 1), 1, '只有一天、一条时不能直接最深');
+  assert.ok(level(2, 8) < level(8, 8));
+  const levels = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => level(n, 8));
+  assert.deepEqual(levels, [...levels].sort((a, b) => a - b), '条数越多颜色不能变浅');
+  assert.equal(level(8, 8), 4);
+  assert.equal(level(1, 40), 1);
+  assert.equal(level(40, 40), 4);
+  assert.ok(level(12, 40) >= 2, '重度用户的中等日子也要有中间档');
+});

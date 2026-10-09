@@ -1241,7 +1241,7 @@ test('new source attribution does not relabel old words or infer human authorshi
  await p.handleFileCreation({path:'capture.md',content:'word '.repeat(600)});
  await p.handleFileCreation({path:'other.md',content:'one two'});
  const sources=p.getReviewModel('2026-09-02','2026-09-08','all').current.sourceWords;
- assert.equal(sources.system,3);assert.equal(sources.capture,600);assert.equal(sources.unattributed,2);assert.equal(sources.historical,10);
+ assert.equal(sources.system,0);assert.equal(p.getOrCreateTodayRecord().contribution.externalWords,3);assert.equal(sources.capture,600);assert.equal(sources.unattributed,2);assert.equal(sources.historical,10);
  assert.equal(old.files['old.md'].sourceWords,undefined);
 });
 
@@ -1300,7 +1300,7 @@ test('system exclusion changes do not back-count skipped edits when re-enabled',
  p.app.vault.getMarkdownFiles=()=>[file];p.fileSnapshots.set(file.path,{words:1,tasks:0,links:0,lastTime:0});
  const before=JSON.stringify(p.store.daily);await p.setSystemArtifactsExcluded(true);file.content='one two three four';await p.handleFileModification(file);assert.equal(JSON.stringify(p.store.daily),before);
  await p.setSystemArtifactsExcluded(false);await p.handleFileModification(file);assert.equal(JSON.stringify(p.store.daily),before);
- file.content+=' five';await p.handleFileModification(file);assert.equal(p.getOrCreateTodayRecord().contribution.wordsAdded,1);
+ file.content+=' five';await p.handleFileModification(file);assert.equal(p.getOrCreateTodayRecord().contribution.wordsAdded,0);assert.equal(p.getOrCreateTodayRecord().contribution.externalWords,1);
 });
 
 test('system exclusion save failure restores the previous preference',async()=>{
@@ -2097,4 +2097,55 @@ test('memo URL handler captures text with extra tags and only opens the view whe
   await p.handleMemoUrl({ text: '再记一条', open: '1' });
   assert.deepEqual(captured, ['路上想到的 #灵感', '再记一条']);
   assert.equal(opened, 2);
+});
+
+// 1.13.1: only writes made inside Obsidian count as writing; background and system writes are kept aside.
+test('system directory writes never count as writing, created notes or score, even when tracked', async () => {
+  const { p } = setup();await p.loadPluginData();
+  assert.equal(p.settings.excludeSystemArtifacts, false);
+  await p.handleFileCreation({ path: 'Sidecar/logs/backup/AGENTS.md', extension: 'md', content: 'word '.repeat(800) });
+  const file = { path: 'Sidecar/logs/run.md', extension: 'md', content: 'one' };
+  p.fileSnapshots.set(file.path, baseline(file.content));
+  file.content = 'one two three four - [x] done [[link]]';await p.handleFileModification(file);
+  const record = p.getOrCreateTodayRecord();
+  assert.equal(record.contribution.wordsAdded, 0);
+  assert.equal(record.contribution.notesCreated, 0);
+  assert.equal(record.contribution.linksCreated, 0);
+  assert.equal(record.contribution.score, 0);
+  assert.equal(Object.keys(record.files).length, 0);
+  assert.ok(record.contribution.externalWords >= 800);
+  assert.equal(p.activeSessions.size, 0);
+});
+
+test('writes while Obsidian is in the background are kept out of writing; typed edits after refocus count', async () => {
+  const { p, context, advance } = setup();await p.loadPluginData();
+  let focused = false;context.document.hasFocus = () => focused;
+  await p.handleFileCreation({ path: 'Topics/a/raw/article.md', extension: 'md', content: 'word '.repeat(300) });
+  const file = { path: 'notes/draft.md', extension: 'md', content: 'one' };
+  p.fileSnapshots.set(file.path, baseline(file.content));
+  file.content = 'one ' + 'agent '.repeat(40);await p.handleFileModification(file);
+  let record = p.getOrCreateTodayRecord();
+  assert.equal(record.contribution.wordsAdded, 0);
+  assert.equal(record.contribution.notesCreated, 0);
+  assert.equal(record.contribution.externalWords, 340);
+  focused = true;
+  file.content += ' typed here';await p.handleFileModification(file);
+  record = p.getOrCreateTodayRecord();
+  assert.equal(record.contribution.wordsAdded, 2);
+  assert.equal(record.files['notes/draft.md'].sourceWords.unattributed, 2);
+  advance(1);
+});
+
+test('an editor save landing just after switching away still counts as writing', async () => {
+  const { p, context, events, advance } = setup();await p.loadPluginData();p.registerActivityListeners();
+  let focused = true;context.document.hasFocus = () => focused;
+  p.noteWindowBlur();focused = false;advance(3000);
+  const file = { path: 'notes/a.md', extension: 'md', content: 'one' };
+  p.fileSnapshots.set(file.path, baseline(file.content));
+  file.content = 'one two three';await p.handleFileModification(file);
+  assert.equal(p.getOrCreateTodayRecord().contribution.wordsAdded, 2);
+  advance(60000);
+  file.content += ' four';await p.handleFileModification(file);
+  assert.equal(p.getOrCreateTodayRecord().contribution.wordsAdded, 2);
+  void events;
 });

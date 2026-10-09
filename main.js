@@ -539,7 +539,8 @@ function createEmptyDailyRecord(dateStr, quality = "recorded") {
       tasksCompleted: 0,
       linksCreated: 0,
       captureWords: 0,
-      rewrittenWords: 0 // 1.2 additions
+      rewrittenWords: 0, // 1.2 additions
+      externalWords: 0 // 1.13.1: system/background writes, recorded but never scored
     },
     files: {},
     intensity: 0
@@ -819,6 +820,8 @@ function generateReviewReport(model) {
 }
 
 const SYSTEM_ARTIFACT_FOLDERS = ['Sidecar/logs', 'Sidecar/backups', 'Sidecar/manifests'];
+// Obsidian saves the editor about 2s after the last keystroke, so a save shortly after switching away is still typing.
+const BACKGROUND_WRITE_GRACE_MS = 10000;
 const REVIEW_SOURCE_LABELS = { system: '系统目录新增', capture: '大段捕获（估算）', unattributed: '其他新增（来源未确认）', historical: '历史未分类' };
 const REVIEW_ACTION_STATES = { pending: '待办', done: '完成', deferred: '延期', cancelled: '取消' };
 function isSystemArtifact(path) {
@@ -2156,9 +2159,29 @@ class CrispPulsePlugin extends Plugin {
       this.dirty = true;
     };
 
-    this.registerDomEvent(window, "blur", () => { this.lastInteractionTime = null; });
+    this.registerDomEvent(window, "blur", () => { this.lastInteractionTime = null; this.noteWindowBlur(); });
+    this.registerDomEvent(window, "focus", () => { this.windowBlurredAt = null; });
     this.registerDomEvent(window, "keydown", recordActivity, { passive: true });
     this.registerDomEvent(window, "pointerdown", recordActivity, { passive: true });
+  }
+
+  noteWindowBlur() {
+    this.windowBlurredAt = Date.now();
+  }
+
+  // Writes to system folders, or made while Obsidian is in the background (agents, scripts, sync),
+  // are not the user's writing here: they are tallied as externalWords and never scored.
+  isExternalWrite(path) {
+    if (isSystemArtifact(path)) return true;
+    if (typeof document === "undefined" || typeof document.hasFocus !== "function" || document.hasFocus()) return false;
+    return !(this.windowBlurredAt && Date.now() - this.windowBlurredAt < BACKGROUND_WRITE_GRACE_MS);
+  }
+
+  recordExternalWords(words) {
+    if (!(words > 0)) return;
+    const today = this.getOrCreateTodayRecord();
+    today.contribution.externalWords = (Number(today.contribution.externalWords) || 0) + words;
+    this.dirty = true;
   }
 
   handleFileCreation(file) {
@@ -2168,14 +2191,8 @@ class CrispPulsePlugin extends Plugin {
         try {
           const content = await this.readTrackedFile(file);
           if (content === null) return;
-          const today = this.getOrCreateTodayRecord();
-          today.contribution.notesCreated += 1;
-          if (!today.files[file.path]) {
-            today.files[file.path] = { wordsAdded: 0, created: true, tasks: 0, links: 0 };
-          } else {
-            today.files[file.path].created = true;
-          }
           const words = countWords(content);
+          const external = this.isExternalWrite(file.path);
           this.fileSnapshots.set(file.path, {
             words,
             tasks: countTasks(content),
@@ -2184,6 +2201,18 @@ class CrispPulsePlugin extends Plugin {
             completedTaskSet: getCompletedTaskSet(content),
             lastTime: Date.now()
           });
+          if (external) {
+            this.recordExternalWords(words);
+            if (this.dirty) await this.savePluginData();
+            return;
+          }
+          const today = this.getOrCreateTodayRecord();
+          today.contribution.notesCreated += 1;
+          if (!today.files[file.path]) {
+            today.files[file.path] = { wordsAdded: 0, created: true, tasks: 0, links: 0 };
+          } else {
+            today.files[file.path].created = true;
+          }
           if (words > 0) {
             today.contribution.wordsAdded += words;
             today.files[file.path].wordsAdded += words;
@@ -2323,6 +2352,11 @@ class CrispPulsePlugin extends Plugin {
       snapshot.lastTime = now;
 
       if (wordsDelta === 0 && realTasksAdded === 0 && realTasksRemoved === 0 && linksDelta === 0 && !isMeaningfulRewrite) {
+        return;
+      }
+
+      if (this.isExternalWrite(file.path)) {
+        this.recordExternalWords(wordsDelta);
         return;
       }
 
@@ -3205,10 +3239,12 @@ function analyticsLinePath(points, field, x, y) {
 // order, and whatever older records never classified stays "historical" instead of being guessed.
 function buildWritingMix(daily, dates, includeRecord) {
   const parts = { typed: 0, capture: 0, system: 0, historical: 0 };
+  let external = 0;
   const sourceKeys = { system: 'system', capture: 'capture', typed: 'unattributed' };
   const days = dates.map(date => {
     const record = daily[date];
     if (!record || !includeRecord(record, date)) return null;
+    external += Math.max(0, Number(record.contribution?.externalWords) || 0);
     let left = Math.max(0, Number(record.contribution?.wordsAdded) || 0);
     const day = { date, typed: 0, capture: 0, system: 0, historical: 0 };
     for (const [part, source] of Object.entries(sourceKeys)) {
@@ -3224,7 +3260,7 @@ function buildWritingMix(daily, dates, includeRecord) {
     for (const key of Object.keys(parts)) parts[key] += day[key];
     return day;
   });
-  return { parts, total: Object.values(parts).reduce((sum, value) => sum + value, 0), days };
+  return { parts, total: Object.values(parts).reduce((sum, value) => sum + value, 0), external, days };
 }
 
 // Project-level folder for a note: "Topics/self-media/x.md" -> "Topics/self-media", "Core/x.md" -> "Core".
@@ -4223,10 +4259,10 @@ class CrispPulseView extends ItemView {
     const parts = [
       { key: 'typed', label: '逐步写入', hint: '单次保存少于 500 词', color: 'blue' },
       { key: 'capture', label: '大段捕获', hint: '单次保存 500 词以上', color: 'orange' },
-      { key: 'system', label: '系统目录', hint: '日志、备份等自动产物', color: 'gray' },
+      { key: 'system', label: '系统目录', hint: '1.13.1 之前记下的日志、备份；之后不再计入新增', color: 'gray' },
       { key: 'historical', label: '未分类', hint: '早期记录没有来源信息', color: 'faint' }
     ];
-    const card = this.analyticsSection(parent, '写作来源', '新增词数按保存方式拆分。大段捕获是按单次新增量推断的，粘贴、导入和同步都会落在这里。', 'pen-line');
+    const card = this.analyticsSection(parent, '写作来源', '新增词数只算 Obsidian 在前台时的写入，按保存方式拆分。大段捕获按单次新增量推断，粘贴、导入都落在这里。', 'pen-line');
     card.addClass('crisp-pulse-mix-card');
     const number = value => Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 0 });
     const pct = value => mix.total ? Math.round(value / mix.total * 1000) / 10 : 0;
@@ -4236,6 +4272,7 @@ class CrispPulseView extends ItemView {
     big.createSpan({ cls: 'crisp-pulse-analytics-total', text: mix.total ? `${number(mix.total)} 词` : '—' });
     const lead = parts.filter(part => part.key !== 'historical').sort((a, b) => mix.parts[b.key] - mix.parts[a.key])[0];
     if (mix.total && mix.parts[lead.key] > 0) big.createSpan({ cls: 'crisp-pulse-mix-of', text: `${lead.label}最多，占 ${pct(mix.parts[lead.key])}%` });
+    if (mix.external > 0) head.createDiv({ cls: 'crisp-pulse-mix-note', text: `另有 ${number(mix.external)} 词来自后台或系统目录（Agent、脚本、同步），已记下但不计入` });
     const bar = card.createDiv({ cls: 'crisp-pulse-mix-bar' });
     bar.setAttr('role', 'img');
     bar.setAttr('aria-label', parts.map(part => `${part.label} ${pct(mix.parts[part.key])}%`).join('，'));
@@ -5815,6 +5852,12 @@ function memoKeyToDay(key) {
   return new Date(y, m - 1, d);
 }
 
+// 深浅按条数分 4 档；刻度至少按 8 条算，零星几条保持浅色，不会因为只有一天有数据就直接最深。
+function memoHeatLevel(count, max) {
+  if (!(count > 0)) return 0;
+  return Math.min(4, Math.max(1, Math.ceil((count / Math.max(8, max || 0)) * 4)));
+}
+
 function memoStats(memos, todayKey, { weeks = 12, weekStartsOn = "sunday" } = {}) {
   const byDate = new Map();
   for (const m of memos) byDate.set(m.date, (byDate.get(m.date) || 0) + 1);
@@ -6749,7 +6792,7 @@ class CrispPulseMemoView extends ItemView {
     for (let row = 0; row < 7; row++) {
       for (let col = 0; col < weeks; col++) {
         const cell = stats.cells[col * 7 + row];
-        const level = cell.count ? Math.min(4, Math.ceil((cell.count / max) * 4)) : 0;
+        const level = memoHeatLevel(cell.count, max);
         const el = grid.createDiv({ cls: `crisp-pulse-memo-heat-cell level-${level}${cell.future ? " is-future" : ""}${this.filterDate === cell.date ? " is-selected" : ""}` });
         el.setAttribute("title", `${cell.date} · ${cell.count} 条`);
         if (!cell.future) el.addEventListener("click", () => { this.filterDate = this.filterDate === cell.date ? null : cell.date; this.tab = "all"; this.render(); });
@@ -6765,7 +6808,12 @@ class CrispPulseMemoView extends ItemView {
       months.createSpan({ text: month && month !== lastMonth ? `${month}月` : "" });
       if (month) lastMonth = month;
     }
-    card.createDiv({ cls: "crisp-pulse-memo-statline", text: `连续 ${stats.streak} 天 · 本月 ${stats.month} 条 · 近 12 周 ${stats.recent} 条` });
+    const foot = card.createDiv({ cls: "crisp-pulse-memo-heat-foot" });
+    foot.createDiv({ cls: "crisp-pulse-memo-statline", text: `连续 ${stats.streak} 天 · 本月 ${stats.month} 条 · 近 12 周 ${stats.recent} 条` });
+    const legend = foot.createDiv({ cls: "crisp-pulse-memo-heat-legend", attr: { "aria-hidden": "true" } });
+    legend.createSpan({ text: "少" });
+    for (let level = 0; level <= 4; level++) legend.createSpan({ cls: `crisp-pulse-memo-heat-cell level-${level}` });
+    legend.createSpan({ text: "多" });
   }
 
   renderTabs(root) {
@@ -7765,7 +7813,7 @@ module.exports.CrispPulseEvidenceModal = CrispPulseEvidenceModal;
 module.exports.CrispPulseMemoView = CrispPulseMemoView;
 module.exports.memoHelpers = {
   buildMemoBlock, parseMemoBlocks, extractMemoTags, insertMemoBlock, removeMemoBlock, appendMemoLink,
-  memoStats, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
+  memoStats, memoHeatLevel, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
   buildMemoQuestionNote, buildMemoNote, buildMemoNowLine, MemoStore,
   filterMemos, buildTagTree, renameTagInText, renameTagInContent, selectDailyReview, onThisDay, parseMemoUrlParams,
   tokenizeMemo, buildMemoIndex, relatedMemos, walkStep, explainShared,
