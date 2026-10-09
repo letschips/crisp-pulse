@@ -69,7 +69,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8').replace(PUBLIC_PEM_RE, '`' + LOCAL_PUBLIC_PEM + '`') +
-    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined,splitActiveInterval:typeof splitActiveInterval === "function" ? splitActiveInterval : undefined,buildHourlyProfile:typeof buildHourlyProfile === "function" ? buildHourlyProfile : undefined};',
     context
   );
   const Pulse = context.module.exports;
@@ -1984,4 +1984,117 @@ test('renaming the custom banner image keeps the setting pointed at it', async (
   assert.equal(p.settings.headerBannerImage, 'media/banners/sky.png');
   await handlers.rename({ path: 'pics' }, 'media/banners');
   assert.equal(p.settings.headerBannerImage, 'pics/sky.png');
+});
+
+/* ---------- 24 小时活跃时段 ---------- */
+const plainJSON = (x) => JSON.parse(JSON.stringify(x));
+
+test('hourly: an active interval is split at every hour boundary and at midnight', () => {
+  const { helpers } = setup();
+  const t = (d, h, m) => new Date(2026, 8, d, h, m).getTime();
+  assert.deepEqual(plainJSON(helpers.splitActiveInterval(t(8, 9, 50), t(8, 10, 20))),
+    [{ day: '2026-09-08', hour: 9, minutes: 10 }, { day: '2026-09-08', hour: 10, minutes: 20 }]);
+  assert.deepEqual(plainJSON(helpers.splitActiveInterval(t(8, 23, 50), t(9, 0, 10))),
+    [{ day: '2026-09-08', hour: 23, minutes: 10 }, { day: '2026-09-09', hour: 0, minutes: 10 }]);
+  assert.deepEqual(plainJSON(helpers.splitActiveInterval(t(8, 9, 0), t(8, 9, 0))), []);
+});
+
+test('hourly: interaction accounting fills hourly buckets whose sum equals the daily active minutes', async () => {
+  const { p, events, advance } = setup(); // clock starts 2026-09-08 12:00
+  await p.loadPluginData();
+  p.registerActivityListeners();
+  advance(58 * 60000); events.dispatchEvent(new Event('keydown'));   // 12:58:00 (first touch, no minutes)
+  advance(90000); events.dispatchEvent(new Event('keydown'));         // 12:59:30 → +1.5 in 12h
+  advance(90000); events.dispatchEvent(new Event('keydown'));         // 13:01:00 → +0.5 in 12h, +1 in 13h
+  const rec = p.getOrCreateTodayRecord();
+  assert.equal(rec.activity.hourly.length, 24);
+  assert.ok(Math.abs(rec.activity.hourly[12] - 2) < 1e-9);
+  assert.ok(Math.abs(rec.activity.hourly[13] - 1) < 1e-9);
+  const sum = rec.activity.hourly.reduce((a, b) => a + b, 0);
+  assert.ok(Math.abs(sum - rec.activity.activeMinutes) < 1e-9);
+});
+
+test('hourly: profile uses only days with hourly data, finds the busiest 3-hour window and withholds it on thin samples', () => {
+  const { helpers } = setup();
+  const day = (key, hourly, active) => {
+    const r = helpers.createEmptyDailyRecord(key);
+    r.activity.activeMinutes = active ?? (hourly ? hourly.reduce((a, b) => a + b, 0) : 0);
+    if (hourly) r.activity.hourly = hourly;
+    return r;
+  };
+  const h = (pairs) => { const a = Array(24).fill(0); for (const [k, v] of Object.entries(pairs)) a[k] = v; return a; };
+  const daily = {
+    '2026-09-07': day('2026-09-07', null, 300),                 // before hourly tracking: must not count as zeros
+    '2026-09-08': day('2026-09-08', h({ 9: 40, 10: 50, 11: 30, 20: 10 })), // Tuesday
+    '2026-09-09': day('2026-09-09', h({ 10: 4, 23: 5, 0: 5 })),            // Wednesday
+  };
+  const dates = ['2026-09-07', '2026-09-08', '2026-09-09'];
+  const prof = helpers.buildHourlyProfile(daily, dates, () => true, { weekStartsOn: 'monday', minSample: 60 });
+  assert.equal(prof.total, 144);
+  assert.equal(prof.days, 2);
+  assert.equal(prof.missingDays, 1);
+  assert.equal(prof.hours[10], 54);
+  assert.deepEqual(plainJSON(prof.peak), { start: 9, end: 12, minutes: 124, share: 124 / 144 });
+  assert.equal(prof.matrix.length, 7);
+  assert.equal(prof.matrix[0].label, '一');           // Monday first
+  assert.equal(prof.matrix[1].hours[9], 40);          // Tuesday 09h
+  assert.equal(prof.matrix[2].hours[23], 5);
+  const thin = helpers.buildHourlyProfile(daily, dates, () => true, { minSample: 1000 });
+  assert.equal(thin.peak, null);
+  assert.equal(thin.needMinutes, 856);
+  const filtered = helpers.buildHourlyProfile(daily, dates, (r, key) => key !== '2026-09-08', { minSample: 1 });
+  assert.equal(filtered.total, 14);
+  // 跨午夜的窗口（22–01 与 23–02 都是 10 分钟）胜出，并列时取更早的起点
+  assert.deepEqual(plainJSON(filtered.peak), { start: 22, end: 1, minutes: 10, share: 10 / 14 });
+});
+
+test('hourly: repair drops malformed hourly arrays and zeroes invalid buckets without touching daily totals', () => {
+  const { helpers } = setup();
+  const store = { schemaVersion: 1, settings: {}, daily: {
+    '2026-09-08': { date: '2026-09-08', quality: 'recorded', activity: { activeMinutes: 30, focusMinutes: 0, editingSessions: 0, notesOpened: 0, notesEdited: 0, hourly: [1, 2] }, contribution: {}, files: {} },
+    '2026-09-09': { date: '2026-09-09', quality: 'recorded', activity: { activeMinutes: 30, focusMinutes: 0, editingSessions: 0, notesOpened: 0, notesEdited: 0, hourly: Array.from({ length: 24 }, (_, i) => (i === 3 ? -5 : i === 4 ? 'x' : 1)) }, contribution: {}, files: {} },
+  } };
+  const { store: repaired } = helpers.validateAndRepairStore(store);
+  assert.equal(repaired.daily['2026-09-08'].activity.hourly, undefined);
+  assert.equal(repaired.daily['2026-09-09'].activity.hourly[3], 0);
+  assert.equal(repaired.daily['2026-09-09'].activity.hourly[4], 0);
+  assert.equal(repaired.daily['2026-09-09'].activity.hourly[5], 1);
+  assert.equal(repaired.daily['2026-09-09'].activity.activeMinutes, 30);
+});
+
+
+/* ---------- 速记：每日回顾提醒与 URL 入口（插件层） ---------- */
+
+test('memo review reminder fires once per day after the configured time and never without old memos', async () => {
+  const { p } = setup();
+  await p.loadPluginData();
+  const memos = [{ date: '2026-09-01', time: '09:00', text: '旧想法', tags: [], links: [], path: 'Daily/2026-09-01.md', startLine: 0 }];
+  p.memoStore = { list: async () => memos };
+  p.settings.memoReviewTime = '09:00';
+  await p.checkMemoReviewReminder(new Date(2026, 8, 8, 8, 59));
+  assert.equal(p.settings.memoReviewNotifiedOn, '');
+  await p.checkMemoReviewReminder(new Date(2026, 8, 8, 9, 1));
+  assert.equal(p.settings.memoReviewNotifiedOn, '2026-09-08');
+  let listed = 0;
+  p.memoStore = { list: async () => { listed++; return memos; } };
+  await p.checkMemoReviewReminder(new Date(2026, 8, 8, 18, 0));
+  assert.equal(listed, 0, 'already reminded today');
+  p.settings.memoReviewTime = '';
+  await p.checkMemoReviewReminder(new Date(2026, 8, 9, 10, 0));
+  assert.equal(p.settings.memoReviewNotifiedOn, '2026-09-08', 'empty time disables the reminder');
+});
+
+test('memo URL handler captures text with extra tags and only opens the view when asked or empty', async () => {
+  const { p } = setup();
+  await p.loadPluginData();
+  const captured = [];
+  let opened = 0;
+  p.memoStore = { capture: async (text) => { captured.push(text); } };
+  p.refreshMemoViews = () => {};
+  p.activateMemoView = async () => { opened++; };
+  await p.handleMemoUrl({ action: 'crisp-pulse-memo', text: '路上想到的', tags: '灵感' });
+  await p.handleMemoUrl({ text: '' });
+  await p.handleMemoUrl({ text: '再记一条', open: '1' });
+  assert.deepEqual(captured, ['路上想到的 #灵感', '再记一条']);
+  assert.equal(opened, 2);
 });

@@ -3,7 +3,7 @@
    Crafted for the Crisp Plugin Suite
    ========================================================================== */
 
-const { Plugin, ItemView, Setting, PluginSettingTab, Notice, TFile, Modal, AbstractInputSuggest = null, Platform = {}, addIcon = (() => {}), setIcon = (() => {}) } = require("obsidian");
+const { Plugin, ItemView, Setting, PluginSettingTab, Notice, TFile, Modal, MarkdownRenderer = null, Component = null, AbstractInputSuggest = null, Platform = {}, addIcon = (() => {}), setIcon = (() => {}), Menu = null, moment = null } = require("obsidian");
 
 const VIEW_TYPE_PULSE = "crisp-pulse-view";
 
@@ -409,7 +409,20 @@ const DEFAULT_SETTINGS = {
 
   // --- 1.4.0 Software License ---
   licenseCode: "",
-  licenseLastOnlineAt: 0
+  licenseLastOnlineAt: 0,
+
+  // --- 1.13.0 速记 ---
+  memoMode: "auto", // "auto" | "general" | "anks"
+  memoAnksTopic: "", // empty: first Topic
+  memoHeading: "## 速记", // empty: append to the end of the daily note
+  memoDailyFolder: "", // empty: follow the core Daily notes plugin
+  memoDailyFormat: "", // empty: follow the core Daily notes plugin
+  memoNoteFolder: "", // empty: Obsidian's default new-note location
+  memoReviewCount: 6, // 每日回顾条数，1–24
+  memoReviewTags: "", // 空：全部标签；多个用空格分隔，含子标签
+  memoReviewWithinDays: 0, // 0：全部时间
+  memoReviewTime: "", // "HH:MM" 到点提醒；空：不提醒
+  memoReviewNotifiedOn: "" // 内部：今天是否已提醒
 };
 
 // Words scoring with diminishing marginal returns (Section 6)
@@ -1198,6 +1211,19 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
           repairedCount++;
         }
       }
+      // 24 小时分布只从开始按小时记录的那天起存在；形状不对就当作没记录，不伪造零。
+      if (rec.activity.hourly !== undefined) {
+        if (!Array.isArray(rec.activity.hourly) || rec.activity.hourly.length !== 24) {
+          delete rec.activity.hourly;
+          repairedCount++;
+        } else {
+          rec.activity.hourly = rec.activity.hourly.map((v) => {
+            if (Number.isFinite(v) && v >= 0) return v;
+            repairedCount++;
+            return 0;
+          });
+        }
+      }
     }
 
     if (!rec.contribution || typeof rec.contribution !== "object" || Array.isArray(rec.contribution)) {
@@ -1337,6 +1363,30 @@ class CrispPulsePlugin extends Plugin {
     }
 
     this.registerView(VIEW_TYPE_PULSE, (leaf) => new CrispPulseView(leaf, this));
+    this.memoStore = new MemoStore(this.app, () => this.settings, typeof moment === "function" ? moment : null);
+    this.registerView(VIEW_TYPE_MEMO, (leaf) => new CrispPulseMemoView(leaf, this));
+    this.addRibbonIcon("feather", "打开 Crisp Pulse 速记", () => this.activateMemoView());
+    this.addCommand({ id: "open-memo-view", name: "打开速记", callback: () => this.activateMemoView() });
+    this.addCommand({
+      id: "quick-memo",
+      name: "记一条速记",
+      callback: () => new CrispPulseMemoInputModal(this.app, "记一条速记", "现在的想法是…", "", async (text) => {
+        await this.memoStore.capture(text, new Date());
+        new Notice("Crisp Pulse：已记录速记");
+        this.refreshMemoViews();
+      }).open()
+    });
+    if (this.app.metadataCache?.on) {
+      this.registerEvent(this.app.metadataCache.on("changed", (file, data) => {
+        if (typeof data === "string" && data.includes("[!memo]")) this.refreshMemoViews();
+      }));
+    }
+    if (this.app.vault?.on) {
+      this.registerEvent(this.app.vault.on("delete", () => this.refreshMemoViews()));
+      this.registerEvent(this.app.vault.on("rename", () => this.refreshMemoViews()));
+    }
+    this.registerObsidianProtocolHandler?.("crisp-pulse-memo", (params) => this.handleMemoUrl(params));
+    this.registerInterval(window.setInterval(() => { this.checkMemoReviewReminder().catch(() => {}); }, 60000));
     crispPulseRegisterIcons();
     this.addRibbonIcon(CRISP_PULSE_ICON_ID, "打开 Crisp Pulse 年度知识看板", () => {
       this.activatePulseView();
@@ -2096,20 +2146,12 @@ class CrispPulsePlugin extends Plugin {
       const maxIdleMs = (this.settings.focusIdleTimeoutMinutes || 5) * 60 * 1000;
       if (now - previous > maxIdleMs || now <= previous) return;
 
-      const prevDay = dateKey(new Date(previous));
-      const currDay = dateKey(new Date(now));
-      if (prevDay === currDay) {
-        const mins = (now - previous) / 60000;
-        const rec = this.getOrCreateRecord(currDay);
-        rec.activity.activeMinutes += mins;
-      } else {
-        const splitTime = new Date(new Date(now).getFullYear(), new Date(now).getMonth(), new Date(now).getDate()).getTime();
-        const prevMins = Math.max(0, (splitTime - previous) / 60000);
-        const currMins = Math.max(0, (now - splitTime) / 60000);
-        const prevRec = this.getOrCreateRecord(prevDay);
-        prevRec.activity.activeMinutes += prevMins;
-        const currRec = this.getOrCreateRecord(currDay);
-        currRec.activity.activeMinutes += currMins;
+      // 按整点（含午夜）拆分，同时累计全天总数与 24 小时分布；两者之和恒等。
+      for (const piece of splitActiveInterval(previous, now)) {
+        const rec = this.getOrCreateRecord(piece.day);
+        rec.activity.activeMinutes += piece.minutes;
+        if (!Array.isArray(rec.activity.hourly) || rec.activity.hourly.length !== 24) rec.activity.hourly = Array(24).fill(0);
+        rec.activity.hourly[piece.hour] += piece.minutes;
       }
       this.dirty = true;
     };
@@ -2843,11 +2885,280 @@ class CrispPulsePlugin extends Plugin {
 
     return { map, getVal };
   }
+
+  /* ---------- 速记 ---------- */
+
+  async activateMemoView() {
+    const { workspace } = this.app;
+    let leaf = workspace.getLeavesOfType(VIEW_TYPE_MEMO)[0];
+    if (!leaf) {
+      leaf = workspace.getRightLeaf(false);
+      await leaf.setViewState({ type: VIEW_TYPE_MEMO, active: true });
+    }
+    workspace.revealLeaf(leaf);
+  }
+
+  refreshMemoViews() {
+    window.clearTimeout(this.memoRefreshTimer);
+    this.memoRefreshTimer = window.setTimeout(() => {
+      for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MEMO)) {
+        const root = leaf.view?.containerEl?.children?.[1];
+        // 正在输入时不重建，避免打断
+        if (root && root.contains(root.ownerDocument.activeElement) && root.ownerDocument.activeElement.tagName === "TEXTAREA") continue;
+        leaf.view?.reload?.();
+      }
+    }, 400);
+  }
+
+  async openMemoSource(memo) {
+    const file = this.app.vault.getAbstractFileByPath(memo.path);
+    if (!file) return;
+    await this.app.workspace.getLeaf(false).openFile(file, { eState: { line: memo.startLine } });
+  }
+
+  async createUnique(path, content) {
+    const base = path.replace(/\.md$/, "");
+    let target = path;
+    for (let n = 2; this.app.vault.getAbstractFileByPath(target); n++) target = `${base} ${n}.md`;
+    const folder = target.includes("/") ? target.slice(0, target.lastIndexOf("/")) : "";
+    if (folder) await this.memoStore.ensureFolder(folder);
+    return this.app.vault.create(target, content);
+  }
+
+  async convertMemoToNote(memo) {
+    return this.runMemoConversion(memo, "note", async () => {
+      const current = await this.memoStore.ensureIdentity(memo);
+      let folder = this.settings.memoNoteFolder || this.app.fileManager.getNewFileParent?.(current.path)?.path || "";
+      if (folder === "/") folder = "";
+      return this.finishMemoDocument(current, "note", buildMemoNote({ memo: current, folder }));
+    });
+  }
+
+  async convertMemoToQuestion(memo) {
+    return this.runMemoConversion(memo, "question", async () => {
+      const source = this.app.vault.getAbstractFileByPath(memo.path);
+      if (!source) throw new Error("速记所在的文件已不存在");
+      const topic = this.app.metadataCache.getFileCache(source)?.frontmatter?.topic || /^Topics\/([^/]+)\//.exec(memo.path)?.[1] || this.memoStore.anksTopic();
+      if (!this.memoStore.anksTopics().includes(topic)) throw new Error("速记所属 Topic 不存在，请先检查来源或选择 Topic");
+      const target = await this.memoStore.anksTarget(memo.date, topic);
+      const route = await this.memoStore.readJson(ANKS_ROUTE_CONTRACT_PATH);
+      const rule = ((route?.data || route)?.rules || []).find((r) => r.name === "question-backlog");
+      const folder = (rule?.target || "Topics/{topic}/questions/backlog").replace("{topic}", target.topic);
+      const current = await this.memoStore.ensureIdentity(memo);
+      return this.finishMemoDocument(current, "question", buildMemoQuestionNote({ memo: current, topic: target.topic, folder, now: new Date() }));
+    });
+  }
+
+  runMemoConversion(memo, kind, action) {
+    this.memoConversions ||= new Map();
+    const key = `${memo.path}:${memo.startLine}:${kind}`;
+    if (this.memoConversions.has(key)) return this.memoConversions.get(key);
+    const pending = Promise.resolve().then(action).finally(() => this.memoConversions.delete(key));
+    this.memoConversions.set(key, pending);
+    return pending;
+  }
+
+  async finishMemoDocument(memo, kind, note) {
+    const marker = `<!-- crisp-pulse-conversion:${memo.id}:${kind} -->`;
+    let file = null;
+    // The receipt lives with the created document, so retry also works after a restart or rename.
+    for (const candidate of memo.identityCreated ? [] : this.app.vault.getMarkdownFiles()) {
+      const text = await this.app.vault.cachedRead(candidate);
+      if (text.split("\n").includes(marker)) { file = candidate; break; }
+    }
+    if (!file) file = await this.createUnique(note.path, `${note.content}\n${marker}\n`);
+    try {
+      await this.memoStore.linkBack(memo, file.path.replace(/\.md$/, ""));
+    } catch (error) {
+      throw new Error(`已创建 ${file.path}，但来源回链未完成：${error.message || error}。目标文件已保留，重试会复用它`);
+    }
+    new Notice(`Crisp Pulse：已转为${kind === "question" ? "问题" : "笔记"} ${file.basename}`);
+    await this.app.workspace.getLeaf(false).openFile(file);
+    return file;
+  }
+
+  async convertMemoToNow(memo) {
+    return this.runMemoConversion(memo, "now", async () => {
+      const file = this.app.vault.getAbstractFileByPath(ANKS_NOW_FILE);
+      if (!file) throw new Error(`找不到 ${ANKS_NOW_FILE}`);
+      const current = await this.memoStore.ensureIdentity(memo);
+      const blockId = `pulse-memo-${current.id}`;
+      await this.app.vault.process(file, (text) => {
+        if (text.split("\n").some((line) => line.trimEnd().endsWith(` ^${blockId}`))) return text;
+        return `${text.replace(/\s*$/, "")}\n${buildMemoNowLine(current)} ^${blockId}\n`;
+      });
+      try {
+        await this.memoStore.linkBack(current, `${ANKS_NOW_FILE.replace(/\.md$/, "")}#^${blockId}`);
+      } catch (error) {
+        throw new Error(`已加入 Now 行动，但来源回链未完成：${error.message || error}。重试不会重复添加行动`);
+      }
+      new Notice("Crisp Pulse：已加入 Now 行动");
+    });
+  }
+
+  promptRenameTag(from, done) {
+    new CrispPulseMemoInputModal(this.app, `把 #${from} 改名为`, "新标签名（可含 / 表示层级）", from, async (value) => {
+      const to = value.replace(/^#+/, "").trim();
+      if (to === from) return;
+      try {
+        const preview = await this.memoStore.previewTagRename(from);
+        const modal = new Modal(this.app);
+        modal.onOpen = () => {
+          const { contentEl } = modal;
+          contentEl.createEl("h3", { text: `#${from} → #${to}` });
+          contentEl.createEl("p", { text: `将改写 ${preview.files} 个文件里的 ${preview.memos} 条速记（含子标签 #${from}/…）。只改速记块，日笔记其他段落里的同名标签不动。` });
+          const row = contentEl.createDiv({ cls: "crisp-pulse-memo-modal-row" });
+          row.createEl("button", { text: "取消" }).addEventListener("click", () => modal.close());
+          const ok = row.createEl("button", { cls: "mod-cta", text: "改名" });
+          ok.addEventListener("click", async () => {
+            modal.close();
+            try {
+              const result = await this.memoStore.renameTag(from, to);
+              new Notice(`Crisp Pulse：已改写 ${result.memos} 条速记`);
+              done?.();
+            } catch (error) {
+              new Notice(`Crisp Pulse 速记：${error.message || error}`, 8000);
+            }
+          });
+        };
+        modal.onClose = () => modal.contentEl.empty();
+        modal.open();
+      } catch (error) {
+        new Notice(`Crisp Pulse 速记：${error.message || error}`, 8000);
+      }
+    }).open();
+  }
+
+  async handleMemoUrl(params) {
+    const { text, open } = parseMemoUrlParams(params);
+    if (text) {
+      try {
+        await this.memoStore.capture(text, new Date());
+        new Notice("Crisp Pulse：已记录速记");
+        this.refreshMemoViews();
+      } catch (error) {
+        new Notice(`Crisp Pulse 速记：${error.message || error}`, 8000);
+        return;
+      }
+    }
+    if (open) await this.activateMemoView();
+  }
+
+  /** 每日回顾提醒：Obsidian 开着时，到点提醒一次；关掉 Obsidian 不会提醒。 */
+  async checkMemoReviewReminder(now = new Date()) {
+    const time = String(this.settings.memoReviewTime || "").trim();
+    if (!/^\d{1,2}:\d{2}$/.test(time)) return;
+    const today = dateKey(now);
+    if (this.settings.memoReviewNotifiedOn === today) return;
+    const [h, m] = time.split(":").map(Number);
+    if (now.getHours() * 60 + now.getMinutes() < h * 60 + m) return;
+    this.settings.memoReviewNotifiedOn = today;
+    await this.savePluginData();
+    const tags = String(this.settings.memoReviewTags || "").split(/[,，\s]+/).map((t) => t.replace(/^#+/, "").trim()).filter(Boolean);
+    const review = selectDailyReview(await this.memoStore.list(), today, { count: this.settings.memoReviewCount, tags, withinDays: Number(this.settings.memoReviewWithinDays) || 0 });
+    if (!review.length) return;
+    const open = async () => {
+      await this.activateMemoView();
+      const view = this.app.workspace.getLeavesOfType(VIEW_TYPE_MEMO)[0]?.view;
+      if (view) { view.tab = "review"; view.render(); }
+    };
+    const NotificationCtor = typeof window !== "undefined" ? window.Notification : null;
+    if (NotificationCtor && NotificationCtor.permission === "granted") {
+      const n = new NotificationCtor("Crisp Pulse 每日回顾", { body: `今天有 ${review.length} 条旧速记等你回看：${review[0].text.slice(0, 40)}` });
+      n.onclick = () => { window.focus?.(); open(); };
+    } else {
+      new Notice(`Crisp Pulse：今日回顾 ${review.length} 条，打开速记的「回顾」页查看`, 10000);
+    }
+  }
+
+  confirmDeleteMemo(memo, done) {
+    const modal = new Modal(this.app);
+    modal.onOpen = () => {
+      const { contentEl } = modal;
+      contentEl.createEl("h3", { text: "删除这条速记？" });
+      contentEl.createEl("p", { cls: "crisp-pulse-memo-muted", text: `${memo.date} ${memo.time} · ${memo.path}` });
+      contentEl.createEl("blockquote", { text: memo.text.slice(0, 200) });
+      contentEl.createEl("p", { cls: "crisp-pulse-memo-muted", text: "只从所在笔记里移除这一块；需要时可以用 Obsidian 的文件恢复找回。" });
+      const row = contentEl.createDiv({ cls: "crisp-pulse-memo-modal-row" });
+      row.createEl("button", { text: "取消" }).addEventListener("click", () => modal.close());
+      const del = row.createEl("button", { cls: "mod-warning", text: "删除" });
+      del.addEventListener("click", async () => {
+        modal.close();
+        try {
+          await this.memoStore.remove(memo);
+          done?.();
+        } catch (error) {
+          new Notice(`Crisp Pulse 速记：${error.message || error}`, 8000);
+        }
+      });
+    };
+    modal.onClose = () => modal.contentEl.empty();
+    modal.open();
+  }
 }
 
 /* ==========================================================================
    Crisp Pulse View (ItemView)
    ========================================================================== */
+
+/** 把一段活跃时间按本地整点拆开（跨午夜即换日），供 24 小时活跃时段统计。 */
+function splitActiveInterval(startMs, endMs) {
+  const pieces = [];
+  let cursor = startMs;
+  while (cursor < endMs) {
+    const at = new Date(cursor);
+    const nextHour = new Date(at.getFullYear(), at.getMonth(), at.getDate(), at.getHours() + 1).getTime();
+    const stop = Math.min(endMs, nextHour);
+    pieces.push({ day: dateKey(at), hour: at.getHours(), minutes: (stop - cursor) / 60000 });
+    cursor = stop;
+  }
+  return pieces;
+}
+
+const HOURLY_WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
+
+/** 24 小时活跃分布：只用带 hourly 的日期（开始按小时记录之后）；样本不足时不下「最活跃时段」的结论。 */
+function buildHourlyProfile(daily, dates, includeRecord, { weekStartsOn = "sunday", minSample = 120, windowHours = 3 } = {}) {
+  const hours = Array(24).fill(0);
+  const firstDow = weekStartsOn === "monday" ? 1 : 0;
+  const matrix = Array.from({ length: 7 }, (_, i) => {
+    const dow = (firstDow + i) % 7;
+    return { dow, label: HOURLY_WEEKDAY_LABELS[dow], hours: Array(24).fill(0) };
+  });
+  let days = 0;
+  let missingDays = 0;
+  for (const key of dates) {
+    const record = daily[key];
+    if (!record || !includeRecord(record, key)) continue;
+    const hourly = record.activity?.hourly;
+    if (!Array.isArray(hourly) || hourly.length !== 24) {
+      if ((record.activity?.activeMinutes || 0) > 0) missingDays++;
+      continue;
+    }
+    days++;
+    const [y, m, d] = key.split("-").map(Number);
+    const row = matrix[(new Date(y, m - 1, d).getDay() - firstDow + 7) % 7];
+    hourly.forEach((v, h) => {
+      const value = Number.isFinite(v) && v > 0 ? v : 0;
+      hours[h] += value;
+      row.hours[h] += value;
+    });
+  }
+  const total = hours.reduce((a, b) => a + b, 0);
+  let peak = null;
+  if (total >= minSample && total > 0) {
+    for (let start = 0; start < 24; start++) {
+      let minutes = 0;
+      for (let k = 0; k < windowHours; k++) minutes += hours[(start + k) % 24];
+      if (!peak || minutes > peak.minutes) peak = { start, end: (start + windowHours) % 24, minutes, share: minutes / total };
+    }
+  }
+  let firstDay = null;
+  for (const key of Object.keys(daily).sort()) {
+    if (Array.isArray(daily[key]?.activity?.hourly)) { firstDay = key; break; }
+  }
+  return { hours, matrix, total, days, missingDays, peak, needMinutes: peak ? 0 : Math.max(0, Math.ceil(minSample - total)), minSample, firstDay };
+}
 
 // Analytics uses daily aggregates only; a missing/excluded day is never invented as zero.
 function buildAnalyticsData(daily, dates, includeRecord) {
@@ -3588,6 +3899,56 @@ class CrispPulseView extends ItemView {
     this.renderAnalyticsWritingMix(pair, buildWritingMix(this.plugin.store.daily || {}, dates, include));
     this.renderAnalyticsFolders(pair, buildFolderShare(this.plugin.store.daily || {}, dates, include));
     this.renderAnalyticsChart(section, data, configs[2]);
+    this.renderAnalyticsHours(section, buildHourlyProfile(this.plugin.store.daily || {}, dates, include, { weekStartsOn: this.plugin.settings.weekStartsOn }));
+  }
+
+  // 24 小时活跃时段：本机交互活跃分钟按小时分布，外加星期 × 小时矩阵。
+  renderAnalyticsHours(parent, profile) {
+    const card = this.analyticsSection(parent, '活跃时段', '本机交互活跃分钟按小时分布，帮你找到一天里最容易进入状态的时间。只统计开始按小时记录之后的日期；更早的日期只有全天总数，不计入。', 'clock-4');
+    const pad = (h) => String(h).padStart(2, '0');
+    const fmt = (v) => Number(v).toLocaleString('zh-CN', { maximumFractionDigits: 0 });
+    const summary = card.createDiv({ cls: 'crisp-pulse-analytics-summary' });
+    const primary = summary.createDiv();
+    primary.createDiv({ cls: 'crisp-pulse-analytics-label', text: '最活跃时段' });
+    primary.createDiv({ cls: 'crisp-pulse-analytics-total', text: profile.peak ? `${pad(profile.peak.start)}:00–${pad(profile.peak.end)}:00` : '—' });
+    const notes = [];
+    if (profile.peak) notes.push(`该时段累计 ${fmt(profile.peak.minutes)} 分钟，占 ${Math.round(profile.peak.share * 100)}%`);
+    else if (profile.total > 0) notes.push(`再积累 ${fmt(profile.needMinutes)} 分钟后判断`);
+    notes.push(`区间共 ${fmt(profile.total)} 个活跃分钟 · 按小时记录 ${profile.days} 天`);
+    if (profile.missingDays) notes.push(`${profile.missingDays} 天只有全天总数`);
+    summary.createDiv({ cls: 'crisp-pulse-analytics-subtotals', text: notes.join(' · ') });
+    if (!profile.firstDay) {
+      card.createDiv({ cls: 'crisp-pulse-analytics-empty', text: '从这个版本开始按小时记录。在 Obsidian 里写一会儿，这里就会出现你的活跃分布。' });
+      return;
+    }
+    if (!profile.total) {
+      card.createDiv({ cls: 'crisp-pulse-analytics-empty', text: `所选范围内没有按小时的记录（从 ${profile.firstDay} 开始记录）。` });
+      return;
+    }
+    const level = (v, max) => (v > 0 ? Math.min(4, Math.max(1, Math.ceil((v / max) * 4))) : 0);
+    const max = Math.max(...profile.hours);
+    const strip = card.createDiv({ cls: 'pulse-hours-strip', attr: { role: 'list', 'aria-label': '24 小时活跃分布' } });
+    profile.hours.forEach((v, h) => {
+      const inPeak = profile.peak && ((h - profile.peak.start + 24) % 24) < 3;
+      const cell = strip.createDiv({ cls: `pulse-hours-cell level-${level(v, max)}${inPeak ? ' is-peak' : ''}`, attr: { role: 'listitem', 'aria-label': `${pad(h)}:00–${pad((h + 1) % 24)}:00 · ${fmt(v)} 分钟` } });
+      cell.setAttribute('title', `${pad(h)}:00–${pad((h + 1) % 24)}:00 · ${fmt(v)} 分钟`);
+      if (v >= 1) cell.createSpan({ cls: 'pulse-hours-value', text: fmt(v) });
+    });
+    const axis = card.createDiv({ cls: 'pulse-hours-axis', attr: { 'aria-hidden': 'true' } });
+    for (const h of [0, 6, 12, 18, 23]) axis.createSpan({ text: `${pad(h)}:00` });
+
+    const matrixMax = Math.max(...profile.matrix.flatMap((row) => row.hours));
+    const grid = card.createDiv({ cls: 'pulse-hours-matrix', attr: { role: 'grid', 'aria-label': '星期 × 小时活跃分布' } });
+    let best = null;
+    for (const row of profile.matrix) {
+      grid.createDiv({ cls: 'pulse-hours-matrix-label', text: `周${row.label}` });
+      row.hours.forEach((v, h) => {
+        if (!best || v > best.v) best = { v, label: row.label, h };
+        const cell = grid.createDiv({ cls: `pulse-hours-matrix-cell level-${level(v, matrixMax)}` });
+        cell.setAttribute('title', `周${row.label} ${pad(h)}:00 · ${fmt(v)} 分钟`);
+      });
+    }
+    if (best && best.v > 0) card.createDiv({ cls: 'pulse-hours-note', text: `最常写的一格：周${best.label} ${pad(best.h)}:00，累计 ${fmt(best.v)} 分钟 · 从 ${profile.firstDay} 开始按小时记录` });
   }
 
   // Forward-looking card: where this month stands against the same day of last month, and where it is heading.
@@ -5306,6 +5667,1431 @@ class CrispPulseEvidenceModal extends Modal {
   onClose() { this.readVersion++;this.contentEl.empty(); }
 }
 
+/* ==========================================================================
+   速记（flomo 式）
+   通用模式：追加到当天日笔记的速记段落；ANKS 模式：每天一个 raw 采集件，
+   字段取自库内 ANKS 采集合约（pulse-memo）。两种来源都按 `> [!memo] HH:MM` 解析。
+   速记属于数据采集，永不上锁。
+   ========================================================================== */
+
+const VIEW_TYPE_MEMO = "crisp-pulse-memo-view";
+const MEMO_HEADER_RE = /^>\s*\[!memo\][+-]?\s*(\d{1,2}:\d{2})?\s*$/i;
+const MEMO_LINK_RE = /^→\s*\[\[([^\]]+)\]\]\s*$/;
+const MEMO_ID_RE = /^<!-- crisp-pulse-memo-id: ([a-zA-Z0-9-]+) -->$/;
+const ANKS_CAPTURE_CONTRACT_PATH = "Sidecar/tools/capture-metadata/contract.json";
+const ANKS_ROUTE_CONTRACT_PATH = ".runtime/snapshot/route-contract.json";
+const ANKS_NOW_FILE = "Now/行动.md";
+const MEMO_CAPTURE_TYPE = "pulse-memo";
+const MEMO_WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
+
+function memoPad(n) {
+  return String(n).padStart(2, "0");
+}
+
+function memoClock(date) {
+  return `${memoPad(date.getHours())}:${memoPad(date.getMinutes())}`;
+}
+
+function buildMemoBlock(text, date) {
+  const body = String(text ?? "").replace(/\r\n?/g, "\n").trim();
+  const lines = body.split("\n").map((line) => (line.trim() ? `> ${line.replace(/\s+$/, "")}` : ">"));
+  return [`> [!memo] ${memoClock(date)}`, ...lines].join("\n");
+}
+
+function extractMemoTags(text) {
+  const clean = String(text ?? "").replace(/`[^`]*`/g, " ");
+  const tags = [];
+  const re = /(^|\s)#([^\s#`]+)/g;
+  let match;
+  while ((match = re.exec(clean))) {
+    const tag = match[2].replace(/[，。,.;；:：!！?？)）\]]+$/, "");
+    if (!tag || /^\d+$/.test(tag) || tags.includes(tag)) continue;
+    tags.push(tag);
+  }
+  return tags;
+}
+
+function parseMemoBlocks(content) {
+  const lines = String(content ?? "").split("\n");
+  const memos = [];
+  let fence = null;
+  for (let i = 0; i < lines.length; i++) {
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(lines[i]);
+    if (fence) {
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = null;
+      continue;
+    }
+    if (marker && (marker[1][0] !== "`" || !marker[2].includes("`"))) { fence = marker[1]; continue; }
+    const header = MEMO_HEADER_RE.exec(lines[i]);
+    if (!header) continue;
+    let end = i;
+    while (end + 1 < lines.length && /^>/.test(lines[end + 1]) && !MEMO_HEADER_RE.test(lines[end + 1])) end++;
+    const body = lines.slice(i + 1, end + 1).map((line) => line.replace(/^>\s?/, ""));
+    const links = [];
+    const textLines = [];
+    let id;
+    for (const line of body) {
+      const identity = MEMO_ID_RE.exec(line.trim());
+      if (identity) { id = identity[1]; continue; }
+      const link = MEMO_LINK_RE.exec(line.trim());
+      if (link) links.push(link[1]);
+      else textLines.push(line);
+    }
+    const text = textLines.join("\n").trim();
+    memos.push({
+      ...(id ? { id } : {}),
+      time: header[1] ? header[1].padStart(5, "0") : "",
+      text,
+      tags: extractMemoTags(text),
+      links,
+      startLine: i,
+      endLine: end,
+      raw: lines.slice(i, end + 1).join("\n"),
+    });
+    i = end;
+  }
+  return memos;
+}
+
+function memoHeadingLevel(line) {
+  const match = /^(#{1,6})\s/.exec(line);
+  return match ? match[1].length : 0;
+}
+
+function insertMemoBlock(content, block, heading) {
+  const text = String(content ?? "");
+  const trimmedEnd = text.replace(/\s+$/, "");
+  const headingLine = String(heading ?? "").trim();
+  if (!headingLine) return trimmedEnd ? `${trimmedEnd}\n\n${block}\n` : `${block}\n`;
+  const lines = text.split("\n");
+  const at = lines.findIndex((line) => line.trim() === headingLine);
+  if (at < 0) return trimmedEnd ? `${trimmedEnd}\n\n${headingLine}\n\n${block}\n` : `${headingLine}\n\n${block}\n`;
+  const level = memoHeadingLevel(headingLine) || 6;
+  let next = lines.length;
+  for (let i = at + 1; i < lines.length; i++) {
+    const lv = memoHeadingLevel(lines[i]);
+    if (lv && lv <= level) { next = i; break; }
+  }
+  let last = next - 1;
+  while (last > at && !lines[last].trim()) last--;
+  const before = lines.slice(0, last + 1);
+  const after = lines.slice(next);
+  const merged = [...before, "", ...block.split("\n")];
+  if (after.length) return [...merged, "", ...after].join("\n");
+  return `${merged.join("\n")}\n`;
+}
+
+function locateMemo(lines, memo) {
+  // Match an entire parsed block, never a prefix or a fenced example.
+  const hits = parseMemoBlocks(lines.join("\n")).filter((m) => m.raw === memo.raw);
+  const atLine = hits.find((m) => m.startLine === memo.startLine);
+  if (atLine) return atLine.startLine;
+  if (hits.length === 1) return hits[0].startLine;
+  throw new Error("这条速记已被修改或找不到，请刷新后再试");
+}
+
+function removeMemoBlock(content, memo) {
+  const lines = String(content ?? "").split("\n");
+  const start = locateMemo(lines, memo);
+  const end = start + memo.raw.split("\n").length - 1;
+  let from = start;
+  let to = end;
+  if (to + 1 < lines.length && !lines[to + 1].trim()) to++;
+  else if (from > 0 && !lines[from - 1].trim()) from--;
+  lines.splice(from, to - from + 1);
+  return lines.join("\n");
+}
+
+function appendMemoLink(content, memo, linkText) {
+  const lines = String(content ?? "").split("\n");
+  const start = locateMemo(lines, memo);
+  const end = start + memo.raw.split("\n").length - 1;
+  lines.splice(end + 1, 0, `> → [[${linkText}]]`);
+  return lines.join("\n");
+}
+
+function memoKeyToDay(key) {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function memoStats(memos, todayKey, { weeks = 12, weekStartsOn = "sunday" } = {}) {
+  const byDate = new Map();
+  for (const m of memos) byDate.set(m.date, (byDate.get(m.date) || 0) + 1);
+  const today = memoKeyToDay(todayKey);
+  const firstDow = weekStartsOn === "monday" ? 1 : 0;
+  const end = new Date(today);
+  end.setDate(end.getDate() + ((firstDow + 6 - today.getDay() + 7) % 7));
+  const start = new Date(end);
+  start.setDate(start.getDate() - weeks * 7 + 1);
+  const cells = [];
+  let recent = 0;
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const key = dateKey(d);
+    const count = byDate.get(key) || 0;
+    if (key <= todayKey) recent += count;
+    cells.push({ date: key, count, future: key > todayKey });
+  }
+  let streak = 0;
+  const cursor = new Date(today);
+  if (!byDate.get(todayKey)) cursor.setDate(cursor.getDate() - 1);
+  while (byDate.get(dateKey(cursor))) { streak++; cursor.setDate(cursor.getDate() - 1); }
+  const monthPrefix = todayKey.slice(0, 7);
+  const month = memos.filter((m) => m.date.startsWith(monthPrefix)).length;
+  return { cells, recent, streak, month, total: memos.length, byDate };
+}
+
+function formatMemoDate(date, format, momentFn) {
+  if (momentFn) return momentFn(date).format(format);
+  const tokens = { YYYY: String(date.getFullYear()), YY: String(date.getFullYear()).slice(-2), MM: memoPad(date.getMonth() + 1), M: String(date.getMonth() + 1), DD: memoPad(date.getDate()), D: String(date.getDate()) };
+  return String(format).replace(/\[([^\]]*)\]|YYYY|YY|MM|M|DD|D/g, (token, literal) => (literal !== undefined ? literal : tokens[token]));
+}
+
+function dailyNotePath(date, { folder = "", format = "YYYY-MM-DD" } = {}, momentFn = null) {
+  const dir = String(folder || "").replace(/^\/+|\/+$/g, "");
+  const name = formatMemoDate(date, format || "YYYY-MM-DD", momentFn);
+  return `${dir ? `${dir}/` : ""}${name}.md`;
+}
+
+function dailyDateFromPath(path, { folder = "", format = "YYYY-MM-DD" } = {}, momentFn = null) {
+  const dir = String(folder || "").replace(/^\/+|\/+$/g, "");
+  if (!path.endsWith(".md")) return null;
+  if (dir && !path.startsWith(`${dir}/`)) return null;
+  const rel = path.slice(dir ? dir.length + 1 : 0, -3);
+  const fmt = format || "YYYY-MM-DD";
+  if (momentFn) {
+    const parsed = momentFn(rel, fmt, true);
+    return parsed.isValid() ? parsed.format("YYYY-MM-DD") : null;
+  }
+  const groups = [];
+  const pattern = fmt.replace(/\[([^\]]*)\]|YYYY|YY|MM|M|DD|D|[.*+?^${}()|\\]/g, (token, literal) => {
+    if (literal !== undefined) return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (/^[.*+?^${}()|\\]$/.test(token)) return `\\${token}`;
+    groups.push(token);
+    return { YYYY: "(\\d{4})", YY: "(\\d{2})", MM: "(\\d{2})", M: "(\\d{1,2})", DD: "(\\d{2})", D: "(\\d{1,2})" }[token];
+  });
+  const match = new RegExp(`^${pattern}$`).exec(rel);
+  if (!match) return null;
+  const parts = {};
+  groups.forEach((token, k) => { parts[token[0]] = token === "YY" ? `20${match[k + 1]}` : match[k + 1]; });
+  if (!parts.Y || !parts.M || !parts.D) return null;
+  const key = `${parts.Y}-${memoPad(parts.M)}-${memoPad(parts.D)}`;
+  return dateKey(memoKeyToDay(key)) === key ? key : null;
+}
+
+function memoYaml(value) {
+  return JSON.stringify(String(value));
+}
+
+function buildAnksMemoFile({ date, topic, contract, now = new Date() }) {
+  const routing = contract?.routing?.[MEMO_CAPTURE_TYPE];
+  if (!contract?.contract || !routing) throw new Error(`ANKS 采集合约里没有 ${MEMO_CAPTURE_TYPE} 类型，请先在 ${ANKS_CAPTURE_CONTRACT_PATH} 登记`);
+  const hex = Math.floor(Math.random() * 0x10000).toString(16).toUpperCase().padStart(4, "0");
+  const lines = [
+    "---",
+    `id: ${memoYaml(`RAW-${date.replace(/-/g, "")}-MEMO-${hex}`)}`,
+    "type: raw",
+    `topic: ${memoYaml(topic)}`,
+    `owner: ${memoYaml(`topic:${topic}`)}`,
+    `capture_type: ${MEMO_CAPTURE_TYPE}`,
+    `capture_contract: ${contract.contract}`,
+    `source_title: ${memoYaml(`${date} 速记`)}`,
+    `clipped_at: ${memoYaml(now.toISOString())}`,
+    ...Object.entries(routing).map(([k, v]) => `${k}: ${v}`),
+    `memo_date: ${memoYaml(date)}`,
+    "---",
+    "",
+    `# ${date} 速记`,
+    "",
+  ];
+  return lines.join("\n");
+}
+
+/** 把一行拆成普通文本与可点击标签，只认 extractMemoTags 认可的标签。 */
+function splitMemoLine(line, tags) {
+  const pieces = [];
+  const re = /(^|\s)#([^\s#`]+)/g;
+  let last = 0;
+  let match;
+  while ((match = re.exec(line))) {
+    const name = match[2].replace(/[，。,.;；:：!！?？)）\]]+$/, "");
+    if (!tags.includes(name)) continue;
+    const at = match.index + match[1].length;
+    if (at > last) pieces.push({ text: line.slice(last, at) });
+    pieces.push({ tag: name });
+    last = at + 1 + name.length;
+  }
+  if (last < line.length) pieces.push({ text: line.slice(last) });
+  return pieces;
+}
+
+function buildMemoQuestionNote({ memo, topic, folder, now = new Date() }) {
+  const title = memoSafeTitle(memo.text);
+  const date = dateKey(now);
+  const id = `QST-${date.replace(/-/g, "")}-${memoPad(now.getHours())}${memoPad(now.getMinutes())}${memoPad(now.getSeconds())}`;
+  const source = memo.path.replace(/\.md$/, "");
+  const content = [
+    "---",
+    "type: question",
+    `id: ${memoYaml(id)}`,
+    `topic: ${memoYaml(topic)}`,
+    "status: backlog",
+    `created: ${date}`,
+    `updated: ${date}`,
+    `owner: ${memoYaml(`topic:${topic}`)}`,
+    "confidence: n/a",
+    "priority: medium",
+    "related_ids: []",
+    "---",
+    "",
+    `# ${title}`,
+    "",
+    `> [!quote] 来自速记 [[${source}]] ${memo.date} ${memo.time}`,
+    ...memo.text.split("\n").map((l) => `> ${l}`),
+    "",
+    "## 为什么重要",
+    "",
+    "## 当前理解",
+    "",
+    "## 什么证据可以解决它",
+    "",
+    "## 研究日志",
+    "",
+  ].join("\n");
+  return { path: `${folder}/${title}.md`, title, id, content };
+}
+
+function buildMemoNote({ memo, folder }) {
+  const title = memoSafeTitle(memo.text);
+  const source = memo.path.replace(/\.md$/, "");
+  const content = [
+    `> [!quote] 来自速记 [[${source}]] ${memo.date} ${memo.time}`,
+    ...memo.text.split("\n").map((l) => `> ${l}`),
+    "",
+    "",
+  ].join("\n");
+  const dir = String(folder || "").replace(/^\/+|\/+$/g, "");
+  return { path: `${dir ? `${dir}/` : ""}${title}.md`, title, content };
+}
+
+function buildMemoNowLine(memo) {
+  const first = memo.text.split("\n").map((l) => l.trim()).find(Boolean) || "速记";
+  return `- [ ] ${first} [[${memo.path.replace(/\.md$/, "")}]]`;
+}
+
+/* ---------- flomo 核心：搜索筛选、标签树、标签改名、每日回顾、去年今日、URL 入口 ---------- */
+
+const MEMO_TAG_TAIL = "(?=$|[\\s/，。,.;；:：!！?？)）\\]])";
+
+function memoHasTag(memo, tag) {
+  return memo.tags.some((t) => t === tag || t.startsWith(`${tag}/`));
+}
+
+function filterMemos(memos, { query = "", from = "", to = "", includeTags = [], excludeTags = [], untagged = false, converted = null } = {}) {
+  const terms = String(query).toLowerCase().split(/\s+/).filter(Boolean);
+  return memos.filter((m) => {
+    if (from && m.date < from) return false;
+    if (to && m.date > to) return false;
+    if (untagged && m.tags.length) return false;
+    if (includeTags.length && !includeTags.some((t) => memoHasTag(m, t))) return false;
+    if (excludeTags.some((t) => memoHasTag(m, t))) return false;
+    if (converted === true && !m.links.length) return false;
+    if (converted === false && m.links.length) return false;
+    if (terms.length) {
+      const text = m.text.toLowerCase();
+      if (!terms.every((term) => text.includes(term))) return false;
+    }
+    return true;
+  });
+}
+
+function buildTagTree(memos) {
+  const root = { children: new Map() };
+  for (const m of memos) {
+    const touched = new Set();
+    for (const tag of m.tags) {
+      const parts = tag.split("/").filter(Boolean);
+      for (let i = 1; i <= parts.length; i++) touched.add(parts.slice(0, i).join("/"));
+    }
+    for (const path of touched) {
+      let node = root;
+      const parts = path.split("/");
+      parts.forEach((name, i) => {
+        const key = parts.slice(0, i + 1).join("/");
+        if (!node.children.has(name)) node.children.set(name, { name, path: key, count: 0, children: new Map() });
+        node = node.children.get(name);
+      });
+      node.count++;
+    }
+  }
+  const finish = (map) => [...map.values()]
+    .map((n) => ({ name: n.name, path: n.path, count: n.count, children: finish(n.children) }))
+    .sort((a, b) => b.count - a.count);
+  return finish(root.children);
+}
+
+function validTagName(tag) {
+  return typeof tag === "string" && /^[^\s#`]+$/.test(tag) && !/^\d+$/.test(tag) && !tag.startsWith("/") && !tag.endsWith("/");
+}
+
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function renameTagInText(text, from, to) {
+  if (!validTagName(from) || !validTagName(to)) throw new Error("标签名不能为空，也不能包含空格、# 或反引号");
+  const re = new RegExp(`(^|\\s)#${escapeRegExp(from)}${MEMO_TAG_TAIL}`, "g");
+  // 行内代码里的 # 不是标签：只改反引号外面的片段
+  return String(text).split(/(`[^`]*`)/).map((part) => (part.startsWith("`") ? part : part.replace(re, (_, lead) => `${lead}#${to}`))).join("");
+}
+
+function renameTagInContent(content, from, to) {
+  const lines = String(content ?? "").split("\n");
+  let changed = 0;
+  for (const m of parseMemoBlocks(content)) {
+    let touched = false;
+    for (let i = m.startLine + 1; i <= m.endLine; i++) {
+      const match = /^(>\s?)(.*)$/.exec(lines[i]);
+      if (!match || MEMO_LINK_RE.test(match[2].trim())) continue;
+      const next = renameTagInText(match[2], from, to);
+      if (next !== match[2]) { lines[i] = match[1] + next; touched = true; }
+    }
+    if (touched) changed++;
+  }
+  return { content: lines.join("\n"), changed };
+}
+
+function memoHash(text) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h;
+}
+
+function memoDaysBefore(todayKey, days) {
+  const d = memoKeyToDay(todayKey);
+  d.setDate(d.getDate() - days);
+  return dateKey(d);
+}
+
+/** 每日回顾：以日期为种子挑选，同一天打开结果不变；不含今天的速记。 */
+function selectDailyReview(memos, todayKey, { count = 6, tags = [], withinDays = 0, batch = 0 } = {}) {
+  const n = Math.max(1, Math.min(24, Number(count) || 6));
+  const earliest = withinDays > 0 ? memoDaysBefore(todayKey, withinDays) : "";
+  return memos
+    .filter((m) => m.date < todayKey && (!earliest || m.date >= earliest) && (!tags.length || tags.some((t) => memoHasTag(m, t))))
+    .map((m) => ({ m, score: memoHash(`${todayKey}#${batch}|${m.path}|${m.date} ${m.time}|${m.text}`) }))
+    .sort((a, b) => a.score - b.score)
+    .slice(0, n)
+    .map((x) => x.m);
+}
+
+function onThisDay(memos, todayKey) {
+  const groups = [];
+  const today = memoKeyToDay(todayKey);
+  const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+  if (lastMonth.getDate() === today.getDate()) {
+    const key = dateKey(lastMonth);
+    const list = memos.filter((m) => m.date === key);
+    if (list.length) groups.push({ label: "上月今日", date: key, memos: list });
+  }
+  const md = todayKey.slice(5);
+  const years = new Map();
+  for (const m of memos) {
+    if (m.date.slice(5) !== md || m.date >= todayKey) continue;
+    const ago = today.getFullYear() - Number(m.date.slice(0, 4));
+    if (!years.has(ago)) years.set(ago, []);
+    years.get(ago).push(m);
+  }
+  for (const ago of [...years.keys()].sort((a, b) => a - b)) {
+    groups.push({ label: `${ago} 年前`, date: years.get(ago)[0].date, memos: years.get(ago) });
+  }
+  return groups;
+}
+
+function parseMemoUrlParams(params = {}) {
+  let text = String(params.text ?? "").replace(/\r\n?/g, "\n").trim();
+  const open = ["1", "true", "yes"].includes(String(params.open ?? "").toLowerCase());
+  if (!text) return { text: "", open: true };
+  const existing = extractMemoTags(text);
+  const extra = String(params.tags ?? "").split(/[,，\s]+/).map((t) => t.replace(/^#+/, "").trim()).filter((t) => validTagName(t) && !existing.includes(t));
+  if (extra.length) text = `${text} ${extra.map((t) => `#${t}`).join(" ")}`;
+  return { text, open };
+}
+
+/* ---------- 相关笔记与随机漫步：纯本地 TF-IDF，中文双字切分；不联网、不接 AI ---------- */
+
+const MEMO_CJK_RUN = /[㐀-鿿豈-﫿]+/g;
+
+function tokenizeMemo(memo) {
+  const body = String(memo.text || "")
+    .replace(/(^|\s)#[^\s#`]+/g, " ")
+    .replace(/\[\[[^\]]*\]\]/g, " ")
+    .replace(/https?:\/\/\S+/g, " ")
+    .toLowerCase();
+  const tokens = [];
+  for (const run of body.match(MEMO_CJK_RUN) || []) {
+    for (let i = 0; i + 1 < run.length; i++) tokens.push(run.slice(i, i + 2));
+  }
+  for (const word of body.replace(MEMO_CJK_RUN, " ").match(/[a-z0-9][a-z0-9_-]+/g) || []) tokens.push(word);
+  for (const tag of memo.tags || []) {
+    const parts = tag.split("/").filter(Boolean);
+    for (let i = 1; i <= parts.length; i++) tokens.push(`#${parts.slice(0, i).join("/")}`);
+  }
+  return tokens;
+}
+
+function buildMemoIndex(memos) {
+  const docs = memos.map((m) => {
+    const tf = new Map();
+    for (const t of tokenizeMemo(m)) tf.set(t, (tf.get(t) || 0) + 1);
+    return tf;
+  });
+  const df = new Map();
+  for (const tf of docs) for (const t of tf.keys()) df.set(t, (df.get(t) || 0) + 1);
+  const n = memos.length || 1;
+  const vectors = docs.map((tf) => {
+    const v = new Map();
+    let norm = 0;
+    for (const [t, c] of tf) {
+      const w = (1 + Math.log(c)) * Math.log(1 + n / df.get(t)) * (t.startsWith("#") ? 2 : 1);
+      v.set(t, w);
+      norm += w * w;
+    }
+    return { v, norm: Math.sqrt(norm) || 1 };
+  });
+  return { memos, vectors, pos: new Map(memos.map((m, i) => [m, i])) };
+}
+
+function relatedMemos(memo, index, { limit = 5, minScore = 0.1 } = {}) {
+  const i = index.pos.get(memo);
+  if (i === undefined) return [];
+  const a = index.vectors[i];
+  const out = [];
+  index.vectors.forEach((b, j) => {
+    if (j === i) return;
+    let dot = 0;
+    const shared = [];
+    const [small, large] = a.v.size <= b.v.size ? [a.v, b.v] : [b.v, a.v];
+    for (const [t, w] of small) {
+      const other = large.get(t);
+      if (other === undefined) continue;
+      dot += w * other;
+      shared.push([t, w * other]);
+    }
+    const score = dot / (a.norm * b.norm);
+    if (score >= minScore) out.push({ memo: index.memos[j], score, shared: explainShared(memo, shared.sort((x, y) => y[1] - x[1]).slice(0, 8).map((s) => s[0])) });
+  });
+  return out.sort((x, y) => y.score - x.score).slice(0, limit);
+}
+
+/** 把共同的中文双字按原文拼回完整片段（卡片/片笔/笔记 → 卡片笔记），标签与英文词原样保留，最多 3 个。 */
+function explainShared(memo, tokens, limit = 3) {
+  const set = new Set(tokens);
+  const phraseOf = new Map();
+  const body = String(memo.text || "").replace(/(^|\s)#[^\s#`]+/g, " ").toLowerCase();
+  for (const run of body.match(MEMO_CJK_RUN) || []) {
+    let start = -1;
+    for (let i = 0; i <= run.length - 1; i++) {
+      const hit = i + 1 < run.length && set.has(run.slice(i, i + 2));
+      if (hit && start < 0) start = i;
+      if (!hit && start >= 0) {
+        const phrase = run.slice(start, i + 1);
+        for (let k = start; k < i; k++) if (!phraseOf.has(run.slice(k, k + 2))) phraseOf.set(run.slice(k, k + 2), phrase);
+        start = -1;
+      }
+    }
+  }
+  const out = [];
+  for (const t of tokens) {
+    const label = phraseOf.get(t) || t;
+    if (!out.includes(label)) out.push(label);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/** 漫步一步：在前三条未走过的相关速记里随机挑一条；没有相关的就随机跳到一条没走过的。 */
+function walkStep(current, index, visited, rng = Math.random) {
+  const related = relatedMemos(current, index, { limit: 10 }).filter((r) => !visited.has(r.memo));
+  if (related.length) {
+    const pick = related[Math.min(related.length, 3) > 1 ? Math.floor(rng() * Math.min(related.length, 3)) : 0];
+    return { memo: pick.memo, via: "related", shared: pick.shared, score: pick.score };
+  }
+  const rest = index.memos.filter((m) => !visited.has(m));
+  if (!rest.length) return null;
+  return { memo: rest[Math.min(rest.length - 1, Math.floor(rng() * rest.length))], via: "random", shared: [], score: 0 };
+}
+
+function pickRandomMemo(memos, rng = Math.random) {
+  if (!memos.length) return null;
+  return memos[Math.min(memos.length - 1, Math.floor(rng() * memos.length))];
+}
+
+function memoSafeTitle(text) {
+  const first = String(text ?? "").split("\n").map((l) => l.trim()).find(Boolean) || "速记";
+  return first.replace(/#[^\s#]+/g, "").replace(/[\\/:*?"<>|#^\[\]]/g, "-").replace(/\s+/g, " ").trim().slice(0, 40) || "速记";
+}
+
+class MemoStore {
+  constructor(app, getSettings, momentFn = null) {
+    this.app = app;
+    this.getSettings = getSettings;
+    this.momentFn = momentFn;
+  }
+
+  settings() {
+    return this.getSettings() || {};
+  }
+
+  dailyOptions() {
+    const s = this.settings();
+    const core = this.app.internalPlugins?.getPluginById?.("daily-notes");
+    const options = (core?.enabled !== false && core?.instance?.options) || {};
+    return {
+      folder: s.memoDailyFolder || options.folder || "",
+      format: s.memoDailyFormat || options.format || "YYYY-MM-DD",
+      template: options.template || "",
+    };
+  }
+
+  async exists(path) {
+    try { return await this.app.vault.adapter.exists(path); } catch (_) { return false; }
+  }
+
+  async anksAvailable() {
+    if (!(await this.exists("Sidecar/bin/anks"))) return false;
+    return this.app.vault.getMarkdownFiles().some((f) => f.path.startsWith("Topics/"));
+  }
+
+  async resolveMode() {
+    const mode = this.settings().memoMode || "auto";
+    if (mode === "general" || mode === "anks") return mode;
+    return (await this.anksAvailable()) ? "anks" : "general";
+  }
+
+  anksTopics() {
+    const topics = new Set();
+    for (const f of this.app.vault.getMarkdownFiles()) {
+      const m = /^Topics\/([^/]+)\//.exec(f.path);
+      if (m) topics.add(m[1]);
+    }
+    return [...topics].sort();
+  }
+
+  /** 用户选的 Topic；只有一个 Topic 时直接用它；多个且没选时返回 null，不替用户挑。 */
+  anksTopic() {
+    const chosen = String(this.settings().memoAnksTopic || "").trim();
+    if (chosen) return chosen;
+    const topics = this.anksTopics();
+    return topics.length === 1 ? topics[0] : null;
+  }
+
+  async readJson(path) {
+    if (!(await this.exists(path))) return null;
+    try { return JSON.parse(await this.app.vault.adapter.read(path)); } catch (_) { return null; }
+  }
+
+  async anksTarget(date, topic = this.anksTopic()) {
+    if (!topic) {
+      throw new Error(this.anksTopics().length
+        ? "库里有多个 Topic，请先在速记输入框下方或设置里选择写入哪个 Topic"
+        : "库里没有 Topics/<topic>，无法使用 ANKS 模式");
+    }
+    const contract = await this.readJson(ANKS_CAPTURE_CONTRACT_PATH);
+    if (!contract) throw new Error(`找不到 ANKS 采集合约 ${ANKS_CAPTURE_CONTRACT_PATH}`);
+    const routing = contract.routing?.[MEMO_CAPTURE_TYPE];
+    if (!routing) throw new Error(`ANKS 采集合约里没有 ${MEMO_CAPTURE_TYPE} 类型，请先在 ${ANKS_CAPTURE_CONTRACT_PATH} 登记`);
+    let folder = `Topics/${topic}/raw/inbox/scratch`;
+    const route = await this.readJson(ANKS_ROUTE_CONTRACT_PATH);
+    const rules = (route?.data || route)?.rules || [];
+    const rule = rules.find((r) => r.group === "rules" && r.match?.type === "raw" && Object.entries(routing).every(([k, v]) => r.match?.[k] === v) && Object.keys(r.match).length === Object.keys(routing).length + 1);
+    if (rule?.target) folder = rule.target.replace("{topic}", topic);
+    return { path: `${folder}/${date} 速记.md`, folder, topic, contract };
+  }
+
+  async ensureFolder(folder) {
+    const parts = folder.split("/").filter(Boolean);
+    for (let i = 1; i <= parts.length; i++) {
+      const p = parts.slice(0, i).join("/");
+      if (!this.app.vault.getAbstractFileByPath(p)) {
+        try { await this.app.vault.createFolder(p); } catch (_) { /* 并发创建 */ }
+      }
+    }
+  }
+
+  async newDailyContent(date) {
+    const { template } = this.dailyOptions();
+    if (!template) return "";
+    const tplPath = template.endsWith(".md") ? template : `${template}.md`;
+    const file = this.app.vault.getAbstractFileByPath(tplPath);
+    if (!file || typeof this.app.vault.cachedRead !== "function") return "";
+    const raw = await this.app.vault.cachedRead(file);
+    const { format } = this.dailyOptions();
+    return raw
+      .replace(/{{\s*title\s*}}/gi, formatMemoDate(date, format, this.momentFn))
+      .replace(/{{\s*date(?::([^}]+))?\s*}}/gi, (_, f) => formatMemoDate(date, (f || format).trim(), this.momentFn))
+      .replace(/{{\s*time(?::([^}]+))?\s*}}/gi, (_, f) => (f ? formatMemoDate(date, f.trim(), this.momentFn) : memoClock(date)));
+  }
+
+  async capture(text, now = new Date()) {
+    if (!String(text ?? "").trim()) throw new Error("速记内容为空");
+    const block = buildMemoBlock(text, now);
+    const date = dateKey(now);
+    const mode = await this.resolveMode();
+    const heading = mode === "anks" ? "" : (this.settings().memoHeading ?? "## 速记");
+    let path;
+    let initial;
+    if (mode === "anks") {
+      const target = await this.anksTarget(date);
+      path = target.path;
+      if (!this.app.vault.getAbstractFileByPath(path)) {
+        await this.ensureFolder(target.folder);
+        initial = buildAnksMemoFile({ date, topic: target.topic, contract: target.contract, now });
+      }
+    } else {
+      const options = this.dailyOptions();
+      path = dailyNotePath(now, options, this.momentFn);
+      if (!this.app.vault.getAbstractFileByPath(path)) {
+        const folder = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+        if (folder) await this.ensureFolder(folder);
+        initial = await this.newDailyContent(now);
+      }
+    }
+    let file = this.app.vault.getAbstractFileByPath(path);
+    if (!file) {
+      try {
+        file = await this.app.vault.create(path, insertMemoBlock(initial || "", block, heading));
+        return { path, mode, date };
+      } catch (error) {
+        file = this.app.vault.getAbstractFileByPath(path);
+        if (!file) throw error;
+      }
+    }
+    await this.app.vault.process(file, (content) => insertMemoBlock(content, block, heading));
+    return { path, mode, date };
+  }
+
+  sourceFiles() {
+    const options = this.dailyOptions();
+    const out = [];
+    for (const f of this.app.vault.getMarkdownFiles()) {
+      const fm = this.app.metadataCache.getFileCache(f)?.frontmatter;
+      const memoDate = fm?.memo_date ? String(fm.memo_date) : null;
+      const date = memoDate || dailyDateFromPath(f.path, options, this.momentFn);
+      if (date) out.push({ file: f, date });
+    }
+    return out;
+  }
+
+  async list() {
+    const memos = [];
+    for (const { file, date } of this.sourceFiles()) {
+      const content = await this.app.vault.cachedRead(file);
+      if (!content.includes("[!memo]")) continue;
+      for (const m of parseMemoBlocks(content)) memos.push({ ...m, date, path: file.path });
+    }
+    return memos.sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time) || b.startLine - a.startLine);
+  }
+
+  async previewTagRename(from) {
+    const hits = (await this.list()).filter((m) => memoHasTag(m, from));
+    return { memos: hits.length, files: new Set(hits.map((m) => m.path)).size };
+  }
+
+  /** 只改写速记块里的标签；日笔记其他段落里的同名标签保持原样。 */
+  async renameTag(from, to) {
+    if (!validTagName(from) || !validTagName(to)) throw new Error("标签名不能为空，也不能包含空格、# 或反引号");
+    const paths = [...new Set((await this.list()).filter((m) => memoHasTag(m, from)).map((m) => m.path))];
+    let memos = 0;
+    for (const path of paths) {
+      const file = this.app.vault.getAbstractFileByPath(path);
+      if (!file) continue;
+      await this.app.vault.process(file, (content) => {
+        const result = renameTagInContent(content, from, to);
+        memos += result.changed;
+        return result.content;
+      });
+    }
+    return { memos, files: paths.length };
+  }
+
+  async remove(memo) {
+    const file = this.app.vault.getAbstractFileByPath(memo.path);
+    if (!file) throw new Error("速记所在的文件已不存在");
+    await this.app.vault.process(file, (content) => removeMemoBlock(content, memo));
+  }
+
+  async ensureIdentity(memo) {
+    const file = this.app.vault.getAbstractFileByPath(memo.path);
+    if (!file) throw new Error("速记所在的文件已不存在");
+    let current;
+    let identityCreated = false;
+    await this.app.vault.process(file, (content) => {
+      const blocks = parseMemoBlocks(content);
+      if (memo.id) {
+        const hits = blocks.filter((m) => m.id === memo.id);
+        if (hits.length !== 1) throw new Error("速记标识已不存在或重复，请检查来源后再试");
+        current = hits[0];
+        return content;
+      }
+      const lines = content.split("\n");
+      const start = locateMemo(lines, memo);
+      current = blocks.find((m) => m.startLine === start);
+      const id = globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+      lines.splice(current.endLine + 1, 0, `> <!-- crisp-pulse-memo-id: ${id} -->`);
+      identityCreated = true;
+      const next = lines.join("\n");
+      current = parseMemoBlocks(next).find((m) => m.id === id);
+      return next;
+    });
+    Object.assign(memo, current);
+    return { ...current, path: memo.path, date: memo.date, identityCreated };
+  }
+
+  async linkBack(memo, linkText) {
+    const file = this.app.vault.getAbstractFileByPath(memo.path);
+    if (!file) throw new Error("速记所在的文件已不存在");
+    await this.app.vault.process(file, (content) => {
+      let current = memo;
+      if (memo.id) {
+        const hits = parseMemoBlocks(content).filter((m) => m.id === memo.id);
+        if (hits.length !== 1) throw new Error("速记标识已不存在或重复，请检查来源后再试");
+        current = hits[0];
+      }
+      if (current.links.includes(linkText)) return content;
+      return appendMemoLink(content, current, linkText);
+    });
+  }
+}
+
+class CrispPulseMemoInputModal extends Modal {
+  constructor(app, title, placeholder, initial, onSubmit) {
+    super(app);
+    this.titleText = title;
+    this.placeholder = placeholder;
+    this.initial = initial;
+    this.onSubmit = onSubmit;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.addClass("crisp-pulse-memo-modal");
+    contentEl.createEl("h3", { text: this.titleText });
+    const input = contentEl.createEl("textarea", { cls: "crisp-pulse-memo-modal-input", attr: { placeholder: this.placeholder, rows: "3" } });
+    input.value = this.initial || "";
+    const row = contentEl.createDiv({ cls: "crisp-pulse-memo-modal-row" });
+    const ok = row.createEl("button", { cls: "mod-cta", text: "确定" });
+    const errorEl = contentEl.createDiv({ cls: "crisp-pulse-memo-error", attr: { role: "alert" } });
+    const submit = async () => {
+      if (this.submitting) return;
+      const value = input.value.trim();
+      if (!value) return;
+      this.submitting = true;
+      ok.disabled = true;
+      input.readOnly = true;
+      errorEl.textContent = "";
+      try {
+        await this.onSubmit(value);
+        this.close();
+      } catch (error) {
+        errorEl.textContent = `未保存：${error.message || error}。内容已保留，请重试。`;
+      } finally {
+        this.submitting = false;
+        ok.disabled = false;
+        input.readOnly = false;
+      }
+    };
+    ok.addEventListener("click", submit);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); submit(); }
+    });
+    window.setTimeout(() => { input.focus(); input.select?.(); }, 0);
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
+class CrispPulseMemoView extends ItemView {
+  constructor(leaf, plugin) {
+    super(leaf);
+    this.plugin = plugin;
+    this.memos = [];
+    this.index = null;
+    this.limitDays = 30;
+    this.draft = "";
+    this.draftRevision = 0;
+    this.memoSubmitting = false;
+    this.memoMarkdownComponents = new Map();
+    this.mode = "general";
+    this.tab = "all";
+    this.showAdvanced = false;
+    this.reviewBatch = 0;
+    this.expanded = null;
+    this.walk = { trail: [], step: null };
+    this.resetFilters();
+  }
+
+  getViewType() { return VIEW_TYPE_MEMO; }
+  getDisplayText() { return "Crisp Pulse 速记"; }
+  getIcon() { return "feather"; }
+
+  async onOpen() {
+    await this.reload();
+  }
+
+  async onClose() {
+    this.clearMemoMarkdown();
+  }
+
+  clearMemoMarkdown(parent = null) {
+    for (const [el, component] of this.memoMarkdownComponents || []) {
+      if (!parent || parent.contains(el)) {
+        component.unload();
+        this.memoMarkdownComponents.delete(el);
+      }
+    }
+  }
+
+  async reload() {
+    try {
+      this.mode = await this.plugin.memoStore.resolveMode();
+      this.memos = await this.plugin.memoStore.list();
+      this.index = null;
+      this.error = null;
+    } catch (error) {
+      this.error = error.message || String(error);
+    }
+    this.render();
+  }
+
+  memoKey(m) {
+    return `${m.path}:${m.date} ${m.time}:${m.startLine}`;
+  }
+
+  getIndex() {
+    if (!this.index) this.index = buildMemoIndex(this.memos);
+    return this.index;
+  }
+
+  /** 列表刷新后旧对象失效，按键找回当前列表里的同一条速记。 */
+  findSame(m) {
+    if (!m) return null;
+    if (m.id) return this.memos.find((x) => x.id === m.id) || null;
+    const key = this.memoKey(m);
+    return this.memos.find((x) => this.memoKey(x) === key) || this.memos.find((x) => x.path === m.path && x.date === m.date && x.time === m.time && x.text === m.text) || null;
+  }
+
+  render() {
+    const root = this.containerEl.children[1];
+    const doc = root.ownerDocument;
+    const active = doc?.activeElement;
+    if (this.composerComposing && root.contains(active)) { this.memoRenderPending = true; return; }
+    const refocusComposer = root.contains(active) && active.classList?.contains("crisp-pulse-memo-input")
+      ? { start: active.selectionStart, end: active.selectionEnd, direction: active.selectionDirection, scroll: active.scrollTop } : null;
+    const searchFocus = root.contains(active) && active.classList?.contains("crisp-pulse-memo-search") ? { start: active.selectionStart, end: active.selectionEnd } : null;
+    const scroll = root.scrollTop;
+    this.clearMemoMarkdown();
+    root.empty();
+    root.addClass("crisp-pulse-memo-view");
+    this.renderNavHeader(root, searchFocus);
+    const body = root.createDiv({ cls: "crisp-pulse-memo-body" });
+    this.renderComposer(body, refocusComposer);
+    if (this.error) body.createDiv({ cls: "crisp-pulse-memo-error", text: this.error });
+    this.renderStats(body, memoStats(this.memos, getTodayKey(), { weeks: 12, weekStartsOn: this.plugin.settings.weekStartsOn }));
+    this.listEl = null;
+    this.renderTabs(body);
+    root.scrollTop = scroll;
+  }
+
+  /* 顶部沿用 Obsidian 原生 nav-header：按钮行 + 搜索框，与左侧文件列表同高同样式 */
+  renderNavHeader(root, searchFocus) {
+    const header = root.createDiv({ cls: "nav-header crisp-pulse-memo-nav" });
+    const buttons = header.createDiv({ cls: "nav-buttons-container" });
+    const navButton = (icon, label, onClick, isActive = false) => {
+      const b = buttons.createDiv({ cls: `clickable-icon nav-action-button${isActive ? " is-active" : ""}`, attr: { "aria-label": label, role: "button", tabindex: "0" } });
+      setIcon(b, icon);
+      b.addEventListener("click", onClick);
+      b.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(e); } });
+      return b;
+    };
+    navButton("refresh-cw", "刷新速记", () => this.reload());
+    navButton("filter", "高级筛选", () => { this.showAdvanced = !this.showAdvanced; this.tab = "all"; this.render(); }, this.showAdvanced || this.isFiltered());
+    navButton("shuffle", "随机漫步", () => { this.startWalk(); this.tab = "walk"; this.render(); }, this.tab === "walk");
+    navButton("settings", "速记设置", () => {
+      const setting = this.app.setting;
+      if (setting?.open) { setting.open(); setting.openTabById?.(this.plugin.manifest.id); }
+    });
+    const container = header.createDiv({ cls: "search-input-container" });
+    const search = container.createEl("input", { cls: "crisp-pulse-memo-search", attr: { type: "search", enterkeyhint: "search", spellcheck: "false", placeholder: "搜索速记…", "aria-label": "搜索速记（空格分隔多个词）" } });
+    search.value = this.filters.query;
+    const clear = container.createDiv({ cls: "search-input-clear-button", attr: { "aria-label": "清空搜索" } });
+    clear.toggleClass("is-hidden", !this.filters.query);
+    clear.addEventListener("click", () => { this.filters.query = ""; this.render(); });
+    search.addEventListener("input", () => {
+      this.filters.query = search.value;
+      clear.toggleClass("is-hidden", !search.value);
+      if (this.tab !== "all") {
+        this.tab = "all";
+        const pos = search.selectionStart;
+        this.render();
+        const again = this.containerEl.children[1].querySelector(".crisp-pulse-memo-search");
+        again?.focus();
+        again?.setSelectionRange?.(pos, pos);
+      } else {
+        this.renderList();
+      }
+    });
+    if (searchFocus) {
+      window.setTimeout(() => { search.focus(); search.setSelectionRange?.(searchFocus.start, searchFocus.end); }, 0);
+    }
+  }
+
+  renderComposer(root, refocus) {
+    const box = root.createDiv({ cls: "crisp-pulse-memo-composer" });
+    const input = box.createEl("textarea", { cls: "crisp-pulse-memo-input", attr: { placeholder: "现在的想法是…", rows: "3", "aria-label": "速记内容" } });
+    input.value = this.draft;
+    input.addEventListener("input", () => { this.draft = input.value; this.draftRevision = (this.draftRevision || 0) + 1; });
+    input.addEventListener("compositionstart", () => { this.composerComposing = true; });
+    input.addEventListener("compositionend", () => {
+      this.composerComposing = false;
+      this.draft = input.value;
+      if (this.memoRenderPending) { this.memoRenderPending = false; this.render(); }
+    });
+    const bar = box.createDiv({ cls: "crisp-pulse-memo-toolbar" });
+    const tool = (icon, label, fn) => {
+      const b = bar.createEl("button", { cls: "clickable-icon crisp-pulse-memo-tool", attr: { "aria-label": label, type: "button" } });
+      setIcon(b, icon);
+      b.addEventListener("mousedown", (e) => e.preventDefault());
+      b.addEventListener("click", () => { fn(); this.draft = input.value; this.draftRevision = (this.draftRevision || 0) + 1; input.focus(); });
+    };
+    const insertAt = (text, wrap = "") => {
+      const { selectionStart: s, selectionEnd: e, value } = input;
+      const selected = value.slice(s, e);
+      const next = wrap ? `${wrap}${selected}${wrap}` : text;
+      input.setRangeText(next, s, e, "end");
+      if (wrap && !selected) input.setSelectionRange(s + wrap.length, s + wrap.length);
+    };
+    tool("hash", "插入标签 #", () => {
+      const before = input.value.slice(0, input.selectionStart);
+      insertAt(before && !/\s$/.test(before) ? " #" : "#");
+    });
+    tool("list", "列表", () => {
+      const { selectionStart: s, value } = input;
+      const lineStart = value.lastIndexOf("\n", s - 1) + 1;
+      input.setRangeText("- ", lineStart, lineStart, "end");
+    });
+    tool("bold", "加粗", () => insertAt("", "**"));
+    const topics = this.mode === "anks" ? this.plugin.memoStore.anksTopics() : [];
+    const meta = bar.createDiv({ cls: "crisp-pulse-memo-toolbar-meta" });
+    if (topics.length > 1) {
+      const select = meta.createEl("select", { cls: "crisp-pulse-memo-topic dropdown", attr: { "aria-label": "写入的 Topic" } });
+      select.createEl("option", { text: "选择 Topic", attr: { value: "" } });
+      for (const t of topics) select.createEl("option", { text: t, attr: { value: t } });
+      select.value = this.plugin.settings.memoAnksTopic || "";
+      select.addEventListener("change", async () => {
+        this.plugin.settings.memoAnksTopic = select.value;
+        await this.plugin.savePluginData();
+      });
+    } else {
+      meta.createSpan({ cls: "crisp-pulse-memo-mode", text: this.mode === "anks" ? `ANKS · ${topics[0] || ""}` : "日笔记" });
+    }
+    const send = bar.createEl("button", { cls: "crisp-pulse-memo-send", attr: { "aria-label": "记录（⏎）· 换行（⇧⏎）", type: "button" } });
+    setIcon(send, "send");
+    send.disabled = !!this.memoSubmitting;
+    const submit = async () => {
+      if (this.memoSubmitting || !input.value.trim()) return;
+      const submitted = input.value;
+      const revision = this.draftRevision;
+      this.memoSubmitting = true;
+      send.disabled = true;
+      try {
+        await this.plugin.memoStore.capture(submitted, new Date());
+        if (!this.composerComposing && this.draftRevision === revision && this.draft === submitted) this.draft = "";
+        await this.reload();
+        this.containerEl.children[1].querySelector(".crisp-pulse-memo-input")?.focus();
+      } catch (error) {
+        new Notice(`Crisp Pulse 速记：${error.message || error}`, 8000);
+      } finally {
+        this.memoSubmitting = false;
+        const button = this.containerEl.children[1].querySelector(".crisp-pulse-memo-send");
+        if (button) button.disabled = false;
+      }
+    };
+    send.addEventListener("click", submit);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); submit(); }
+    });
+    if (refocus) window.setTimeout(() => {
+      if (!input.isConnected) return;
+      input.focus();
+      input.setSelectionRange(refocus.start, refocus.end, refocus.direction);
+      input.scrollTop = refocus.scroll;
+    }, 0);
+  }
+
+  renderStats(root, stats) {
+    const card = root.createDiv({ cls: "crisp-pulse-memo-stats" });
+    const big = card.createDiv({ cls: "crisp-pulse-memo-bignums" });
+    const tagCount = new Set(this.memos.flatMap((m) => m.tags)).size;
+    for (const [value, label] of [[stats.total, "速记"], [tagCount, "标签"], [stats.byDate.size, "天"]]) {
+      const k = big.createDiv({ cls: "crisp-pulse-memo-bignum" });
+      k.createDiv({ cls: "crisp-pulse-memo-bignum-value", text: value.toLocaleString("zh-CN") });
+      k.createDiv({ cls: "crisp-pulse-memo-bignum-label", text: label });
+    }
+    const weeks = stats.cells.length / 7;
+    const grid = card.createDiv({ cls: "crisp-pulse-memo-heat", attr: { role: "grid", "aria-label": "近 12 周速记热力" } });
+    const max = Math.max(1, ...stats.cells.map((c) => c.count));
+    for (let row = 0; row < 7; row++) {
+      for (let col = 0; col < weeks; col++) {
+        const cell = stats.cells[col * 7 + row];
+        const level = cell.count ? Math.min(4, Math.ceil((cell.count / max) * 4)) : 0;
+        const el = grid.createDiv({ cls: `crisp-pulse-memo-heat-cell level-${level}${cell.future ? " is-future" : ""}${this.filterDate === cell.date ? " is-selected" : ""}` });
+        el.setAttribute("title", `${cell.date} · ${cell.count} 条`);
+        if (!cell.future) el.addEventListener("click", () => { this.filterDate = this.filterDate === cell.date ? null : cell.date; this.tab = "all"; this.render(); });
+      }
+    }
+    const months = card.createDiv({ cls: "crisp-pulse-memo-heat-months", attr: { "aria-hidden": "true" } });
+    let lastMonth = null;
+    for (let col = 0; col < weeks; col++) {
+      const week = stats.cells.slice(col * 7, col * 7 + 7);
+      // 只在真正包含 1 号的那一列标月份，避免开头两个月挤在一起
+      const first = week.find((c) => c.date.endsWith("-01"));
+      const month = first ? Number(first.date.slice(5, 7)) : null;
+      months.createSpan({ text: month && month !== lastMonth ? `${month}月` : "" });
+      if (month) lastMonth = month;
+    }
+    card.createDiv({ cls: "crisp-pulse-memo-statline", text: `连续 ${stats.streak} 天 · 本月 ${stats.month} 条 · 近 12 周 ${stats.recent} 条` });
+  }
+
+  renderTabs(root) {
+    const tabs = root.createDiv({ cls: "crisp-pulse-memo-tabs", attr: { role: "tablist", "aria-label": "速记视图" } });
+    for (const [id, label] of [["all", "全部"], ["review", "回顾"], ["walk", "漫步"], ["tags", "标签"]]) {
+      const tab = tabs.createEl("button", { cls: `crisp-pulse-memo-tab${this.tab === id ? " is-active" : ""}`, text: label, attr: { role: "tab", "aria-selected": String(this.tab === id) } });
+      tab.addEventListener("click", () => {
+        if (id === "walk" && !this.walk.trail.length) this.startWalk();
+        this.tab = id;
+        this.render();
+      });
+    }
+    if (this.tab === "review") return this.renderReview(root);
+    if (this.tab === "walk") return this.renderWalk(root);
+    if (this.tab === "tags") return this.renderTags(root);
+    if (this.showAdvanced) this.renderAdvanced(root);
+    this.activeChips = root.createDiv({ cls: "crisp-pulse-memo-filters" });
+    this.listEl = root.createDiv({ cls: "crisp-pulse-memo-timeline" });
+    this.renderList();
+  }
+
+  renderAdvanced(root) {
+    const f = this.filters;
+    const panel = root.createDiv({ cls: "crisp-pulse-memo-advanced" });
+    const row = (label) => {
+      const r = panel.createDiv({ cls: "crisp-pulse-memo-advanced-row" });
+      r.createDiv({ cls: "crisp-pulse-memo-advanced-label", text: label });
+      return r.createDiv({ cls: "crisp-pulse-memo-advanced-fields" });
+    };
+    const dates = row("日期");
+    const from = dates.createEl("input", { attr: { type: "date", "aria-label": "开始日期" } });
+    from.value = f.from;
+    dates.createSpan({ cls: "crisp-pulse-memo-muted", text: "至" });
+    const to = dates.createEl("input", { attr: { type: "date", "aria-label": "结束日期" } });
+    to.value = f.to;
+    from.addEventListener("change", () => { f.from = from.value; this.renderList(); });
+    to.addEventListener("change", () => { f.to = to.value; this.renderList(); });
+    const tagInput = (label, key, placeholder) => {
+      const input = row(label).createEl("input", { attr: { type: "text", placeholder, "aria-label": label } });
+      input.value = f[key].join(" ");
+      input.addEventListener("change", () => {
+        f[key] = input.value.split(/[,，\s]+/).map((t) => t.replace(/^#+/, "").trim()).filter(Boolean);
+        this.renderList();
+      });
+    };
+    tagInput("包含标签", "includeTags", "#阅读 #工作（含子标签）");
+    tagInput("排除标签", "excludeTags", "#日常");
+    const flags = row("其他");
+    const untagged = flags.createEl("label", { cls: "crisp-pulse-memo-check" });
+    const untaggedBox = untagged.createEl("input", { attr: { type: "checkbox" } });
+    untaggedBox.checked = f.untagged;
+    untagged.appendText(" 只看无标签");
+    untaggedBox.addEventListener("change", () => { f.untagged = untaggedBox.checked; this.renderList(); });
+    const converted = flags.createEl("select", { cls: "dropdown", attr: { "aria-label": "转化状态" } });
+    for (const [value, label] of [["", "转化状态不限"], ["yes", "已转化"], ["no", "未转化"]]) converted.createEl("option", { text: label, attr: { value } });
+    converted.value = f.converted === true ? "yes" : f.converted === false ? "no" : "";
+    converted.addEventListener("change", () => { f.converted = converted.value === "yes" ? true : converted.value === "no" ? false : null; this.renderList(); });
+    const clear = panel.createEl("button", { cls: "crisp-pulse-memo-chip", text: "清空筛选" });
+    clear.addEventListener("click", () => { this.resetFilters(); this.render(); });
+  }
+
+  resetFilters() {
+    this.filters = { query: "", from: "", to: "", includeTags: [], excludeTags: [], untagged: false, converted: null };
+    this.filterDate = null;
+    this.filterTag = null;
+  }
+
+  isFiltered() {
+    const f = this.filters;
+    return !!(this.filterDate || this.filterTag || f.query.trim() || f.from || f.to || f.includeTags.length || f.excludeTags.length || f.untagged || f.converted !== null);
+  }
+
+  visibleMemos() {
+    const f = this.filters;
+    let list = filterMemos(this.memos, { ...f, includeTags: this.filterTag ? [...f.includeTags, this.filterTag] : f.includeTags });
+    if (this.filterDate) list = list.filter((m) => m.date === this.filterDate);
+    if (!this.isFiltered()) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - this.limitDays);
+      const cutoffKey = dateKey(cutoff);
+      list = list.filter((m) => m.date > cutoffKey);
+    }
+    return list;
+  }
+
+  renderList() {
+    if (!this.listEl) return;
+    const chips = this.activeChips;
+    chips.empty();
+    const chip = (text, clear) => {
+      const c = chips.createEl("button", { cls: "crisp-pulse-memo-chip is-active", text: `${text} ×` });
+      c.addEventListener("click", () => { clear(); this.render(); });
+    };
+    if (this.filterDate) chip(this.filterDate, () => { this.filterDate = null; });
+    if (this.filterTag) chip(`#${this.filterTag}`, () => { this.filterTag = null; });
+    const f = this.filters;
+    if (f.from) chip(`从 ${f.from}`, () => { f.from = ""; });
+    if (f.to) chip(`至 ${f.to}`, () => { f.to = ""; });
+    for (const tag of f.includeTags) chip(`包含 #${tag}`, () => { f.includeTags = f.includeTags.filter((t) => t !== tag); });
+    for (const tag of f.excludeTags) chip(`排除 #${tag}`, () => { f.excludeTags = f.excludeTags.filter((t) => t !== tag); });
+    if (f.untagged) chip("无标签", () => { f.untagged = false; });
+    if (f.converted !== null) chip(f.converted ? "已转化" : "未转化", () => { f.converted = null; });
+    this.containerEl.querySelector('[aria-label="高级筛选"]')?.toggleClass("is-active", this.showAdvanced || this.isFiltered());
+    const list = this.visibleMemos();
+    if (this.isFiltered()) chips.createSpan({ cls: "crisp-pulse-memo-muted", text: `找到 ${list.length} 条` });
+    this.clearMemoMarkdown(this.listEl);
+    this.listEl.empty();
+    if (!list.length) {
+      this.listEl.createDiv({ cls: "crisp-pulse-memo-empty", text: this.memos.length ? "这个范围里没有速记" : "还没有速记。在上面写下第一条吧。" });
+    }
+    for (const m of list) this.renderMemoCard(this.listEl, m);
+    if (!this.isFiltered() && this.memos.length > list.length) {
+      const more = this.listEl.createEl("button", { cls: "crisp-pulse-memo-more", text: `显示更早的速记（再往前 ${this.limitDays} 天）` });
+      more.addEventListener("click", () => { this.limitDays += 30; this.renderList(); });
+    }
+  }
+
+  renderReview(root) {
+    const s = this.plugin.settings;
+    const todayKey = getTodayKey();
+    const tags = String(s.memoReviewTags || "").split(/[,，\s]+/).map((t) => t.replace(/^#+/, "").trim()).filter(Boolean);
+    const review = selectDailyReview(this.memos, todayKey, { count: s.memoReviewCount, tags, withinDays: Number(s.memoReviewWithinDays) || 0, batch: this.reviewBatch || 0 });
+    const head = root.createDiv({ cls: "crisp-pulse-memo-section-head" });
+    head.createSpan({ cls: "crisp-pulse-memo-section-title", text: `今日回顾 · ${review.length} 条` });
+    const again = head.createEl("button", { cls: "crisp-pulse-memo-chip", text: "换一批" });
+    again.addEventListener("click", () => { this.reviewBatch = (this.reviewBatch || 0) + 1; this.render(); });
+    const scope = [tags.length ? tags.map((t) => `#${t}`).join(" ") : "全部标签", Number(s.memoReviewWithinDays) ? `近 ${s.memoReviewWithinDays} 天` : "全部时间"].join(" · ");
+    root.createDiv({ cls: "crisp-pulse-memo-muted", text: `范围：${scope}（在设置里调整）。同一天打开看到的是同一组。` });
+    const box = root.createDiv({ cls: "crisp-pulse-memo-timeline" });
+    if (!review.length) box.createDiv({ cls: "crisp-pulse-memo-empty", text: "还没有可回顾的旧速记。今天记下的内容，从明天起会出现在这里。" });
+    for (const m of review) this.renderMemoCard(box, m);
+    const groups = onThisDay(this.memos, todayKey);
+    const past = root.createDiv({ cls: "crisp-pulse-memo-section-head" });
+    past.createSpan({ cls: "crisp-pulse-memo-section-title", text: "去年今日" });
+    const pastBox = root.createDiv({ cls: "crisp-pulse-memo-timeline" });
+    if (!groups.length) pastBox.createDiv({ cls: "crisp-pulse-memo-empty", text: "往年和上个月的今天还没有速记。" });
+    for (const g of groups) {
+      pastBox.createDiv({ cls: "crisp-pulse-memo-group-label", text: `${g.label} · ${g.date}` });
+      for (const m of g.memos) this.renderMemoCard(pastBox, m);
+    }
+  }
+
+  startWalk(from = null) {
+    const first = from || pickRandomMemo(this.memos);
+    this.walk = { trail: first ? [first] : [], step: null };
+  }
+
+  stepWalk() {
+    const current = this.findSame(this.walk.trail.at(-1));
+    if (!current) { this.startWalk(); return; }
+    const visited = new Set(this.walk.trail.map((m) => this.findSame(m)).filter(Boolean));
+    const step = walkStep(current, this.getIndex(), visited);
+    if (!step) { new Notice("这一路已经走遍了，重新开始吧"); return; }
+    this.walk.trail.push(step.memo);
+    this.walk.step = step;
+  }
+
+  renderWalk(root) {
+    const head = root.createDiv({ cls: "crisp-pulse-memo-section-head" });
+    head.createSpan({ cls: "crisp-pulse-memo-section-title", text: "随机漫步" });
+    const actions = head.createDiv({ cls: "crisp-pulse-memo-head-actions" });
+    const btn = (text, fn, disabled = false) => {
+      const b = actions.createEl("button", { cls: "crisp-pulse-memo-chip", text });
+      b.disabled = disabled;
+      b.addEventListener("click", () => { fn(); this.render(); });
+    };
+    btn("后退", () => { this.walk.trail.pop(); this.walk.step = null; }, this.walk.trail.length < 2);
+    btn("重新开始", () => this.startWalk());
+    const current = this.findSame(this.walk.trail.at(-1));
+    root.createDiv({ cls: "crisp-pulse-memo-muted", text: "从一条速记出发，沿着内容相近的速记一条条走下去；相近度按本地文字与标签计算，不联网。" });
+    if (!current) {
+      root.createDiv({ cls: "crisp-pulse-memo-empty", text: this.memos.length ? "点「重新开始」随机选一个起点。" : "还没有速记，先记几条再来漫步。" });
+      return;
+    }
+    if (this.walk.trail.length > 1) {
+      const trail = root.createDiv({ cls: "crisp-pulse-memo-trail" });
+      this.walk.trail.forEach((m, i) => {
+        if (i) trail.createSpan({ cls: "crisp-pulse-memo-muted", text: "›" });
+        const dot = trail.createEl("button", { cls: `crisp-pulse-memo-trail-step${i === this.walk.trail.length - 1 ? " is-current" : ""}`, text: memoSafeTitle(m.text).slice(0, 10) });
+        dot.setAttribute("title", m.text);
+        dot.addEventListener("click", () => { this.walk.trail = this.walk.trail.slice(0, i + 1); this.walk.step = null; this.render(); });
+      });
+    }
+    const step = this.walk.step;
+    if (step) {
+      root.createDiv({ cls: "crisp-pulse-memo-why", text: step.via === "related" ? `因为共同的：${step.shared.join("、")}` : "附近没有相近的了，随机跳到一条没走过的" });
+    }
+    const box = root.createDiv({ cls: "crisp-pulse-memo-timeline" });
+    this.renderMemoCard(box, current, { related: true, walk: true });
+    const next = root.createEl("button", { cls: "crisp-pulse-memo-walk-next mod-cta", text: "继续漫步 →" });
+    next.addEventListener("click", () => { this.stepWalk(); this.render(); });
+  }
+
+  renderTags(root) {
+    const tree = buildTagTree(this.memos);
+    const untagged = this.memos.filter((m) => !m.tags.length).length;
+    const box = root.createDiv({ cls: "crisp-pulse-memo-tagtree", attr: { role: "tree", "aria-label": "标签" } });
+    if (!tree.length) box.createDiv({ cls: "crisp-pulse-memo-empty", text: "还没有标签。在速记里写 #主题/子主题 就会出现在这里。" });
+    this.collapsedTags = this.collapsedTags || new Set();
+    const renderNode = (node, depth) => {
+      const row = box.createDiv({ cls: "crisp-pulse-memo-tagrow", attr: { role: "treeitem" } });
+      row.style.paddingLeft = `${depth * 14}px`;
+      const collapsed = this.collapsedTags.has(node.path);
+      const twisty = row.createEl("button", { cls: "crisp-pulse-memo-twisty", text: node.children.length ? (collapsed ? "▸" : "▾") : "", attr: { "aria-label": collapsed ? "展开" : "折叠" } });
+      if (node.children.length) twisty.addEventListener("click", () => { if (collapsed) this.collapsedTags.delete(node.path); else this.collapsedTags.add(node.path); this.render(); });
+      const name = row.createEl("button", { cls: "crisp-pulse-memo-tagname", text: `# ${node.name}` });
+      name.setAttribute("title", `看 #${node.path}（含子标签）`);
+      name.addEventListener("click", () => { this.resetFilters(); this.filterTag = node.path; this.tab = "all"; this.render(); });
+      row.createSpan({ cls: "crisp-pulse-memo-muted", text: String(node.count) });
+      const rename = row.createEl("button", { cls: "crisp-pulse-memo-action", text: "改名" });
+      rename.addEventListener("click", () => this.plugin.promptRenameTag(node.path, () => this.reload()));
+      if (!collapsed) for (const child of node.children) renderNode(child, depth + 1);
+    };
+    for (const node of tree) renderNode(node, 0);
+    if (untagged) {
+      const row = box.createDiv({ cls: "crisp-pulse-memo-tagrow" });
+      const name = row.createEl("button", { cls: "crisp-pulse-memo-tagname is-muted", text: "无标签" });
+      name.addEventListener("click", () => { this.resetFilters(); this.filters.untagged = true; this.showAdvanced = true; this.tab = "all"; this.render(); });
+      row.createSpan({ cls: "crisp-pulse-memo-muted", text: String(untagged) });
+    }
+  }
+
+  memoTimeLabel(m) {
+    const diff = Math.round((memoKeyToDay(getTodayKey()) - memoKeyToDay(m.date)) / 86400000);
+    const day = diff === 0 ? "今天" : diff === 1 ? "昨天" : m.date;
+    return `${day} ${m.time || ""}`.trim();
+  }
+
+  openCardMenu(m, event) {
+    if (!Menu) return;
+    const menu = new Menu();
+    const done = () => this.reload();
+    const run = (fn) => async () => {
+      try { await fn(); done(); } catch (error) { new Notice(`Crisp Pulse 速记：${error.message || error}`, 8000); }
+    };
+    const key = this.memoKey(m);
+    menu.addItem((i) => i.setTitle(this.expanded === key ? "收起相关笔记" : "相关笔记").setIcon("sparkles").onClick(() => { this.expanded = this.expanded === key ? null : key; this.render(); }));
+    menu.addItem((i) => i.setTitle("从这里漫步").setIcon("shuffle").onClick(() => { this.startWalk(m); this.tab = "walk"; this.render(); }));
+    menu.addSeparator();
+    menu.addItem((i) => i.setTitle("转为笔记").setIcon("file-plus").onClick(run(() => this.plugin.convertMemoToNote(m))));
+    if (this.mode === "anks") {
+      menu.addItem((i) => i.setTitle("转为 ANKS 问题").setIcon("help-circle").onClick(run(() => this.plugin.convertMemoToQuestion(m))));
+      const inNow = m.links.some((link) => link.startsWith(`${ANKS_NOW_FILE.replace(/\.md$/, "")}#^pulse-memo-`));
+      menu.addItem((i) => i.setTitle(inNow ? "已加入 Now 行动" : "加入 Now 行动").setIcon("check-square").onClick(run(() => this.plugin.convertMemoToNow(m))));
+    }
+    menu.addSeparator();
+    menu.addItem((i) => i.setTitle("复制").setIcon("copy").onClick(async () => { await navigator.clipboard.writeText(m.text); new Notice("已复制速记"); }));
+    menu.addItem((i) => i.setTitle("打开所在笔记").setIcon("file-text").onClick(() => this.plugin.openMemoSource(m)));
+    menu.addItem((i) => i.setTitle("删除").setIcon("trash-2").onClick(() => this.plugin.confirmDeleteMemo(m, done)));
+    menu.showAtMouseEvent(event);
+  }
+
+  renderMemoCard(parent, m, { related = false, walk = false } = {}) {
+    const key = this.memoKey(m);
+    const card = parent.createDiv({ cls: `crisp-pulse-memo-item${walk ? " is-walk" : ""}` });
+    const head = card.createDiv({ cls: "crisp-pulse-memo-item-head" });
+    const time = head.createEl("button", { cls: "crisp-pulse-memo-time", text: this.memoTimeLabel(m) });
+    time.setAttribute("aria-label", `打开 ${m.path}`);
+    time.addEventListener("click", () => this.plugin.openMemoSource(m));
+    const more = head.createEl("button", { cls: "clickable-icon crisp-pulse-memo-more-btn", attr: { "aria-label": "更多操作" } });
+    setIcon(more, "more-horizontal");
+    more.addEventListener("click", (event) => this.openCardMenu(m, event));
+    const body = card.createDiv({ cls: "crisp-pulse-memo-text" });
+    if (MarkdownRenderer && Component) {
+      const component = new Component();
+      this.memoMarkdownComponents ||= new Map();
+      this.memoMarkdownComponents.set(body, component);
+      component.load();
+      MarkdownRenderer.render(this.app, m.text, body, m.path, component).then(() => {
+        if (this.memoMarkdownComponents.get(body) !== component) { component.unload(); return; }
+        for (const tag of body.querySelectorAll("a.tag")) tag.addClass("crisp-pulse-memo-tag");
+      }).catch((error) => {
+        if (this.memoMarkdownComponents.get(body) !== component) return;
+        component.unload();
+        this.memoMarkdownComponents.delete(body);
+        body.setText(m.text);
+        body.createDiv({ cls: "crisp-pulse-memo-error", text: `显示格式失败：${error.message || error}` });
+      });
+      body.addEventListener("click", (event) => {
+        const link = event.target.closest?.("a");
+        if (!link || !body.contains(link)) return;
+        if (link.classList.contains("tag")) {
+          event.preventDefault(); event.stopPropagation();
+          this.resetFilters(); this.filterTag = (link.getAttribute("href") || link.textContent).replace(/^#/, ""); this.tab = "all"; this.render();
+        } else if (link.classList.contains("internal-link")) {
+          event.preventDefault(); event.stopPropagation();
+          this.app.workspace.openLinkText(link.getAttribute("data-href") || link.getAttribute("href"), m.path, event.metaKey || event.ctrlKey);
+        }
+      });
+    } else {
+      body.setText(m.text);
+    }
+    for (const link of m.links) {
+      const l = card.createDiv({ cls: "crisp-pulse-memo-link" });
+      setIcon(l.createSpan({ cls: "crisp-pulse-memo-link-icon" }), "corner-down-right");
+      l.createSpan({ text: link });
+      l.addEventListener("click", () => this.app.workspace.openLinkText(link, m.path));
+    }
+    if (related || this.expanded === key) this.renderRelated(card, m, walk);
+  }
+
+  renderRelated(card, m, walk) {
+    const box = card.createDiv({ cls: "crisp-pulse-memo-related" });
+    const visited = walk ? new Set(this.walk.trail.map((x) => this.findSame(x)).filter(Boolean)) : null;
+    const list = relatedMemos(m, this.getIndex(), { limit: walk ? 10 : 5 }).filter((r) => !visited || !visited.has(r.memo)).slice(0, 5);
+    box.createDiv({ cls: "crisp-pulse-memo-related-title", text: list.length ? `相关速记 · ${list.length}` : "没有找到内容相近的速记" });
+    for (const r of list) {
+      const row = box.createEl("button", { cls: "crisp-pulse-memo-related-row" });
+      row.createSpan({ cls: "crisp-pulse-memo-related-text", text: r.memo.text.replace(/\n+/g, " ") });
+      row.createSpan({ cls: "crisp-pulse-memo-related-why", text: `${r.memo.date} · ${r.shared.join("、")}` });
+      row.addEventListener("click", () => {
+        if (walk) {
+          this.walk.trail.push(r.memo);
+          this.walk.step = { memo: r.memo, via: "related", shared: r.shared, score: r.score };
+        } else {
+          this.startWalk(m);
+          this.walk.trail.push(r.memo);
+          this.walk.step = { memo: r.memo, via: "related", shared: r.shared, score: r.score };
+          this.tab = "walk";
+        }
+        this.render();
+      });
+    }
+  }
+}
+
 class CrispPulseSettingTab extends PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
@@ -5495,6 +7281,136 @@ class CrispPulseSettingTab extends PluginSettingTab {
       }));
 
     // 3. Basic Settings
+    containerEl.createEl("h3", { text: "速记" });
+    const memoModeSetting = new Setting(containerEl)
+      .setName("速记存储方式")
+      .setDesc("自动：库里有 ANKS（Sidecar/bin/anks 与 Topics/）时进 ANKS，否则写日笔记。")
+      .addDropdown((dd) => dd
+        .addOption("auto", "自动")
+        .addOption("general", "通用：追加到日笔记")
+        .addOption("anks", "ANKS：每天一个 raw 采集件")
+        .setValue(this.plugin.settings.memoMode || "auto")
+        .onChange(async (value) => {
+          this.plugin.settings.memoMode = value;
+          await this.plugin.savePluginData();
+          this.plugin.refreshMemoViews();
+          this.display();
+        }));
+    this.plugin.memoStore?.resolveMode().then((mode) => {
+      memoModeSetting.descEl?.createDiv({ cls: "crisp-pulse-memo-muted", text: `当前生效：${mode === "anks" ? "ANKS" : "日笔记"}` });
+    });
+
+    const topics = this.plugin.memoStore?.anksTopics() || [];
+    new Setting(containerEl)
+      .setName("ANKS Topic")
+      .setDesc("ANKS 模式下写入 Topics/<topic>/raw/inbox/scratch/，字段取自库内采集合约 pulse-memo。")
+      .addDropdown((dd) => {
+        dd.addOption("", topics.length === 1 ? `默认（${topics[0]}）` : topics.length ? "未选择（记录前必须选）" : "（库里没有 Topic）");
+        for (const t of topics) dd.addOption(t, t);
+        dd.setValue(this.plugin.settings.memoAnksTopic || "").onChange(async (value) => {
+          this.plugin.settings.memoAnksTopic = value;
+          await this.plugin.savePluginData();
+          this.plugin.refreshMemoViews();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("日笔记里的速记段落")
+      .setDesc("通用模式下速记追加到这个标题下面；没有这个标题时会在文末补上。留空则直接追加到文末。")
+      .addText((text) => text
+        .setPlaceholder("## 速记")
+        .setValue(this.plugin.settings.memoHeading ?? "## 速记")
+        .onChange(async (value) => {
+          this.plugin.settings.memoHeading = value.trim();
+          await this.plugin.savePluginData();
+        }));
+
+    new Setting(containerEl)
+      .setName("日笔记文件夹与日期格式")
+      .setDesc("留空跟随 Obsidian 核心「日记」插件。格式用 moment 语法，例如 YYYY-MM-DD 或 YYYY/MM/YYYY-MM-DD。")
+      .addText((text) => text
+        .setPlaceholder("文件夹")
+        .setValue(this.plugin.settings.memoDailyFolder || "")
+        .onChange(async (value) => {
+          this.plugin.settings.memoDailyFolder = value.trim();
+          await this.plugin.savePluginData();
+          this.plugin.refreshMemoViews();
+        }))
+      .addText((text) => text
+        .setPlaceholder("YYYY-MM-DD")
+        .setValue(this.plugin.settings.memoDailyFormat || "")
+        .onChange(async (value) => {
+          this.plugin.settings.memoDailyFormat = value.trim();
+          await this.plugin.savePluginData();
+          this.plugin.refreshMemoViews();
+        }));
+
+    new Setting(containerEl)
+      .setName("「转为笔记」的文件夹")
+      .setDesc("留空使用 Obsidian「新笔记的存放位置」。")
+      .addText((text) => text
+        .setValue(this.plugin.settings.memoNoteFolder || "")
+        .onChange(async (value) => {
+          this.plugin.settings.memoNoteFolder = value.trim();
+          await this.plugin.savePluginData();
+        }));
+
+    new Setting(containerEl)
+      .setName("每日回顾条数")
+      .setDesc("「回顾」页每天挑出的旧速记数量，同一天内结果不变，可点「换一批」。")
+      .addDropdown((dd) => {
+        for (const n of [4, 6, 8, 12, 16, 24]) dd.addOption(String(n), `${n} 条`);
+        dd.setValue(String(this.plugin.settings.memoReviewCount || 6)).onChange(async (value) => {
+          this.plugin.settings.memoReviewCount = Number(value);
+          await this.plugin.savePluginData();
+          this.plugin.refreshMemoViews();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("回顾范围")
+      .setDesc("只回顾这些标签（含子标签），空格分隔，留空为全部；时间范围限定回顾多久以内的速记。")
+      .addText((text) => text
+        .setPlaceholder("#阅读 #工作")
+        .setValue(this.plugin.settings.memoReviewTags || "")
+        .onChange(async (value) => {
+          this.plugin.settings.memoReviewTags = value.trim();
+          await this.plugin.savePluginData();
+          this.plugin.refreshMemoViews();
+        }))
+      .addDropdown((dd) => {
+        for (const [v, label] of [["0", "全部时间"], ["30", "近 30 天"], ["90", "近 90 天"], ["365", "近 1 年"]]) dd.addOption(v, label);
+        dd.setValue(String(this.plugin.settings.memoReviewWithinDays || 0)).onChange(async (value) => {
+          this.plugin.settings.memoReviewWithinDays = Number(value);
+          await this.plugin.savePluginData();
+          this.plugin.refreshMemoViews();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("每日回顾提醒")
+      .setDesc("到这个时间提醒一次（例如 21:30），留空不提醒。只在 Obsidian 开着时生效；允许系统通知时弹系统通知，否则在 Obsidian 内提示。")
+      .addText((text) => text
+        .setPlaceholder("21:30")
+        .setValue(this.plugin.settings.memoReviewTime || "")
+        .onChange(async (value) => {
+          const v = value.trim();
+          if (v && !/^\d{1,2}:\d{2}$/.test(v)) return;
+          this.plugin.settings.memoReviewTime = v;
+          await this.plugin.savePluginData();
+          const N = typeof window !== "undefined" ? window.Notification : null;
+          if (v && N && N.permission === "default") N.requestPermission?.();
+        }));
+
+    const vaultName = this.app.vault?.getName?.() || "你的库";
+    new Setting(containerEl)
+      .setName("外部快捷入口（URL）")
+      .setDesc(`在 iOS 快捷指令、Raycast、Alfred、PopClip 里打开这个链接即可记一条：obsidian://crisp-pulse-memo?vault=${encodeURIComponent(vaultName)}&text=内容 。可选参数 tags=阅读,工作（自动补成 #标签）、open=1（记完打开速记）；不带 text 时只打开速记。`)
+      .addButton((button) => button.setButtonText("复制示例链接").onClick(async () => {
+        await navigator.clipboard.writeText(`obsidian://crisp-pulse-memo?vault=${encodeURIComponent(vaultName)}&text=${encodeURIComponent("在这里写想法")}`);
+        new Notice("已复制示例链接");
+      }));
+
     containerEl.createEl("h3", { text: "常规偏好" });
 
     new Setting(containerEl)
@@ -5846,3 +7762,11 @@ module.exports.getReviewDrilldown = getReviewDrilldown;
 module.exports.generateReviewReport = generateReviewReport;
 
 module.exports.CrispPulseEvidenceModal = CrispPulseEvidenceModal;
+module.exports.CrispPulseMemoView = CrispPulseMemoView;
+module.exports.memoHelpers = {
+  buildMemoBlock, parseMemoBlocks, extractMemoTags, insertMemoBlock, removeMemoBlock, appendMemoLink,
+  memoStats, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
+  buildMemoQuestionNote, buildMemoNote, buildMemoNowLine, MemoStore,
+  filterMemos, buildTagTree, renameTagInText, renameTagInContent, selectDailyReview, onThisDay, parseMemoUrlParams,
+  tokenizeMemo, buildMemoIndex, relatedMemos, walkStep, explainShared,
+};
