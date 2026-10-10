@@ -2484,25 +2484,26 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 
 /* Footer: a pixel horizon that answers the header sky. Full-bleed like the banner; the top fades in. */
 .crisp-pulse-view .crisp-pulse-footer {
-  margin: 48px -28px -56px;
+  position: relative;
+  margin: 40px -28px -56px;
 }
+/* 文字像顶部横幅里的标题一样，浮在画面上方渐隐的天空里 */
 .crisp-pulse-view .crisp-pulse-footer-info {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  right: 0;
   max-width: 1160px;
   margin: 0 auto;
-  padding: 16px 28px 0;
+  padding: 26px 28px 0;
+  pointer-events: none;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px 20px;
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
-}
-.crisp-pulse-view .crisp-pulse-footer-info::before {
-  content: "";
-  grid-column: 1 / -1;
-  height: 1px;
-  margin-bottom: 8px;
-  background: var(--pulse-ui-border);
 }
 .crisp-pulse-view .crisp-pulse-footer-brand {
   display: flex;
@@ -2523,7 +2524,7 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
   color: var(--text-faint);
   overflow-wrap: anywhere;
 }
-.crisp-pulse-view .crisp-pulse-footer-links { display: flex; gap: 14px; }
+.crisp-pulse-view .crisp-pulse-footer-links { display: flex; gap: 14px; pointer-events: auto; }
 .crisp-pulse-view button.crisp-pulse-footer-link {
   height: auto;
   padding: 0;
@@ -2538,16 +2539,15 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 .crisp-pulse-view button.crisp-pulse-footer-link:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; border-radius: 2px; }
 .crisp-pulse-view .crisp-pulse-footer-ground {
   position: relative;
-  height: 120px;
-  margin-top: 4px;
+  height: 184px;
 }
 .crisp-pulse-view .crisp-pulse-footer-ground canvas {
   display: block;
   width: 100%;
   height: 100%;
   image-rendering: pixelated;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 38%);
-  mask-image: linear-gradient(to bottom, transparent 0%, #000 38%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 45%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 45%);
 }
 .crisp-pulse-view .crisp-pulse-footer-tip {
   position: absolute;
@@ -2569,7 +2569,7 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 @container (max-width: 600px) {
   .crisp-pulse-view .crisp-pulse-footer-info { grid-template-columns: auto auto; justify-content: space-between; }
   .crisp-pulse-view .crisp-pulse-footer-caption { grid-column: 1 / -1; grid-row: 3; text-align: left; }
-  .crisp-pulse-view .crisp-pulse-footer-ground { height: 96px; }
+  .crisp-pulse-view .crisp-pulse-footer-ground { height: 168px; }
 }
 
 /* Today's pomodoros: pixel tomatoes in the same pixel language as the banner and footer. */

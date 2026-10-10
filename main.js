@@ -4080,7 +4080,8 @@ function pixelTomato(parent, state = "done", progress = 0) {
 /* ---------- 页脚：像素地平线，和顶部天空同一套配色与抖动 ---------- */
 const PULSE_GROUND_HEIGHT = 60, PULSE_GROUND_SCALE = 2;
 // 山脊在画布里的位置：没有贡献的日子停在 base，峰值升到 base + rise（占画布高度的比例，从下往上量）
-const PULSE_GROUND_BASE = 0.24, PULSE_GROUND_RISE = 0.52;
+// 上面约四成留给渐隐的天空和页脚文字，山都在下面
+const PULSE_GROUND_BASE = 0.17, PULSE_GROUND_RISE = 0.4;
 // 右侧留几列给「今天」的灯杆，不让它贴边被切掉
 const PULSE_GROUND_MARGIN = 10;
 
@@ -4135,7 +4136,7 @@ function paintPulseGround(canvas, mode, profile, todayX = -1, seed = 11) {
   const mix = pixelMix, clamp01 = pixelClamp01;
   const far = new Float32Array(w), ridge = new Float32Array(w), near = new Float32Array(w), tree = new Int16Array(w).fill(-1);
   for (let x = 0; x < w; x++) {
-    far[x] = h * 0.5 - Math.max(0, fbm(x / (h * 1.1) + 5, 1.7, 4) - 0.32) * h * 0.7;
+    far[x] = h * 0.62 - Math.max(0, fbm(x / (h * 1.1) + 5, 1.7, 4) - 0.32) * h * 0.5;
     ridge[x] = groundRidgeRow(h, profile[x] || 0) + (fbm(x / 4, 6.2, 3) - 0.5) * 2.4;
     near[x] = h * 0.88 - fbm(x / (h * 0.45) + 2, 9.4, 3) * h * 0.13;
   }
@@ -4281,14 +4282,6 @@ class CrispPulseView extends ItemView {
       });
     });
     this.analyticsResizeObserver.observe(container);
-    // 页脚画布按面板实际宽度画，宽度变了只重画页脚
-    this.footerResizeObserver = new win.ResizeObserver(() => {
-      const ground = this.footerEls?.ground;
-      if (!ground?.isConnected || Math.abs(ground.getBoundingClientRect().width - (this.footerPaintedWidth || 0)) < 4) return;
-      if (this.footerResizeFrame) win.cancelAnimationFrame(this.footerResizeFrame);
-      this.footerResizeFrame = win.requestAnimationFrame(() => { this.footerResizeFrame = null; this.paintFooter(); });
-    });
-    this.footerResizeObserver.observe(container);
   }
 
   async onClose() {
@@ -5384,6 +5377,7 @@ class CrispPulseView extends ItemView {
     const canvas = ground.createEl("canvas", { attr: { "aria-hidden": "true" } });
     const tip = ground.createDiv({ cls: "crisp-pulse-footer-tip", attr: { "aria-hidden": "true" } });
     this.footerEls = { footer, ground, canvas, tip, caption, locked };
+    this.observeFooterSize(ground);
     this.paintFooter();
     if (locked) return;
     const hide = () => tip.removeClass("is-visible");
@@ -5405,6 +5399,25 @@ class CrispPulseView extends ItemView {
       tip.style.top = `${row / d.height * 100}%`;
     });
     ground.addEventListener("pointerleave", hide);
+  }
+
+  /* 页脚画布按地面元素的实际尺寸画：宽度或高度变了（拖动面板、样式晚到、容器查询切换高度）只重画页脚，
+     像素才保持方形。观察器第一次画页脚时创建，开始观察时会立即回调一次。 */
+  observeFooterSize(ground) {
+    const win = ground.ownerDocument?.defaultView;
+    if (!win?.ResizeObserver) return;
+    if (!this.footerResizeObserver) {
+      this.footerResizeObserver = new win.ResizeObserver(() => {
+        const current = this.footerEls?.ground;
+        if (!current?.isConnected) return;
+        const rect = current.getBoundingClientRect();
+        if (Math.abs(rect.width - (this.footerPaintedWidth || 0)) < 4 && Math.abs(rect.height - (this.footerPaintedHeight || 0)) < 2) return;
+        this.paintFooter();
+      });
+    }
+    if (this.footerObservedGround) this.footerResizeObserver.unobserve(this.footerObservedGround);
+    this.footerResizeObserver.observe(ground);
+    this.footerObservedGround = ground;
   }
 
   paintFooter() {
@@ -5434,6 +5447,7 @@ class CrispPulseView extends ItemView {
     paintPulseGround(els.canvas, this.footerMode, profile, dates.length ? groundDayX(dates.length - 1, dates.length, width) : -1);
     this.footerData = { dates, values, profile, width, height };
     this.footerPaintedWidth = cssWidth;
+    this.footerPaintedHeight = rect.height;
     let peak = -1;
     values.forEach((v, i) => { if (v > 0 && (peak < 0 || v > values[peak])) peak = i; });
     const caption = els.locked ? "" : peak < 0 ? "开始写作后，这里会长出你的贡献山脊"
