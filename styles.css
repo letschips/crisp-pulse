@@ -1086,8 +1086,14 @@
 .crisp-pulse-review-drafts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .crisp-pulse-review-drafts textarea { width: 100%; min-height: 104px; resize: vertical; line-height: 1.6; padding: 12px; background: var(--pulse-ui-soft, var(--background-secondary)); color: var(--text-normal); }
 .crisp-pulse-review-workspace :is(button,input,select,textarea):focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+.crisp-pulse-review-memos .crisp-pulse-review-comparison { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.crisp-pulse-review-memo-results { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+.crisp-pulse-review-workspace button.crisp-pulse-review-memo-result { display: flex; align-items: baseline; gap: 8px; height: auto; padding: 8px 12px; text-align: left; white-space: normal; box-shadow: none; background: transparent; border: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); border-radius: 10px; }
+.crisp-pulse-review-workspace button.crisp-pulse-review-memo-result:hover { background: var(--background-modifier-hover); }
+.crisp-pulse-review-memo-kind { flex: none; font-size: var(--font-ui-smaller); color: var(--text-muted); }
+.crisp-pulse-review-memo-text { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
 @container (max-width: 600px) {
-  .crisp-pulse-review-comparison { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .crisp-pulse-review-comparison, .crisp-pulse-review-memos .crisp-pulse-review-comparison { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .crisp-pulse-review-drafts { grid-template-columns: minmax(0, 1fr); }
 }
 @container (max-width: 340px) {
@@ -1279,7 +1285,7 @@
 
 .crisp-pulse-memo-toolbar-meta {
   margin-left: auto;
-  margin-right: 6px;
+  margin-right: 4px;
   display: flex;
   align-items: center;
   min-width: 0;
@@ -1295,8 +1301,11 @@
 
 .crisp-pulse-memo-view select.crisp-pulse-memo-topic {
   height: 24px;
-  padding: 0 22px 0 8px;
+  max-width: 100%;
+  padding: 0 16px 0 5px;
+  background-position: right 3px center;
   font-size: var(--font-ui-smaller);
+  text-overflow: ellipsis;
 }
 
 .crisp-pulse-memo-view button.crisp-pulse-memo-send {
@@ -1725,9 +1734,28 @@
   background: var(--memo-accent-soft);
 }
 
-.crisp-pulse-memo-mic-time {
+.crisp-pulse-memo-view button.crisp-pulse-memo-dictate.is-dictating {
+  color: var(--text-accent);
+  background: var(--memo-accent-soft);
+}
+
+/* 输入框下方的状态行：听写、定稿、录音、保存、恢复草稿 */
+.crisp-pulse-memo-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
   font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+}
+.crisp-pulse-memo-status.is-empty {
+  display: none;
+}
+.crisp-pulse-memo-status-text {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* 手机：输入栏停在底部；收起时只露一行，点进来再展开工具栏 */

@@ -1380,6 +1380,15 @@ class CrispPulsePlugin extends Plugin {
     this.addRibbonIcon("feather", "打开 Crisp Pulse 速记", () => this.activateMemoView());
     this.addCommand({ id: "open-memo-view", name: "打开速记", callback: () => this.activateMemoView() });
     this.addCommand({
+      id: "toggle-memo-dictation",
+      name: "速记：开始 / 结束实时听写",
+      checkCallback: (checking) => {
+        if (!this.memoDictationAsr()) return false;
+        if (!checking) void this.toggleMemoDictation();
+        return true;
+      }
+    });
+    this.addCommand({
       id: "quick-memo",
       name: "记一条速记",
       callback: () => new CrispPulseMemoInputModal(this.app, "记一条速记", "现在的想法是…", "", async (text) => {
@@ -1394,8 +1403,9 @@ class CrispPulsePlugin extends Plugin {
       }));
     }
     if (this.app.vault?.on) {
-      this.registerEvent(this.app.vault.on("delete", () => this.refreshMemoViews()));
-      this.registerEvent(this.app.vault.on("rename", () => this.refreshMemoViews()));
+      this.registerEvent(this.app.vault.on("modify", (file) => this.memoStore.forgetParsed(file.path)));
+      this.registerEvent(this.app.vault.on("delete", (file) => { this.memoStore.forgetParsed(file?.path); this.refreshMemoViews(); }));
+      this.registerEvent(this.app.vault.on("rename", (file, oldPath) => { this.memoStore.forgetParsed(oldPath); this.memoStore.forgetParsed(file?.path); this.refreshMemoViews(); }));
     }
     this.registerObsidianProtocolHandler?.("crisp-pulse-memo", (params) => this.handleMemoUrl(params));
     this.registerInterval(window.setInterval(() => { this.checkMemoReviewReminder().catch(() => {}); }, 60000));
@@ -3018,6 +3028,13 @@ class CrispPulsePlugin extends Plugin {
     const asr = this.app.plugins?.plugins?.["crisp-asr"];
     if (!asr || asr.unloaded || typeof asr.startMemoDictation !== "function" || typeof asr.stopMemoDictation !== "function") return null;
     return asr;
+  }
+
+  /** 命令入口：打开速记面板，在输入框光标处开始听写；正在听写时结束。 */
+  async toggleMemoDictation() {
+    await this.activateMemoView();
+    const view = this.app.workspace.getLeavesOfType(VIEW_TYPE_MEMO)[0]?.view;
+    if (view?.toggleDictation) await view.toggleDictation();
   }
 
   memoTempo() {
@@ -5588,11 +5605,74 @@ class CrispPulseView extends ItemView {
       box.createDiv({ cls: 'crisp-pulse-stat-value', text: `${formatPulseMinutes(row.current)} ${row.unit}` });
       box.createDiv({ cls: 'crisp-pulse-review-note', text: `前期 ${formatPulseMinutes(row.previous)} ${row.unit} · ${row.changeLabel}` });
     }
+    this.renderReviewMemos(workspace, model);
     this.renderReviewSources(workspace, model);
     this.renderReviewDrilldown(workspace, model.current);
     this.renderReviewActions(workspace, model);
     this.renderReviewEvidence(workspace, model);
     this.renderReviewDraft(workspace, model);
+  }
+
+  /** 速记的转化反馈：这段时间记下的速记，转成了多少任务、笔记和行动，任务完成了多少，结果在哪。 */
+  renderReviewMemos(parent, model) {
+    const { start, end } = model.period;
+    const section = this.reviewSection(parent, 'feather', '速记与转化', '按速记记下的日期统计，同一条速记只算一次。用来找值得回看的想法，条数不代表知识质量。');
+    const body = section.createDiv({ cls: 'crisp-pulse-review-memos' });
+    body.createDiv({ cls: 'crisp-pulse-review-note', text: '正在读取速记…' });
+    const token = this.reviewMemoToken = {};
+    const live = () => token === this.reviewMemoToken && body.isConnected;
+    void (async () => {
+      let memos;
+      try { memos = await this.plugin.memoStore.list(); }
+      catch (error) {
+        if (live()) { body.empty(); body.createDiv({ cls: 'crisp-pulse-review-note', text: `速记读取失败：${error.message || error}` }); }
+        return;
+      }
+      const tempo = this.plugin.memoTempo?.();
+      const ids = memos.filter((m) => m.id && m.tempoTasks?.length && m.date >= start && m.date <= end).map((m) => `crisp-pulse:${m.id}`);
+      let snapshots = null;
+      let tempoFailed = false;
+      if (tempo && ids.length) {
+        try { snapshots = await tempo.getTasksBySource(ids); }
+        catch (error) { tempoFailed = true; console.warn('[Crisp Pulse] 复盘读取 Tempo 任务状态失败', error); }
+      }
+      if (!live()) return;
+      const r = memoConversionReview(memos, start, end, snapshots);
+      body.empty();
+      if (!r.total) {
+        body.createDiv({ cls: 'crisp-pulse-review-note', text: memos.length ? '这段时间没有速记。' : '还没有速记。在速记面板里记下的想法，会在这里看到转成了什么。' });
+        return;
+      }
+      const stats = body.createDiv({ cls: 'crisp-pulse-review-comparison' });
+      const box = (label, value, note) => {
+        const el = stats.createDiv({ cls: 'crisp-pulse-stat-box' });
+        el.createDiv({ cls: 'crisp-pulse-stat-label', text: label });
+        el.createDiv({ cls: 'crisp-pulse-stat-value', text: value });
+        if (note) el.createDiv({ cls: 'crisp-pulse-review-note', text: note });
+      };
+      box('速记', `${r.total} 条`, r.transcribed ? `其中 ${r.transcribed} 条有录音转写` : '');
+      box('已转化', `${r.converted} 条`, `占 ${Math.round(r.converted / r.total * 100)}%`);
+      const taskNote = r.tasksUnknown && !tempoFailed ? (tempo ? '' : '启用 Crisp Tempo 后显示完成情况')
+        : [r.tasksDone ? `完成 ${r.tasksDone}` : '', r.tasksOpen ? `未完成 ${r.tasksOpen}` : '', r.tasksMissing ? `${r.tasksMissing} 条已在 Tempo 删除` : ''].filter(Boolean).join(' · ');
+      box('转为任务', `${r.toTasks} 条`, tempoFailed ? 'Tempo 任务状态读取失败，完成数未计入' : taskNote);
+      box('转为笔记', `${r.toNotes} 条`, r.toNow ? `另有 ${r.toNow} 条加入 Now 行动` : '');
+      if (!r.results.length) return;
+      const list = body.createDiv({ cls: 'crisp-pulse-review-memo-results' });
+      list.createDiv({ cls: 'crisp-pulse-stat-label', text: `转化结果 · ${r.results.length}` });
+      for (const item of r.results.slice(0, 8)) {
+        const row = list.createEl('button', { cls: 'crisp-pulse-review-memo-result', attr: { type: 'button' } });
+        row.createSpan({ cls: 'crisp-pulse-review-memo-kind', text: item.task ? '完成的任务' : '笔记' });
+        row.createSpan({ cls: 'crisp-pulse-review-memo-text', text: item.task ? item.text : item.link });
+        row.createSpan({ cls: 'crisp-pulse-review-note', text: item.date });
+        row.addEventListener('click', async () => {
+          try {
+            if (item.task) await this.plugin.memoTempo()?.revealTask(item.task.id);
+            else await this.app.workspace.openLinkText(item.link, item.path);
+          } catch (error) { new Notice(`Crisp Pulse：${error.message || error}`); }
+        });
+      }
+      if (r.results.length > 8) list.createDiv({ cls: 'crisp-pulse-review-note', text: `还有 ${r.results.length - 8} 项，可在速记面板用「已转化」筛选查看` });
+    })();
   }
 
   renderReviewDrilldown(parent, review) {
@@ -6316,13 +6396,66 @@ function memoHasTranscriptFor(memo, filePath, { audioPaths = null, exists = null
   return current.filter((p) => p.split("/").pop() === name && !receipts.includes(p)).length === 1;
 }
 
+/** ASR 给出的失败原因：已知的服务商错误换成能照着做的说明，原文放进「详细错误」。
+    已经是说明文字的（比如 ASR 自己的中文提示）原样显示。 */
+function memoAsrErrorInfo(raw) {
+  const detail = String(raw || "").trim();
+  if (!detail) return { text: "", detail: "" };
+  const rules = [
+    [/20000003|no valid speech|no speech|silence audio|服务返回了空结果/i, "录音里没有识别到说话声，录音已保留。如果录的时候说了话，请检查麦克风权限和输入设备后重试"],
+    [/\b(401|403)\b|unauthori[sz]ed|forbidden|invalid[ _-]?(api[ _-]?key|token|credential)/i, "语音识别服务拒绝了请求，请在 Crisp ASR 设置里检查 API Key 是否正确、是否过期"],
+    [/\b429\b|quota|rate[ _-]?limit|too many requests|insufficient[ _-]?balance/i, "语音识别服务额度不足或请求太频繁，请稍后重试，或到服务商后台查看额度"],
+    [/timed? ?out|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|network error|fetch failed|socket hang up/i, "连不上语音识别服务，请检查网络后重试"],
+  ];
+  for (const [re, text] of rules) if (re.test(detail)) return { text, detail };
+  return { text: detail, detail: "" };
+}
+
+/** 复盘里的速记转化：这段时间记了多少，有多少转成了任务、笔记或行动，任务完成了多少。
+    同一条速记（按隐藏标识）只算一次；重新转过的任务按 Tempo 里现在的那条算。条数只用来找值得回看的内容，不代表知识质量。 */
+function memoConversionReview(memos, start, end, tempoSnapshots = null) {
+  const seen = new Set();
+  const inPeriod = [];
+  for (const m of memos || []) {
+    if (!m?.date || m.date < start || m.date > end) continue;
+    const key = m.id || `${m.path}:${m.date} ${m.time}:${m.startLine}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    inPeriod.push(m);
+  }
+  const nowPrefix = `${ANKS_NOW_FILE.replace(/\.md$/, "")}#`;
+  const out = { total: inPeriod.length, converted: 0, toTasks: 0, tasksDone: 0, tasksOpen: 0, tasksMissing: 0, tasksUnknown: 0, toNotes: 0, toNow: 0, transcribed: 0, results: [] };
+  const results = new Map();
+  for (const m of inPeriod) {
+    const notes = (m.links || []).filter((link) => !link.startsWith(nowPrefix));
+    const now = (m.links || []).some((link) => link.startsWith(nowPrefix));
+    const task = m.tempoTasks?.length ? (tempoSnapshots ? tempoSnapshots[`crisp-pulse:${m.id}`] || null : undefined) : undefined;
+    if (m.tempoTasks?.length) {
+      out.toTasks++;
+      if (task === undefined) out.tasksUnknown++;
+      else if (task === null) out.tasksMissing++;
+      else if (task.status === "done") out.tasksDone++;
+      else if (task.status !== "canceled") out.tasksOpen++;
+    }
+    if (notes.length) out.toNotes++;
+    if (now) out.toNow++;
+    if (m.transcriptJobs?.length) out.transcribed++;
+    if (notes.length || now || m.tempoTasks?.length) out.converted++;
+    for (const link of notes) if (!results.has(link)) results.set(link, { link, path: m.path, date: m.date, text: memoTaskTitle(m.text) });
+    if (task?.status === "done") results.set(`tempo:${task.id}`, { task, path: m.path, date: m.date, text: task.title || memoTaskTitle(m.text) });
+  }
+  out.results = [...results.values()].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  return out;
+}
+
 /** 录音卡片上转写按钮的状态。「已转写」只认速记里的隐藏凭据：用户删掉转写段落后可以重新转。 */
 function memoTranscriptionState({ memo, job, starting = false, hasAsr = true, filePath, audioPaths = null, exists = null }) {
   const complete = memoHasTranscriptFor(memo, filePath, { audioPaths, exists }) || !!(job && memo.transcriptJobs?.includes(job.id));
   const live = job && job.status !== "completed" && job.status !== "failed";
   const labels = { queued: "排队中", preparing: "准备中", transcribing: job?.transcriptText ? "写回中" : "转写中", "retry-wait": "等待重试", failed: job?.transcriptText ? "重试写回" : "重试转写" };
   const label = complete ? "已转写" : starting ? "提交中" : (live || job?.status === "failed") ? labels[job.status] || "转写中" : "转文字";
-  return { label, complete, disabled: !hasAsr || starting || complete || !!live, error: !complete && job?.status === "failed" ? (job.lastError || "转写失败") : "" };
+  const failure = !complete && job?.status === "failed" ? memoAsrErrorInfo(job.lastError || "转写失败") : { text: "", detail: "" };
+  return { label, complete, disabled: !hasAsr || starting || complete || !!live, error: failure.text, errorDetail: failure.detail };
 }
 
 function memoAudioFiles(memo, app) {
@@ -6917,14 +7050,30 @@ class MemoStore {
     return out;
   }
 
+  /** 所有速记。按文件缓存解析结果：文件的修改时间、大小和日期都没变就不再读取和解析，只处理变了的文件。 */
   async list() {
+    this.parsed ||= new Map();
     const memos = [];
+    const seen = new Set();
     for (const { file, date } of this.sourceFiles()) {
-      const content = await this.app.vault.cachedRead(file);
-      if (!content.includes("[!memo]")) continue;
-      for (const m of parseMemoBlocks(content)) memos.push({ ...m, date, path: file.path });
+      seen.add(file.path);
+      const stat = file.stat;
+      const version = Number.isFinite(stat?.mtime) && Number.isFinite(stat?.size) ? `${stat.mtime}:${stat.size}` : null;
+      let entry = this.parsed.get(file.path);
+      if (!entry || !version || entry.version !== version || entry.date !== date) {
+        const content = await this.app.vault.cachedRead(file);
+        entry = { version, date, memos: content.includes("[!memo]") ? parseMemoBlocks(content).map((m) => ({ ...m, date, path: file.path })) : [] };
+        if (version) this.parsed.set(file.path, entry); else this.parsed.delete(file.path);
+      }
+      for (const m of entry.memos) memos.push({ ...m });
     }
+    for (const path of [...this.parsed.keys()]) if (!seen.has(path)) this.parsed.delete(path);
     return memos.sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time) || b.startLine - a.startLine);
+  }
+
+  /** 文件被改、删或改名时丢掉它的解析缓存（修改时间精度不够时的保险）。 */
+  forgetParsed(path) {
+    this.parsed?.delete(path);
   }
 
   async previewTagRename(from) {
@@ -7285,7 +7434,7 @@ class CrispPulseMemoView extends ItemView {
       this.draftKey = this.leaf?.id || reviewEntryId();
       const live = this.app.workspace.getLeavesOfType?.(VIEW_TYPE_MEMO)?.map((leaf) => leaf.id) || [];
       const restored = drafts.claimDraft(this.draftKey, live);
-      if (restored && !this.draft) this.draft = restored;
+      if (restored && !this.draft) { this.draft = restored; this.draftRestored = true; }
       this.register(drafts.onChange(() => this.renderPendingRecordings()));
     }
     this.registerEvent(this.app.workspace.on("crisp-asr:state", () => this.refreshMemoTranscriptionControls()));
@@ -7429,6 +7578,7 @@ class CrispPulseMemoView extends ItemView {
   /** 草稿变了（键入、粘贴、工具按钮、插入附件、听写）：同步草稿和修订号，听写占用的那一段跟着挪，并存一份恢复用的草稿。 */
   setDraft(next, caret = null) {
     if (this.dictation && next !== this.draft) this.mapDictationRange(this.dictation, this.draft, next, caret);
+    if (this.draftRestored && next !== this.draft) { this.draftRestored = false; this.updateRecordingUi(); }
     this.draft = next;
     this.draftRevision = (this.draftRevision || 0) + 1;
     this.persistDraft();
@@ -7463,7 +7613,7 @@ class CrispPulseMemoView extends ItemView {
 
   /** 长按麦克风：通过 Crisp ASR 实时听写，文字边说边出现在开始时的光标处，松开结束。
       听写只改写自己写入的那一段；那段之外的手动输入和插入的附件都保留。 */
-  async startDictation() {
+  async startDictation({ held = false } = {}) {
     const asr = this.plugin.memoDictationAsr?.();
     if (!asr || this.dictation || this.memoClosed) return;
     const input = this.composerInput();
@@ -7472,7 +7622,7 @@ class CrispPulseMemoView extends ItemView {
     const start = input ? input.selectionStart : value.length;
     const end = input ? input.selectionEnd : value.length;
     // 选中的文字由听写结果替换；什么都没听到时原样保留
-    const d = { start, shown: value.slice(start, end), text: "", preview: "", state: "connecting", stopRequested: false, done: false, detached: false };
+    const d = { start, shown: value.slice(start, end), text: "", preview: "", state: "connecting", stopRequested: false, done: false, detached: false, held };
     this.dictation = d;
     this.updateRecordingUi();
     const sink = {
@@ -7493,7 +7643,7 @@ class CrispPulseMemoView extends ItemView {
         if (this.dictation === d) this.dictation = null;
         this.updateRecordingUi();
         if (d.detached) new Notice("Crisp Pulse 速记：你改动了正在听写的文字，听写已结束，之后识别的内容没有写入输入框", 8000);
-        else if (error) new Notice(`Crisp Pulse 速记：实时听写中断：${error}${final ? "。已识别的文字已保留" : ""}`, 8000);
+        else if (error) new Notice(`Crisp Pulse 速记：实时听写中断：${memoAsrErrorInfo(error).text}${final ? "。已识别的文字已保留" : ""}`, 8000);
         else if (!final && heard) new Notice("Crisp Pulse 速记：这次没有识别到文字");
       },
     };
@@ -7673,9 +7823,68 @@ class CrispPulseMemoView extends ItemView {
     }
   }
 
+  /** 点击式听写：开始 / 结束都是一次点击。 */
+  async toggleDictation() {
+    if (this.dictation) return this.stopDictation();
+    if (this.recording || this.recordingStarting || this.recordingSaving) {
+      new Notice("Crisp Pulse 速记：正在录音，结束录音后再听写");
+      return;
+    }
+    this.composerInput()?.focus();
+    return this.startDictation();
+  }
+
+  /** 输入框下方的状态行：现在在做什么（连接、听写、定稿、录音、保存），以及结束、取消或处理恢复草稿的按钮。 */
+  composerStatus() {
+    const d = this.dictation;
+    if (d) {
+      if (d.state === "connecting") return { text: "正在连接实时听写…", actions: [["取消", () => this.stopDictation()]] };
+      if (d.state === "finishing" || d.stopRequested) return { text: "正在定稿，完成后可以提交…", actions: [] };
+      return { text: d.held ? "听写中，松开麦克风结束" : "听写中，说完点「结束」", actions: [["结束", () => this.stopDictation()]] };
+    }
+    if (this.recordingStarting) return { text: "等待麦克风权限…", actions: [] };
+    if (this.recording) {
+      const sec = Math.floor((Date.now() - this.recording.startedAt.getTime()) / 1000);
+      return { text: `录音中 ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`, actions: [["结束录音", () => this.toggleRecording()]] };
+    }
+    if (this.recordingSaving) return { text: "正在保存录音…", actions: [] };
+    if (this.draftRestored && this.draft.trim()) {
+      return { text: "已恢复上次没提交的草稿", actions: [
+        ["清空", () => { const input = this.composerInput(); if (input) input.value = ""; this.setDraft(""); this.draftRestored = false; this.updateRecordingUi(); }],
+        ["知道了", () => { this.draftRestored = false; this.updateRecordingUi(); }],
+      ] };
+    }
+    return null;
+  }
+
+  renderComposerStatus() {
+    const el = this.statusEl;
+    if (!el?.isConnected) return;
+    const status = this.composerStatus();
+    const signature = status ? `${status.actions.map((a) => a[0]).join("|")}` : "";
+    el.toggleClass("is-empty", !status);
+    if (signature === this.statusSignature && status) { el.querySelector(".crisp-pulse-memo-status-text")?.setText(status.text); return; }
+    this.statusSignature = signature;
+    el.empty();
+    if (!status) return;
+    el.createSpan({ cls: "crisp-pulse-memo-status-text", text: status.text });
+    for (const [label, fn] of status.actions) {
+      const b = el.createEl("button", { cls: "crisp-pulse-memo-chip", text: label, attr: { type: "button" } });
+      b.addEventListener("mousedown", (e) => e.preventDefault());
+      b.addEventListener("click", () => { void fn(); });
+    }
+  }
+
   updateRecordingUi() {
     const send = this.containerEl.children[1]?.querySelector(".crisp-pulse-memo-send");
     if (send) send.disabled = !!(this.memoSubmitting || this.dictation);
+    this.renderComposerStatus();
+    const dictate = this.containerEl.children[1]?.querySelector(".crisp-pulse-memo-dictate");
+    if (dictate) {
+      dictate.toggleClass("is-dictating", !!this.dictation);
+      dictate.disabled = !!(this.recording || this.recordingStarting || this.recordingSaving || this.dictation?.held);
+      dictate.setAttribute("aria-label", this.dictation ? "结束实时听写" : "实时听写（点一下开始，再点结束）");
+    }
     const button = this.containerEl.children[1]?.querySelector(".crisp-pulse-memo-mic");
     if (!button) return;
     const rec = this.recording;
@@ -7685,23 +7894,14 @@ class CrispPulseMemoView extends ItemView {
     button.toggleClass("is-dictating", !!d);
     const canDictate = !!this.plugin.memoDictationAsr?.();
     button.setAttribute("aria-label", rec ? "结束录音" : d ? "实时听写中，松开结束" : canDictate ? "录音（长按：实时听写）" : "录音");
-    const label = button.querySelector(".crisp-pulse-memo-mic-time");
-    if (d) {
-      const text = { connecting: "连接中…", listening: "听写中", finishing: "整理中…" }[d.state] || "听写中";
-      if (label) label.setText(text); else button.createSpan({ cls: "crisp-pulse-memo-mic-time", text });
-      return;
-    }
-    if (!rec) { label?.remove(); return; }
-    const sec = Math.floor((Date.now() - rec.startedAt.getTime()) / 1000);
-    const text = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
-    if (label) label.setText(text); else button.createSpan({ cls: "crisp-pulse-memo-mic-time", text });
+    // 时长和听写状态显示在输入框下方的状态行里，按钮只变色
   }
 
   renderComposer(root, refocus, { docked = false } = {}) {
     const box = root.createDiv({ cls: `crisp-pulse-memo-composer${docked ? " is-docked" : ""}` });
     if (docked) {
       // 收起时只占一行；点进来、有草稿或正在录音时展开，点到别处且没写东西就收起
-      box.toggleClass("is-open", !!(refocus || this.draft.trim() || this.recording || this.plugin.memoDrafts?.recordings?.length));
+      box.toggleClass("is-open", !!(refocus || this.draft.trim() || this.recording || this.dictation || this.plugin.memoDrafts?.recordings?.length));
       box.addEventListener("focusin", () => box.addClass("is-open"));
       this.dockedComposer = box;
     } else {
@@ -7776,11 +7976,20 @@ class CrispPulseMemoView extends ItemView {
     bindHoldPress(mic, {
       onTap: () => this.toggleRecording(),
       onHoldStart: () => {
-        if (!this.plugin.memoDictationAsr() || this.recording || this.recordingStarting || this.recordingSaving) return false;
-        void this.startDictation();
+        if (!this.plugin.memoDictationAsr() || this.dictation || this.recording || this.recordingStarting || this.recordingSaving) return false;
+        void this.startDictation({ held: true });
       },
-      onHoldEnd: () => { void this.stopDictation(); },
+      onHoldEnd: () => { if (this.dictation?.held) void this.stopDictation(); },
     });
+    // 点一下开始、再点一下结束的听写入口：键盘可用，也适合没法一直按住的时候
+    if (this.plugin.memoDictationAsr?.()) {
+      const dictate = bar.createEl("button", { cls: "clickable-icon crisp-pulse-memo-tool crisp-pulse-memo-dictate", attr: { "aria-label": "实时听写（点一下开始，再点结束）", type: "button" } });
+      setIcon(dictate, "audio-lines");
+      dictate.addEventListener("mousedown", (e) => e.preventDefault());
+      dictate.addEventListener("click", () => { void this.toggleDictation(); });
+    }
+    this.statusEl = box.createDiv({ cls: "crisp-pulse-memo-status", attr: { role: "status", "aria-live": "polite" } });
+    this.statusSignature = null;
     this.updateRecordingUi();
     this.pendingEl = box.createDiv({ cls: "crisp-pulse-memo-pending" });
     this.renderPendingRecordings();
@@ -8436,7 +8645,15 @@ class CrispPulseMemoView extends ItemView {
       const button = item.createEl("button", { cls: "crisp-pulse-memo-chip", text: state.label, attr: { type: "button", "aria-label": `${state.label}：${file.name || file.path}` } });
       button.disabled = state.disabled;
       button.title = !asr ? "请启用 Crisp ASR 0.8.0 或更高版本" : "通过 Crisp ASR 转写，使用其语音识别服务设置";
-      if (state.error) item.createSpan({ cls: "crisp-pulse-memo-audio-error", text: state.error });
+      if (state.error) {
+        const error = item.createDiv({ cls: "crisp-pulse-memo-audio-error" });
+        error.createSpan({ text: state.error });
+        if (state.errorDetail) {
+          const more = error.createEl("details", { cls: "crisp-pulse-memo-error-detail" });
+          more.createEl("summary", { text: "详细错误" });
+          more.createDiv({ text: state.errorDetail });
+        }
+      }
       if (!asr) item.createSpan({ cls: "crisp-pulse-memo-muted", text: "转文字需要 Crisp ASR 0.8.0 或更高版本" });
       button.addEventListener("click", async () => {
         button.disabled = true;
@@ -9145,7 +9362,7 @@ module.exports.CrispPulseEvidenceModal = CrispPulseEvidenceModal;
 module.exports.CrispPulseMemoView = CrispPulseMemoView;
 module.exports.memoHelpers = {
   buildMemoBlock, parseMemoBlocks, extractMemoTags, insertMemoBlock, removeMemoBlock, appendMemoLink,
-  memoStats, memoHeatLevel, memoHasImage, memoHasLink, memoHasAudio, memoTranscriptionState, memoHasTranscriptFor, memoTaskTitle, memoTempoLabel, bindHoldPress, memoAttachmentName, memoRecordingName, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
+  memoStats, memoHeatLevel, memoHasImage, memoHasLink, memoHasAudio, memoTranscriptionState, memoHasTranscriptFor, memoAsrErrorInfo, memoConversionReview, memoTaskTitle, memoTempoLabel, bindHoldPress, memoAttachmentName, memoRecordingName, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
   buildMemoQuestionNote, buildMemoNote, buildMemoNowLine, MemoStore,
   filterMemos, buildTagTree, renameTagInText, renameTagInContent, selectDailyReview, onThisDay, parseMemoUrlParams,
   tokenizeMemo, buildMemoIndex, relatedMemos, walkStep, explainShared,
