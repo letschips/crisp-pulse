@@ -1498,7 +1498,10 @@ test('mobile responsive rules only target classes rendered by the plugin',()=>{
 test('rename into a deleted historical path preserves both file records through save and reload', async () => {
   const { p, handlers } = setup();
   await p.loadPluginData();p.registerVaultEvents();
-  await p.handleFileCreation({ path: 'target.md', content: 'one two', extension: 'md' });
+  // 今天编辑过、随后删除的旧笔记：记录保留（当天新建又删的才撤回）
+  const target = { path: 'target.md', content: 'zero', extension: 'md' };
+  p.fileSnapshots.set(target.path, baseline(target.content));
+  target.content = 'zero one two';await p.handleFileModification(target);
   await handlers.delete({ path: 'target.md' });
   const file = { path: 'source.md', content: 'three four five', extension: 'md' };
   await p.handleFileCreation(file);
@@ -2210,4 +2213,123 @@ test('a new note right after a click or keypress counts as created; Pulse memo c
   p.fileSnapshots.set(daily.path, baseline(daily.content));
   daily.content += '\n> [!memo] 12:00\n> 一条 速记';await p.handleFileModification(daily);
   assert.ok(p.getOrCreateTodayRecord().contribution.wordsAdded > 0);
+});
+
+/* 番茄钟联动（Pulse 1.19.0 + Crisp Focus 1.5.0）。失败模式：
+   - 中途结束的番茄也计分（开了就停能刷分）；不到 1 分钟的误触留下记录。
+   - 同一个事件来两次就记两次；新版 Focus 同时被事件和旧的方法包装各记一次。
+   - 休息事件被当成专注计分。
+   - 存储里的番茄记录被写坏后拖垮整天的统计。 */
+function focusEvent(type, extra = {}) {
+  return { apiVersion: 1, type, id: 's1', kind: 'focus', phase: 'focus', pomodoro: true, round: 1, roundsPerCycle: 4, plannedMinutes: 25, startedAt: new Date(2026, 8, 8, 11, 30).getTime(), notePath: 'notes/draft.md', ...extra };
+}
+
+test('a completed pomodoro is recorded and scored; an interrupted one is recorded but not scored', async () => {
+  const { p } = setup();await p.loadPluginData();
+  p.settings.enableCrispFocusSync = true;p.settings.includeFocusInContribution = true;
+  await p.handleFocusSessionEvent(focusEvent('complete', { completed: true, elapsedMs: 25 * 60000 }));
+  await p.handleFocusSessionEvent(focusEvent('complete', { completed: true, elapsedMs: 25 * 60000 }));
+  let today = p.getOrCreateTodayRecord();
+  assert.equal(today.activity.focusMinutes, 25, '同一个事件只记一次');
+  assert.deepEqual(JSON.parse(JSON.stringify(today.activity.focusSessions)), [{ at: '11:30', minutes: 25, completed: true, pomodoro: true, note: 'notes/draft.md' }]);
+  const score = today.contribution.score;
+  await p.handleFocusSessionEvent(focusEvent('stop', { id: 's2', completed: false, elapsedMs: 12 * 60000 + 5000 }));
+  await p.handleFocusSessionEvent(focusEvent('stop', { id: 's3', completed: false, elapsedMs: 40000 }));
+  today = p.getOrCreateTodayRecord();
+  assert.equal(today.activity.focusMinutes, 25, '中断的不计入专注分钟');
+  assert.equal(today.contribution.score, score, '中断的不计分');
+  assert.equal(today.activity.focusSessions.length, 2, '不到 1 分钟的不留记录');
+  assert.equal(today.activity.focusSessions[1].completed, false);
+  assert.equal(today.activity.focusSessions[1].minutes, 12);
+});
+
+test('break events never score and drive the memo prompt', async () => {
+  const { p } = setup();await p.loadPluginData();
+  p.settings.enableCrispFocusSync = true;
+  await p.handleFocusSessionEvent(focusEvent('start', { id: 'b1', kind: 'break', phase: 'short-break' }));
+  assert.equal(p.pomodoroBreak.id, 'b1');
+  await p.handleFocusSessionEvent(focusEvent('complete', { id: 'b1', kind: 'break', phase: 'short-break', completed: true }));
+  assert.equal(p.pomodoroBreak, null);
+  assert.equal(p.getOrCreateTodayRecord().activity.focusMinutes, 0);
+  assert.equal(p.getOrCreateTodayRecord().activity.focusSessions, undefined);
+});
+
+test('a Focus with the session event API is not wrapped, so nothing is counted twice', () => {
+  const { p, helpers } = setup();
+  p.settings = { enableCrispFocusSync: true };
+  const original = async () => {};
+  const focus = { focusApiVersion: 1, completeFocusSession: original, startFocusSession: async () => {} };
+  p.app.plugins.getPlugin = (id) => (id === 'crisp-focus' ? focus : null);
+  const adapter = new helpers.CrispFocusAdapter(p);
+  adapter.attach();
+  assert.equal(focus.completeFocusSession, original, '新版 Focus 走事件，不包装');
+  const legacy = { completeFocusSession: original, startFocusSession: async () => {} };
+  p.app.plugins.getPlugin = (id) => (id === 'crisp-focus' ? legacy : null);
+  adapter.attach();
+  assert.notEqual(legacy.completeFocusSession, original, '旧版 Focus 仍按原方式记录');
+  adapter.detach();
+});
+
+test('damaged focus session records are dropped without touching the rest of the day', () => {
+  const { helpers } = setup();
+  const store = { version: 1, settings: {}, daily: { '2026-09-08': { date: '2026-09-08', quality: 'recorded', contribution: { score: 3 }, activity: { activeMinutes: 5, focusMinutes: 25, focusSessions: [{ at: '09:00', minutes: 25, completed: true, pomodoro: true, note: null }, { at: 'bad', minutes: 25, completed: true, pomodoro: true }, 'x'] }, files: {} } } };
+  const { store: repaired } = helpers.validateAndRepairStore(store);
+  const day = repaired.daily['2026-09-08'];
+  assert.equal(day.activity.focusSessions.length, 1);
+  assert.equal(day.activity.focusMinutes, 25);
+  assert.equal(day.activity.activeMinutes, 5);
+});
+
+
+/* 删除笔记（1.19.0）。失败模式：
+   - 当天新建又删掉的草稿、误建的「未命名」文件仍算新建笔记和字数（用户看到已删的文件还在计分）。
+   - 反过来，删掉一篇旧笔记把过去那些天的记录也擦掉。
+   - Obsidian 关着时删掉的，重新打开后仍在计分。 */
+test('a note created and deleted on the same day is rolled back; a deleted older note keeps its history', async () => {
+  const { p, handlers } = setup();
+  await p.loadPluginData();p.registerVaultEvents();
+  p.settings.weightNoteCreated = 5;
+  await p.handleFileCreation({ path: 'drafts/未命名思维导图.mind.md', extension: 'md', content: 'word '.repeat(56) });
+  const kept = { path: 'notes/old.md', extension: 'md', content: 'zero' };
+  p.fileSnapshots.set(kept.path, baseline(kept.content));
+  kept.content = 'zero one two three';await p.handleFileModification(kept);
+  let today = p.getOrCreateTodayRecord();
+  assert.equal(today.contribution.notesCreated, 1);
+  assert.equal(today.contribution.wordsAdded, 59);
+  await handlers.delete({ path: 'drafts/未命名思维导图.mind.md' });
+  await handlers.delete({ path: 'notes/old.md' });
+  today = p.getOrCreateTodayRecord();
+  assert.equal(today.contribution.notesCreated, 0);
+  assert.equal(today.contribution.wordsAdded, 3);
+  assert.deepEqual(Object.keys(today.files), ['notes/old.md'], '旧笔记今天的编辑仍保留');
+  const yesterday = p.getOrCreateRecord('2026-09-07');
+  yesterday.files = { 'notes/gone.md': { wordsAdded: 40, created: true, tasks: 0, links: 0 } };
+  yesterday.contribution.notesCreated = 1;yesterday.contribution.wordsAdded = 40;
+  await handlers.delete({ path: 'notes/gone.md' });
+  assert.equal(p.getOrCreateRecord('2026-09-07').contribution.wordsAdded, 40, '以前的记录不擦掉');
+});
+
+test('deleting a folder rolls back the notes created in it today', async () => {
+  const { p, handlers } = setup();
+  await p.loadPluginData();p.registerVaultEvents();
+  await p.handleFileCreation({ path: 'scratch/a.md', extension: 'md', content: 'one two' });
+  await p.handleFileCreation({ path: 'scratch/b.md', extension: 'md', content: 'three' });
+  await p.handleFileCreation({ path: 'keep.md', extension: 'md', content: 'four five' });
+  await handlers.delete({ path: 'scratch' });
+  const today = p.getOrCreateTodayRecord();
+  assert.equal(today.contribution.notesCreated, 1);
+  assert.equal(today.contribution.wordsAdded, 2);
+});
+
+test('notes deleted while Obsidian was closed are rolled back on startup', async () => {
+  const { p } = setup();
+  await p.loadPluginData();
+  await p.handleFileCreation({ path: 'gone.md', extension: 'md', content: 'one two three' });
+  await p.handleFileCreation({ path: 'here.md', extension: 'md', content: 'four' });
+  p.app.vault.getAbstractFileByPath = (path) => (path === 'here.md' ? { path } : null);
+  assert.equal(p.rollbackSameDayCreations((path) => !p.app.vault.getAbstractFileByPath(path)), true);
+  const today = p.getOrCreateTodayRecord();
+  assert.deepEqual(Object.keys(today.files), ['here.md']);
+  assert.equal(today.contribution.wordsAdded, 1);
+  assert.equal(today.contribution.notesCreated, 1);
 });

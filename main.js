@@ -390,7 +390,8 @@ const DEFAULT_SETTINGS = {
   hasRunBackfill: false,
   showStatusBarItem: true,
   showHeaderBanner: true,
-  showFooterLandscape: true, // pixel horizon at the bottom of the Pulse view; the ridge is recent daily contribution
+  showFooterLandscape: true,
+  memoPomodoroPrompt: true, // during a Crisp Focus pomodoro break, the memo composer asks what the round produced // pixel horizon at the bottom of the Pulse view; the ridge is recent daily contribution
   headerBannerImage: "", // vault path of a custom banner image; empty uses the generated sky
 
   // --- 1.1 Credible Analytics Settings ---
@@ -1040,6 +1041,11 @@ class CrispFocusAdapter {
     if (this.attachedPlugin === focusPlugin) return;
 
     this.detach();
+    // Focus 1.5.0 起对外发 crisp-focus:session 事件，Pulse 只听事件，不再包装它的方法（否则同一段会记两次）
+    if (Number(focusPlugin.focusApiVersion) >= 1) {
+      this.attachedPlugin = focusPlugin;
+      return;
+    }
     const self = this;
     this.attachedPlugin = focusPlugin;
     this.originalComplete = focusPlugin.completeFocusSession;
@@ -1217,6 +1223,18 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
         if (!Number.isFinite(val) || val < 0) {
           rec.activity[field] = 0;
           repairedCount++;
+        }
+      }
+      // 每一段专注（来自 Crisp Focus 事件）：形状不对的条目丢掉，不影响其他统计
+      if (rec.activity.focusSessions !== undefined) {
+        if (!Array.isArray(rec.activity.focusSessions)) {
+          delete rec.activity.focusSessions;
+          repairedCount++;
+        } else {
+          const valid = rec.activity.focusSessions.filter((x) => x && typeof x === "object" && /^\d{2}:\d{2}$/.test(x.at)
+            && Number.isFinite(x.minutes) && x.minutes >= 0 && x.minutes <= 240 && typeof x.completed === "boolean" && typeof x.pomodoro === "boolean"
+            && (x.note === undefined || x.note === null || typeof x.note === "string")).slice(-200);
+          if (valid.length !== rec.activity.focusSessions.length) { rec.activity.focusSessions = valid; repairedCount++; }
         }
       }
       // 24 小时分布只从开始按小时记录的那天起存在；形状不对就当作没记录，不伪造零。
@@ -1398,6 +1416,9 @@ class CrispPulsePlugin extends Plugin {
         this.refreshMemoViews();
       }).open()
     });
+    if (this.app.workspace?.on) {
+      this.registerEvent(this.app.workspace.on("crisp-focus:session", (event) => { void this.handleFocusSessionEvent(event); }));
+    }
     if (this.app.metadataCache?.on) {
       this.registerEvent(this.app.metadataCache.on("changed", (file, data) => {
         if (typeof data === "string" && data.includes("[!memo]")) this.refreshMemoViews();
@@ -1536,6 +1557,11 @@ class CrispPulsePlugin extends Plugin {
       await this.initializeSnapshots();
       if (this.stopped) return;
       this.registerVaultEvents();
+      // Obsidian 关着或 Pulse 停用时删掉的当天新建笔记，启动时补一次撤回
+      if (this.rollbackSameDayCreations((path) => !this.app.vault.getAbstractFileByPath(path))) {
+        await this.savePluginData();
+        this.refreshViews();
+      }
       if (!this.settings.hasRunBackfill) {
         console.log("[Crisp Pulse] Running initial historical backfill...");
         await this.runHistoricalBackfill(false);
@@ -1881,7 +1907,51 @@ class CrispPulsePlugin extends Plugin {
   }
 
   // 1.3.0 Ecosystem: Handle Crisp Focus completed session
-  async handleFocusSessionCompleted(minutes) {
+  /* Crisp Focus 1.5.0 起的会话事件。完成的专注照旧计入专注分钟（参与贡献分）；中途结束的只记录，不计分，
+     免得开了就停也能刷分。休息只用来提示记速记。 */
+  async handleFocusSessionEvent(event) {
+    if (!this.settings.enableCrispFocusSync || !event || !(Number(event.apiVersion) >= 1) || this.stopped) return;
+    const key = `${event.id}:${event.type}`;
+    this.focusEventsSeen ||= new Set();
+    if (this.focusEventsSeen.has(key)) return;
+    this.focusEventsSeen.add(key);
+    if (this.focusEventsSeen.size > 200) this.focusEventsSeen.delete(this.focusEventsSeen.values().next().value);
+    if (event.kind === "break") {
+      this.pomodoroBreak = event.type === "start" || event.type === "resume" ? { id: event.id, phase: event.phase, dismissed: this.pomodoroBreak?.id === event.id && this.pomodoroBreak.dismissed } : null;
+      this.refreshMemoComposerStatus();
+    } else if (event.type === "start") {
+      this.pomodoroBreak = null;
+      this.refreshMemoComposerStatus();
+    }
+    if (event.kind === "focus" && (event.type === "complete" || event.type === "stop")) {
+      const completed = event.type === "complete";
+      const minutes = completed ? Math.max(1, Math.round(Number(event.plannedMinutes) || 0)) : Math.floor((Number(event.elapsedMs) || 0) / 60000);
+      // 不到 1 分钟就结束的不留记录
+      if (completed || minutes >= 1) {
+        const started = new Date(Number(event.startedAt) || Date.now());
+        const today = this.getOrCreateTodayRecord();
+        if (!Array.isArray(today.activity.focusSessions)) today.activity.focusSessions = [];
+        today.activity.focusSessions.push({
+          at: `${String(started.getHours()).padStart(2, "0")}:${String(started.getMinutes()).padStart(2, "0")}`,
+          minutes: Math.min(240, minutes), completed, pomodoro: !!event.pomodoro,
+          note: typeof event.notePath === "string" ? event.notePath : null,
+        });
+        this.dirty = true;
+        if (completed) await this.handleFocusSessionCompleted(minutes, { quiet: !!event.pomodoro });
+        else { await this.savePluginData(); this.refreshViews(); }
+      }
+    } else {
+      this.refreshViews();
+    }
+    this.updateStatusBar();
+  }
+
+  /** 速记面板的状态行跟着番茄钟的休息变化。 */
+  refreshMemoComposerStatus() {
+    for (const leaf of this.app.workspace?.getLeavesOfType?.(VIEW_TYPE_MEMO) || []) leaf.view?.updateRecordingUi?.();
+  }
+
+  async handleFocusSessionCompleted(minutes, { quiet = false } = {}) {
     if (!this.settings.enableCrispFocusSync) return;
     const mins = Math.max(1, Math.round(Number(minutes) || 25));
     const today = this.getOrCreateTodayRecord();
@@ -1892,6 +1962,7 @@ class CrispPulsePlugin extends Plugin {
     this.updateStatusBar();
     this.refreshViews();
 
+    if (quiet) return; // 番茄钟自己会提示「第 N 个番茄完成」，这里不再叠一条
     const bonus = this.settings.includeFocusInContribution
       ? `（+${(mins * (this.settings.weightFocusMinute ?? 0.05)).toFixed(1)} 贡献分）`
       : "";
@@ -2041,10 +2112,15 @@ class CrispPulsePlugin extends Plugin {
         const isGone = path => path === file.path || path.startsWith(`${file.path}/`);
         for (const path of [...this.fileSnapshots.keys()]) if (isGone(path)) this.fileSnapshots.delete(path);
         for (const path of [...this.fileQueues.keys()]) if (isGone(path)) this.fileQueues.delete(path);
+        const createdToday = new Set(Object.keys(this.store.daily[getTodayKey()]?.files || {}).filter((path) => isGone(path) && this.store.daily[getTodayKey()].files[path]?.created));
         for (const [path, session] of [...this.activeSessions.entries()]) {
           if (!isGone(path)) continue;
-          this.closeSession(session);
+          // 当天新建又删掉的笔记，编辑会话也不算
+          if (!createdToday.has(path)) this.closeSession(session);
           this.activeSessions.delete(path);
+        }
+        if (this.rollbackSameDayCreations(isGone)) {
+          void this.savePluginData().then(() => { this.updateStatusBar(); this.refreshViews(); });
         }
       })
     );
@@ -2550,6 +2626,32 @@ class CrispPulsePlugin extends Plugin {
     await this.savePluginData();
   }
 
+  /* 当天新建、当天删除的笔记（草稿、误建的「未命名」文件）不算当天的产出，把它在今天的记录整条撤回。
+     以前的记录保留：那些天的工作确实做过，删旧笔记、整理库不该擦掉过去的热力图。 */
+  rollbackSameDayCreations(isGone) {
+    const today = this.store?.daily?.[getTodayKey()];
+    if (!today?.files || !today.contribution) return false;
+    let changed = false;
+    for (const [path, rec] of Object.entries(today.files)) {
+      if (!rec?.created || !isGone(path)) continue;
+      const c = today.contribution;
+      const sub = (field, value) => { c[field] = Math.max(0, (Number(c[field]) || 0) - (Number(value) || 0)); };
+      sub("notesCreated", 1);
+      sub("wordsAdded", rec.wordsAdded);
+      sub("linksCreated", rec.links);
+      sub("tasksCompleted", rec.tasks);
+      sub("rewrittenWords", rec.rewrittenWords);
+      sub("captureWords", rec.sourceWords?.capture);
+      delete today.files[path];
+      changed = true;
+    }
+    if (changed) {
+      this.recomputeScore(today);
+      this.dirty = true;
+    }
+    return changed;
+  }
+
   closeSession(session) {
     if (!session?.isMeaningful) return;
     const record = this.getOrCreateRecord(session.date || getTodayKey());
@@ -2933,6 +3035,8 @@ class CrispPulsePlugin extends Plugin {
           return rec.activity?.activeMinutes || 0;
         case "focus":
           return rec.activity?.focusMinutes || 0;
+        case "pomodoro":
+          return dayPomodoros(rec).done;
         case "words":
           return rec.contribution?.wordsAdded || 0;
         case "notes":
@@ -3920,6 +4024,59 @@ function paintPulseSky(canvas, mode = "night", seed = 7) {
   ctx.putImageData(img, 0, 0);
 }
 
+/* ---------- 番茄：一天里完成 / 中断的番茄，以及像素番茄图标 ---------- */
+/** 只算番茄钟的专注阶段；单次专注会话不算番茄。 */
+function dayPomodoros(record) {
+  const list = Array.isArray(record?.activity?.focusSessions) ? record.activity.focusSessions : [];
+  let done = 0, interrupted = 0;
+  for (const s of list) if (s?.pomodoro) { if (s.completed) done++; else interrupted++; }
+  return { done, interrupted };
+}
+
+// 10×10 的像素番茄：G/g 果蒂叶子，r 果肉，h 高光，d 背光
+const PIXEL_TOMATO_CLASSES = { G: "t-leaf-dark", g: "t-leaf", r: "t-body", h: "t-light", d: "t-shade" };
+const PIXEL_TOMATO_STATES = { done: "is-done", missed: "is-missed", todo: "is-todo", current: "is-current" };
+const PIXEL_TOMATO = [
+  "....GG....",
+  "..gggGgg..",
+  ".rrgrrgrr.",
+  "rrhhrrrrrr",
+  "rhhrrrrrrr",
+  "rhrrrrrrrr",
+  "rrrrrrrrrd",
+  "rrrrrrrrdd",
+  ".rrrrrrdd.",
+  "..dddddd..",
+];
+
+/** 画一个像素番茄。state：done 完成、missed 中断、todo 还没做（只剩轮廓）、current 正在做（按 progress 从下往上填满）。 */
+function pixelTomato(parent, state = "done", progress = 0) {
+  const doc = parent.ownerDocument || document;
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = doc.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 10 10");
+  svg.setAttribute("shape-rendering", "crispEdges");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", `pulse-tomato ${PIXEL_TOMATO_STATES[state] || PIXEL_TOMATO_STATES.done}`);
+  // 还没做的番茄只画轮廓：四邻有空白的像素才画
+  const filled = (x, y) => (PIXEL_TOMATO[y]?.[x] || ".") !== ".";
+  const fillFrom = state === "current" ? 10 - Math.round(Math.max(0, Math.min(1, progress)) * 10) : 0;
+  PIXEL_TOMATO.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (ch === ".") return;
+    const outline = state === "todo" || (state === "current" && y < fillFrom);
+    if (outline && filled(x - 1, y) && filled(x + 1, y) && filled(x, y - 1) && filled(x, y + 1)) return;
+    const rect = doc.createElementNS(NS, "rect");
+    rect.setAttribute("x", String(x));
+    rect.setAttribute("y", String(y));
+    rect.setAttribute("width", "1");
+    rect.setAttribute("height", "1");
+    rect.setAttribute("class", outline && state === "current" ? `${PIXEL_TOMATO_CLASSES[ch]} t-outline` : PIXEL_TOMATO_CLASSES[ch]);
+    svg.appendChild(rect);
+  }));
+  parent.appendChild(svg);
+  return svg;
+}
+
 /* ---------- 页脚：像素地平线，和顶部天空同一套配色与抖动 ---------- */
 const PULSE_GROUND_HEIGHT = 60, PULSE_GROUND_SCALE = 2;
 // 山脊在画布里的位置：没有贡献的日子停在 base，峰值升到 base + rise（占画布高度的比例，从下往上量）
@@ -4135,6 +4292,7 @@ class CrispPulseView extends ItemView {
   }
 
   async onClose() {
+    if (this.pomodoroTicker) window.clearInterval(this.pomodoroTicker);
     this.analyticsResizeObserver?.disconnect();
     this.footerResizeObserver?.disconnect();
     if (this.analyticsResizeFrame) this.containerEl.ownerDocument.defaultView.cancelAnimationFrame(this.analyticsResizeFrame);
@@ -5437,13 +5595,17 @@ class CrispPulseView extends ItemView {
     const heat = this.trayCard(wrapper, { icon: 'calendar-days', title: '年度知识活跃脉冲', subtitle: `${metricLabel} · 强度按个人近期分位数`, pill: `${stats.activeDays} 天活跃`, pillMuted: true, cls: 'pulse-v2-heat' });
     const seg = heat.createDiv({ cls: 'pulse-v2-seg' });
     seg.setAttr('role', 'tablist');
-    for (const m of [['contribution', '贡献分'], ['activity', '交互活跃'], ['focus', '深度专注'], ['words', '新增字数'], ['notes', '新建笔记'], ['tasks', '完成任务']]) {
+    // 「番茄」只在装了带番茄钟的 Crisp Focus、或者已经有番茄记录时出现
+    const hasPomodoro = !!this.pomodoroFocus() || Object.values(this.plugin.store.daily || {}).some((r) => dayPomodoros(r).done > 0);
+    for (const m of [['contribution', '贡献分'], ['activity', '交互活跃'], ['focus', '深度专注'], ...(hasPomodoro ? [['pomodoro', '番茄']] : []), ['words', '新增字数'], ['notes', '新建笔记'], ['tasks', '完成任务']]) {
       const b = seg.createEl('button', { text: m[1] });
       b.setAttr('role', 'tab');
       b.setAttr('aria-selected', String(this.selectedMetric === m[0]));
       b.addEventListener('click', () => { this.selectedMetric = m[0]; this.render(); });
     }
     this.renderHeatmapCard(heat);
+    // 热力图是看板的主角放在上面；番茄是今天的行动入口，紧跟其后
+    this.renderPomodoroCard(wrapper);
 
     const rec = this.plugin.store.daily[this.selectedDate] || createEmptyDailyRecord(this.selectedDate, 'none');
     const quality = rec.quality === 'recorded' ? '真实记录' : rec.quality === 'estimated' ? '历史估算' : rec.quality === 'mixed' ? '含估算' : '无记录';
@@ -5451,6 +5613,111 @@ class CrispPulseView extends ItemView {
     const info = map.get(this.selectedDate) || { level: 0, percentile: 0 };
     const detail = this.trayCard(wrapper, { icon: 'file-text', title: `${formatDateDisplay(this.selectedDate)} 明细`, subtitle: `${quality}${info.level > 0 ? ` · 强度第 ${info.percentile}% 分位` : ''}`, pill: `${(rec.contribution?.score || 0).toFixed(1)} 分`, pillMuted: !(rec.contribution?.score > 0), cls: 'pulse-v2-detail' });
     this.renderDayDetailCard(detail);
+  }
+
+  /** 装了带番茄钟的 Crisp Focus（1.5.0 起）才有的接口。 */
+  pomodoroFocus() {
+    const focus = this.plugin.focusAdapter?.getFocusPlugin?.();
+    return focus && Number(focus.focusApiVersion) >= 1 && typeof focus.getPomodoroSnapshot === "function" ? focus : null;
+  }
+
+  /* 今天的番茄：像素番茄排成一行（完成 / 中断 / 离目标还差几个），右边是正在进行的阶段和按钮。
+     计时在 Crisp Focus 里，这里只读状态、调它的接口。两边都需要激活。 */
+  renderPomodoroCard(wrapper) {
+    if (this.pomodoroTicker) { window.clearInterval(this.pomodoroTicker); this.pomodoroTicker = null; }
+    const focus = this.pomodoroFocus();
+    if (!focus || !this.plugin.settings.enableCrispFocusSync) return;
+    const snap = focus.getPomodoroSnapshot();
+    const today = dayPomodoros(this.plugin.store.daily[getTodayKey()]);
+    const card = this.trayCard(wrapper, {
+      icon: "timer", title: "今天的番茄", cls: "pulse-v2-pomodoro",
+      subtitle: `专注 ${snap.focusMinutes} 分钟 · 短休 ${snap.shortBreakMinutes} · 每 ${snap.every} 个长休 ${snap.longBreakMinutes}`,
+      pill: `${today.done} / ${snap.goal}`, pillMuted: today.done === 0,
+    });
+    const locked = (title, text, action, run) => {
+      const box = card.createDiv({ cls: "pulse-pomo-locked" });
+      box.createDiv({ cls: "pulse-pomo-locked-title", text: title });
+      box.createDiv({ cls: "crisp-pulse-review-note", text });
+      const b = box.createEl("button", { cls: "mod-cta", text: action });
+      b.addEventListener("click", run);
+    };
+    if (!this.plugin.isEntitled()) return locked("番茄记录需要激活 Crisp Pulse", "激活后在看板上查看每天的番茄、中断和专注时长。番茄照常记录。", "前往激活", () => this.plugin.openLicenseSettings());
+    if (!snap.entitled) return locked("番茄钟需要激活 Crisp Focus", "激活 Crisp Focus 后，在这里开始番茄、查看进度。", "打开 Crisp Focus 设置", () => focus.openSettings?.());
+
+    const body = card.createDiv({ cls: "pulse-pomo" });
+    const row = body.createDiv({ cls: "pulse-pomo-row", attr: { role: "img", "aria-label": `今天完成 ${today.done} 个番茄，中断 ${today.interrupted} 个，目标 ${snap.goal} 个` } });
+    const focusing = snap.kind === "focus" && snap.pomodoro && snap.status !== "idle";
+    const slots = Math.min(24, Math.max(snap.goal, today.done + today.interrupted + (focusing ? 1 : 0)));
+    let current = null;
+    const progressOf = (x) => (x.plannedMs > 0 ? 1 - x.remainingMs / x.plannedMs : 0);
+    for (let i = 0; i < slots; i++) {
+      const index = i - today.done - today.interrupted;
+      const state = i < today.done ? "done" : index < 0 ? "missed" : index === 0 && focusing ? "current" : "todo";
+      const svg = pixelTomato(row, state, progressOf(snap));
+      if (state === "current") current = svg;
+    }
+    const live = body.createDiv({ cls: "pulse-pomo-live" });
+    const status = live.createDiv({ cls: "pulse-pomo-status" });
+    const pill = status.createSpan({ cls: "pulse-pomo-pill" });
+    const time = status.createSpan({ cls: "pulse-pomo-time" });
+    const sub = status.createSpan({ cls: "pulse-pomo-sub" });
+    const actions = live.createDiv({ cls: "pulse-pomo-actions" });
+    const act = (label, run, primary = false) => {
+      const b = actions.createEl("button", { cls: `pulse-pomo-btn${primary ? " is-primary" : ""}`, text: label });
+      b.addEventListener("click", async () => {
+        try { await run(); } catch (error) { new Notice(`Crisp Pulse：${error.message || error}`); }
+        this.render();
+      });
+    };
+    const running = snap.status !== "idle";
+    const paused = snap.status === "paused";
+    const tone = snap.kind === "break" ? "break" : "focus";
+    live.dataset.tone = tone;
+    live.toggleClass("is-paused", paused);
+    if (snap.kind === "break" && running) {
+      pill.setText(paused ? "休息暂停" : snap.phase === "long-break" ? "长休" : "短休");
+      if (paused) act("继续", () => focus.resumeFocusSession(), true);
+      act("记一条", () => this.plugin.activateMemoView(), !paused);
+      act("跳过休息", () => focus.skipPomodoroBreak());
+    } else if (running) {
+      pill.setText(paused ? "已暂停" : snap.pomodoro ? `专注 · 第 ${((snap.round - 1) % snap.every) + 1} / ${snap.every} 个` : "单次专注");
+      act(paused ? "继续" : "暂停", () => (paused ? focus.resumeFocusSession() : focus.pauseFocusSession()), true);
+      act("结束", () => (snap.pomodoro ? focus.endPomodoro() : focus.stopFocusSession()));
+    } else if (snap.waiting) {
+      pill.setText("休息结束");
+      act("开始下一个", () => focus.startNextPomodoro(), true);
+      act("结束本轮", () => focus.endPomodoro());
+    } else {
+      pill.setText(today.done ? "继续下一个" : "还没开始");
+      act("开始番茄", () => focus.startPomodoro(), true);
+    }
+    let filledRows = -1;
+    const tick = () => {
+      if (!time.isConnected) { window.clearInterval(this.pomodoroTicker); this.pomodoroTicker = null; return; }
+      const now = focus.getPomodoroSnapshot();
+      // 正在做的番茄每填满一行像素才重画一次
+      const rows = Math.round(Math.max(0, Math.min(1, progressOf(now))) * 10);
+      if (current?.isConnected && rows !== filledRows) {
+        filledRows = rows;
+        const next = pixelTomato(row, "current", progressOf(now));
+        current.replaceWith(next);
+        current = next;
+      }
+      const ms = now.status === "idle" ? now.focusMinutes * 60000 : now.remainingMs;
+      const total = Math.max(0, Math.ceil(ms / 1000));
+      time.setText(`${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`);
+      if (now.status === "running") {
+        const end = new Date(Date.now() + now.remainingMs);
+        sub.setText(now.kind === "break" ? "离开屏幕，站起来走走" : `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")} 结束`);
+      } else sub.setText(now.status === "paused" ? "暂停中" : now.waiting ? "准备好就开始" : "点开始进入第一个番茄");
+    };
+    tick();
+    if (running && !paused) this.pomodoroTicker = window.setInterval(tick, 1000);
+    const foot = body.createDiv({ cls: "pulse-pomo-foot" });
+    const minutes = (this.plugin.store.daily[getTodayKey()]?.activity?.focusSessions || []).filter((x) => x.pomodoro && x.completed).reduce((sum, x) => sum + x.minutes, 0);
+    foot.createSpan({ text: minutes ? `今天番茄专注 ${minutes} 分钟${today.interrupted ? ` · 中断 ${today.interrupted} 个（只记录，不计分）` : ""}` : "完成的番茄计入专注时长和贡献分；中途结束的只记录，不计分" });
+    const open = foot.createEl("button", { cls: "pulse-pomo-link", text: "打开番茄钟" });
+    open.addEventListener("click", () => focus.openPomodoroModal?.());
   }
 
   renderHeatmapCard(parent) {
@@ -5758,8 +6025,14 @@ class CrispPulseView extends ItemView {
 
         const nameSpan = item.createSpan({ cls: "crisp-pulse-file-name", text: fp });
         const metaSpan = item.createSpan({ cls: "crisp-pulse-file-meta" });
+        // 以前的记录里，笔记后来被删了：记录保留，但不再像能点开的链接
+        const deleted = !(this.app.vault.getAbstractFileByPath(fp) instanceof TFile);
+        if (deleted) {
+          item.addClass("is-deleted");
+          item.setAttr("aria-label", `${fp}（已删除）`);
+        }
 
-        const parts = [];
+        const parts = deleted ? ["已删除"] : [];
         if (fInfo.created) parts.push("新建");
         if (fInfo.wordsAdded > 0) parts.push(`+${fInfo.wordsAdded}词`);
         if (fInfo.rewrittenWords > 0) parts.push(`改写${fInfo.rewrittenWords}词`);
@@ -5768,12 +6041,8 @@ class CrispPulseView extends ItemView {
         metaSpan.textContent = parts.join(" · ") || "已编辑";
 
         item.addEventListener("click", () => {
-          const file = this.app.vault.getAbstractFileByPath(fp);
-          if (file instanceof TFile) {
-            this.app.workspace.openLinkText(fp, "");
-          } else {
-            new Notice(`无法打开：文件 "${fp}" 已不存在。`);
-          }
+          if (deleted) return;
+          this.app.workspace.openLinkText(fp, "");
         });
       }
     }
@@ -6093,6 +6362,8 @@ class CrispPulseView extends ItemView {
         return "交互活跃分钟";
       case "focus":
         return "深度专注分钟";
+      case "pomodoro":
+        return "完成的番茄";
       case "words":
         return "新增词数";
       case "notes":
@@ -6506,6 +6777,12 @@ function buildMemoNowLine(memo) {
 /* ---------- flomo 核心：搜索筛选、标签树、标签改名、每日回顾、去年今日、URL 入口 ---------- */
 
 const MEMO_TAG_TAIL = "(?=$|[\\s/，。,.;；:：!！?？)）\\]])";
+
+/** 正文里还没有这个标签就接在末尾。 */
+function memoWithTag(text, tag) {
+  if (new RegExp(`(^|\\s)#${escapeRegExp(tag)}${MEMO_TAG_TAIL}`).test(text)) return text;
+  return `${text.replace(/\s+$/, "")} #${tag}`;
+}
 
 function memoHasTag(memo, tag) {
   return memo.tags.some((t) => t === tag || t.startsWith(`${tag}/`));
@@ -8072,6 +8349,12 @@ class CrispPulseMemoView extends ItemView {
       return { text: `录音中 ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`, actions: [["结束录音", () => this.toggleRecording()]] };
     }
     if (this.recordingSaving) return { text: "正在保存录音…", actions: [] };
+    const pomodoroBreak = this.plugin.pomodoroBreak;
+    if (pomodoroBreak && !pomodoroBreak.dismissed && this.plugin.settings.memoPomodoroPrompt !== false) {
+      return { text: "记一下这一轮做了什么（带 #番茄）", actions: [
+        ["不用了", () => { pomodoroBreak.dismissed = true; this.plugin.refreshMemoComposerStatus(); }],
+      ] };
+    }
     if (this.draftRestored && this.draft.trim()) {
       return { text: "已恢复上次没提交的草稿", actions: [
         ["清空", () => { const input = this.composerInput(); if (input) input.value = ""; this.setDraft(""); this.draftRestored = false; this.updateRecordingUi(); }],
@@ -8243,7 +8526,10 @@ class CrispPulseMemoView extends ItemView {
       this.memoSubmitting = true;
       send.disabled = true;
       try {
-        await this.plugin.memoStore.capture(submitted, new Date());
+        // 番茄钟休息时记下的速记带上 #番茄，方便以后回看每一轮做了什么
+        const pomodoroBreak = this.plugin.pomodoroBreak;
+        const tagged = pomodoroBreak && !pomodoroBreak.dismissed && this.plugin.settings.memoPomodoroPrompt !== false ? memoWithTag(submitted, "番茄") : submitted;
+        await this.plugin.memoStore.capture(tagged, new Date());
         if (!this.composerComposing && this.draftRevision === revision && this.draft === submitted) this.setDraft("");
         await this.reload();
         this.containerEl.children[1].querySelector(".crisp-pulse-memo-input")?.focus();
@@ -9414,8 +9700,19 @@ class CrispPulseSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("番茄钟休息时提示记速记")
+      .setDesc("Crisp Focus 1.5.0 起的番茄钟进入休息时，速记输入框下方提示「这一轮做了什么」，休息期间记下的速记自动带上 #番茄。")
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.memoPomodoroPrompt !== false).onChange(async (val) => {
+          this.plugin.settings.memoPomodoroPrompt = val;
+          await this.plugin.saveSettings();
+          this.plugin.refreshMemoComposerStatus();
+        })
+      );
+
+    new Setting(containerEl)
       .setName("专注时长计入贡献总分")
-      .setDesc("开启后，番茄钟专注分钟数将按设定权重折算为知识脉冲贡献得分")
+      .setDesc("开启后，完成的专注分钟数按设定权重折算为贡献得分；番茄钟中途结束的只记录，不计分。")
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.includeFocusInContribution).onChange(async (val) => {
           this.plugin.settings.includeFocusInContribution = val;
@@ -9595,7 +9892,7 @@ module.exports.CrispPulseEvidenceModal = CrispPulseEvidenceModal;
 module.exports.CrispPulseMemoView = CrispPulseMemoView;
 module.exports.memoHelpers = {
   buildMemoBlock, parseMemoBlocks, extractMemoTags, insertMemoBlock, removeMemoBlock, appendMemoLink,
-  memoStats, memoHeatLevel, memoHasImage, memoHasLink, memoHasAudio, memoTranscriptionState, memoHasTranscriptFor, memoAsrErrorInfo, memoConversionReview, memoTaskTitle, memoTempoLabel, bindHoldPress, memoAttachmentName, memoRecordingName, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
+  memoStats, memoHeatLevel, memoHasImage, memoHasLink, memoHasAudio, memoTranscriptionState, memoHasTranscriptFor, memoAsrErrorInfo, memoConversionReview, memoWithTag, memoTaskTitle, memoTempoLabel, bindHoldPress, memoAttachmentName, memoRecordingName, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
   buildMemoQuestionNote, buildMemoNote, buildMemoNowLine, MemoStore,
   filterMemos, buildTagTree, renameTagInText, renameTagInContent, selectDailyReview, onThisDay, parseMemoUrlParams,
   tokenizeMemo, buildMemoIndex, relatedMemos, walkStep, explainShared,

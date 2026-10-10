@@ -463,6 +463,9 @@
   transition: all 0.15s ease;
 }
 
+.crisp-pulse-file-item.is-deleted { cursor: default; }
+.crisp-pulse-file-item.is-deleted .crisp-pulse-file-name { color: var(--text-faint); text-decoration: line-through; }
+
 .crisp-pulse-file-item:hover {
   background-color: var(--background-modifier-hover);
   border-color: var(--color-accent);
@@ -2567,4 +2570,133 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
   .crisp-pulse-view .crisp-pulse-footer-info { grid-template-columns: auto auto; justify-content: space-between; }
   .crisp-pulse-view .crisp-pulse-footer-caption { grid-column: 1 / -1; grid-row: 3; text-align: left; }
   .crisp-pulse-view .crisp-pulse-footer-ground { height: 96px; }
+}
+
+/* Today's pomodoros: pixel tomatoes in the same pixel language as the banner and footer. */
+.crisp-pulse-view {
+  --pulse-tomato: color-mix(in srgb, var(--color-red) 86%, var(--color-orange));
+  --pulse-tomato-leaf: var(--color-green);
+}
+.crisp-pulse-view .pulse-pomo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  align-items: center;
+  gap: 16px 24px;
+  padding: 16px 18px 12px;
+}
+.crisp-pulse-view .pulse-pomo-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+.crisp-pulse-view .pulse-tomato {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  image-rendering: pixelated;
+}
+.crisp-pulse-view .pulse-tomato .t-body { fill: var(--pulse-tomato); }
+.crisp-pulse-view .pulse-tomato .t-light { fill: color-mix(in srgb, var(--pulse-tomato) 55%, #fff); }
+.crisp-pulse-view .pulse-tomato .t-shade { fill: color-mix(in srgb, var(--pulse-tomato) 72%, #000); }
+.crisp-pulse-view .pulse-tomato .t-leaf { fill: var(--pulse-tomato-leaf); }
+.crisp-pulse-view .pulse-tomato .t-leaf-dark { fill: color-mix(in srgb, var(--pulse-tomato-leaf) 70%, #000); }
+.crisp-pulse-view .pulse-tomato.is-missed { filter: grayscale(1); opacity: 0.5; }
+.crisp-pulse-view .pulse-tomato.is-current .t-outline { fill: color-mix(in srgb, var(--pulse-tomato) 45%, transparent); }
+.crisp-pulse-view .pulse-tomato.is-todo rect { fill: color-mix(in srgb, var(--text-normal) 22%, transparent); }
+.crisp-pulse-view .pulse-tomato.is-todo :is(.t-leaf, .t-leaf-dark) { fill: color-mix(in srgb, var(--pulse-tomato-leaf) 45%, transparent); }
+
+.crisp-pulse-view .pulse-pomo-live {
+  --pomo-tone: var(--pulse-tomato);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--pulse-ui-soft, var(--background-secondary));
+}
+.crisp-pulse-view .pulse-pomo-live[data-tone="break"] { --pomo-tone: var(--color-green); }
+.crisp-pulse-view .pulse-pomo-status {
+  display: grid;
+  grid-template-columns: auto;
+  gap: 2px;
+  min-width: 0;
+}
+.crisp-pulse-view .pulse-pomo-pill {
+  justify-self: start;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--pomo-tone);
+  background: color-mix(in srgb, var(--pomo-tone) 12%, transparent);
+}
+.crisp-pulse-view .pulse-pomo-live.is-paused .pulse-pomo-pill { color: var(--text-muted); background: var(--background-modifier-hover); }
+.crisp-pulse-view .pulse-pomo-time {
+  font-size: 30px;
+  line-height: 1.1;
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-normal);
+}
+.crisp-pulse-view .pulse-pomo-live.is-paused .pulse-pomo-time { color: var(--text-muted); }
+.crisp-pulse-view .pulse-pomo-sub {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.crisp-pulse-view .pulse-pomo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+}
+.crisp-pulse-view button.pulse-pomo-btn {
+  height: 30px;
+  min-width: 92px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 9px;
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+  cursor: pointer;
+}
+.crisp-pulse-view button.pulse-pomo-btn:hover { background: var(--background-modifier-active-hover); }
+.crisp-pulse-view button.pulse-pomo-btn.is-primary { color: #fff; background: var(--pomo-tone); }
+.crisp-pulse-view button.pulse-pomo-btn.is-primary:hover { background: color-mix(in srgb, var(--pomo-tone) 88%, #000); }
+.crisp-pulse-view button.pulse-pomo-btn:focus-visible,
+.crisp-pulse-view button.pulse-pomo-link:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+.crisp-pulse-view .pulse-pomo-foot {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--pulse-ui-border, var(--background-modifier-border));
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+.crisp-pulse-view button.pulse-pomo-link {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font-size: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.crisp-pulse-view button.pulse-pomo-link:hover { color: var(--text-normal); }
+.crisp-pulse-view .pulse-pomo-locked { display: grid; justify-items: start; gap: 6px; padding: 16px 18px; }
+.crisp-pulse-view .pulse-pomo-locked-title { font-weight: 600; }
+@container (max-width: 700px) {
+  .crisp-pulse-view .pulse-pomo { grid-template-columns: minmax(0, 1fr); }
+  .crisp-pulse-view .pulse-tomato { width: 24px; height: 24px; }
 }

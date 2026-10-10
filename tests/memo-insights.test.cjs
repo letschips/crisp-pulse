@@ -153,3 +153,11 @@ test('a restored draft is announced until the user edits or dismisses it', () =>
   assert.equal(v.draft, ''); assert.equal(input.value, '');
   assert.equal(v.composerStatus(), null);
 });
+
+test('memos written during a pomodoro break get #番茄 once, without matching longer tags', () => {
+  const { memoWithTag } = Pulse.memoHelpers;
+  assert.equal(memoWithTag('写完了第一节', '番茄'), '写完了第一节 #番茄');
+  assert.equal(memoWithTag('已经有 #番茄 了', '番茄'), '已经有 #番茄 了');
+  assert.equal(memoWithTag('只有 #番茄钟', '番茄'), '只有 #番茄钟 #番茄');
+  assert.equal(memoWithTag('末尾有换行\n', '番茄'), '末尾有换行 #番茄');
+});
