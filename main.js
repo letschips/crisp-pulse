@@ -390,6 +390,7 @@ const DEFAULT_SETTINGS = {
   hasRunBackfill: false,
   showStatusBarItem: true,
   showHeaderBanner: true,
+  showFooterLandscape: true, // pixel horizon at the bottom of the Pulse view; the ridge is recent daily contribution
   headerBannerImage: "", // vault path of a custom banner image; empty uses the generated sky
 
   // --- 1.1 Credible Analytics Settings ---
@@ -3785,9 +3786,8 @@ const PULSE_SKY_PALETTES = {
   }
 };
 
-function paintPulseSky(canvas, mode = "night", seed = 7) {
-  const w = canvas.width, h = canvas.height;
-  const p = PULSE_SKY_PALETTES[mode] || PULSE_SKY_PALETTES.night;
+/** 像素画共用的随机数和值噪声；同一个 seed 每次画出同一幅图。 */
+function pulsePixelNoise(seed) {
   let state = seed >>> 0;
   const rand = () => {
     state = (state + 0x6D2B79F5) >>> 0;
@@ -3811,8 +3811,26 @@ function paintPulseSky(canvas, mode = "night", seed = 7) {
     for (let i = 0; i < oct; i++) { v += amp * noise(x * f, y * f); norm += amp; f *= 2.03; amp *= gain; }
     return v / norm;
   };
-  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-  const clamp01 = t => Math.max(0, Math.min(1, t));
+  return { rand, hash, noise, fbm };
+}
+
+const pixelMix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const pixelClamp01 = t => Math.max(0, Math.min(1, t));
+const PIXEL_BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+/** 和顶部天空一样的 4×4 有序抖动、每通道 8 级。 */
+function pixelQuantize(img, o, c, x, y) {
+  const step = 255 / 7;
+  const th = (PIXEL_BAYER[(y & 3) * 4 + (x & 3)] + 0.5) / 16 - 0.5;
+  for (let k = 0; k < 3; k++) img.data[o + k] = Math.max(0, Math.min(255, Math.round(c[k] / step + th) * step));
+  img.data[o + 3] = 255;
+}
+
+function paintPulseSky(canvas, mode = "night", seed = 7) {
+  const w = canvas.width, h = canvas.height;
+  const p = PULSE_SKY_PALETTES[mode] || PULSE_SKY_PALETTES.night;
+  const { hash, noise, fbm } = pulsePixelNoise(seed);
+  const mix = pixelMix, clamp01 = pixelClamp01;
 
   const horizon = Math.round(h * 0.6), shore = horizon + Math.round(h * 0.05);
   // Clouds: warped fbm, banded so the sky keeps open gaps; lit from the upper right.
@@ -3835,8 +3853,6 @@ function paintPulseSky(canvas, mode = "night", seed = 7) {
   const tw = Math.max(3, Math.round(h / 32)), towerBase = Math.round(land[towerX]);
   const towerTop = towerBase - Math.round(h * 0.17), lampY = towerTop - 2;
   const houseL = towerX + tw + 1, houseR = houseL + Math.round(h * 0.09), houseTop = Math.round(land[houseL]) - Math.round(h * 0.05);
-  const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-  const step = 255 / 7;
   const ctx = canvas.getContext("2d");
   const img = ctx.createImageData(w, h);
   const clouds = new Float32Array(w * horizon);
@@ -3898,10 +3914,126 @@ function paintPulseSky(canvas, mode = "night", seed = 7) {
         c = mix(c, p.lamp, clamp01(1 - dist / 9) * 0.6);
         if (dx > 2 && Math.abs(dy) < dx * 0.045 + 1) c = mix(c, p.lamp, p.beam * (1 - Math.abs(dy) / (dx * 0.045 + 1)) * Math.pow(clamp01(1 - dx / (w * 0.42)), 2));
       }
-      const th = (bayer[(y & 3) * 4 + (x & 3)] + 0.5) / 16 - 0.5;
-      const o = (y * w + x) * 4;
-      for (let k = 0; k < 3; k++) img.data[o + k] = Math.max(0, Math.min(255, Math.round(c[k] / step + th) * step));
-      img.data[o + 3] = 255;
+      pixelQuantize(img, (y * w + x) * 4, c, x, y);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/* ---------- 页脚：像素地平线，和顶部天空同一套配色与抖动 ---------- */
+const PULSE_GROUND_HEIGHT = 60, PULSE_GROUND_SCALE = 2;
+// 山脊在画布里的位置：没有贡献的日子停在 base，峰值升到 base + rise（占画布高度的比例，从下往上量）
+const PULSE_GROUND_BASE = 0.24, PULSE_GROUND_RISE = 0.52;
+// 右侧留几列给「今天」的灯杆，不让它贴边被切掉
+const PULSE_GROUND_MARGIN = 10;
+
+/** 地平线画多少天：从第一条记录算起（至少 30 天），但每天至少占 3 列像素，最多 180 天。 */
+function groundDayCount(width, firstRecordDaysAgo = 0) {
+  const fit = Math.max(14, Math.floor((width - PULSE_GROUND_MARGIN) / 3));
+  return Math.max(14, Math.min(180, fit, Math.max(30, firstRecordDaysAgo + 8)));
+}
+
+/** 第 index 天（0 = 最早）在画布里的中心列。 */
+function groundDayX(index, n, width) {
+  return Math.round((index + 0.5) * (width - PULSE_GROUND_MARGIN) / n);
+}
+
+/** 最近 N 天每天的贡献分 → 每一列像素的山脊高度（0–1）。开平方压住个别高峰、又保留天与天的高低，再高斯平滑，看起来是山，不是柱状图。 */
+function buildGroundProfile(values, width) {
+  const out = new Float32Array(Math.max(0, width));
+  const n = values.length;
+  if (!n || width <= 0) return out;
+  const scores = values.map((v) => Math.max(0, Number(v) || 0));
+  const positive = scores.filter((v) => v > 0).sort((a, b) => a - b);
+  const ref = positive.length ? positive[Math.min(positive.length - 1, Math.floor(positive.length * 0.98))] : 0;
+  const norm = scores.map((v) => (ref > 0 ? Math.sqrt(Math.min(1, v / ref)) : 0));
+  // 高斯平滑（约前后 3 天），山峰圆一些，不会一天一根柱子
+  const kernel = [-3, -2, -1, 0, 1, 2, 3].map((d) => [d, Math.exp(-(d * d) / (2 * 1.4 * 1.4))]);
+  const soft = norm.map((_, i) => {
+    let sum = 0, weight = 0;
+    for (const [d, k] of kernel) { const v = norm[i + d]; if (v === undefined) continue; sum += v * k; weight += k; }
+    return sum / weight;
+  });
+  const day = (width - PULSE_GROUND_MARGIN) / n;
+  for (let x = 0; x < width; x++) {
+    const t = (x + 0.5) / day - 0.5;
+    const i = Math.max(0, Math.min(n - 1, Math.floor(t)));
+    const j = Math.min(n - 1, i + 1);
+    const f = pixelClamp01(t - i);
+    out[x] = soft[i] + (soft[j] - soft[i]) * f * f * (3 - 2 * f);
+  }
+  return out;
+}
+
+/** 山脊顶在画布里的行号（从上往下）。 */
+function groundRidgeRow(height, level) {
+  return height * (1 - PULSE_GROUND_BASE - PULSE_GROUND_RISE * level);
+}
+
+/** 画页脚地平线：远处一层淡山，中间是贡献山脊（光从右上来），近处一条暗色地面和几棵像素小树；todayX 处立一根小灯杆，夜里亮灯，白天挂旗。 */
+function paintPulseGround(canvas, mode, profile, todayX = -1, seed = 11) {
+  const w = canvas.width, h = canvas.height;
+  const p = PULSE_SKY_PALETTES[mode] || PULSE_SKY_PALETTES.night;
+  const { hash, noise, fbm } = pulsePixelNoise(seed);
+  const mix = pixelMix, clamp01 = pixelClamp01;
+  const far = new Float32Array(w), ridge = new Float32Array(w), near = new Float32Array(w), tree = new Int16Array(w).fill(-1);
+  for (let x = 0; x < w; x++) {
+    far[x] = h * 0.5 - Math.max(0, fbm(x / (h * 1.1) + 5, 1.7, 4) - 0.32) * h * 0.7;
+    ridge[x] = groundRidgeRow(h, profile[x] || 0) + (fbm(x / 4, 6.2, 3) - 0.5) * 2.4;
+    near[x] = h * 0.88 - fbm(x / (h * 0.45) + 2, 9.4, 3) * h * 0.13;
+  }
+  // 坡度取前后 3 列的平均，光照才不会一列一列地跳成竖条纹
+  const slopeAt = new Float32Array(w);
+  for (let x = 0; x < w; x++) slopeAt[x] = ((ridge[Math.min(w - 1, x + 3)]) - (ridge[Math.max(0, x - 3)])) / 6;
+  // 近处地面上稀疏的小松树：避开灯杆，彼此至少隔 6 列
+  for (let x = 3, last = -99; x < w - 3; x++) {
+    if (x - last < 6 || Math.abs(x - todayX) < 5 || hash(x * 3 + 1, 17) < 0.86) continue;
+    tree[x] = 3 + Math.floor(hash(x, 29) * 4);
+    last = x;
+  }
+  const lampTop = todayX >= 0 && todayX < w ? Math.round(ridge[todayX]) - 8 : -99;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const t = y / h;
+      let c = mix(p.skyTop, p.skyHorizon, 0.55 + 0.45 * t);
+      if (p.stars && y < h * 0.45 && hash(x * 7 + 3, y * 13 + 5) > 0.985) c = mix(c, [226, 232, 255], 0.6 * (1 - t * 2));
+      // 远山：带一层天色的薄雾，比贡献山脊浅
+      if (y >= far[x]) c = mix(mix(p.hillFar, p.skyHorizon, 0.62), mix(p.hillFar, p.skyHorizon, 0.4), clamp01((y - far[x]) / (h * 0.4)));
+      if (y >= ridge[x]) {
+        const depth = clamp01((y - ridge[x]) / (h * 0.5));
+        const below = y - ridge[x];
+        // 光从右上来：朝右的坡面（右边更低）亮，朝左的暗，只照到山脊靠顶的几行
+        const slope = slopeAt[x], reach = clamp01(1 - below / 9);
+        c = mix(mix(p.hillFar, p.hillNear, 0.4), mix(p.hillNear, p.rock, 0.3), depth);
+        if (slope > 0.08) c = mix(c, p.cloudLit, clamp01(slope * 1.2) * 0.35 * reach);
+        else if (slope < -0.08) c = mix(c, p.hillNear, clamp01(-slope * 1.2) * 0.45 * reach);
+        if (below < 1.2) c = mix(c, p.cloudEdge, mode === "night" ? 0.22 : 0.3);
+        if (noise(x / 3, y / 2.2) > 0.74) c = mix(c, p.hillNear, 0.3);
+      }
+      if (y >= near[x]) {
+        c = mix(p.hillNear, p.rock, 0.45 + clamp01((y - near[x]) / (h * 0.15)) * 0.4);
+        if (fbm(x / 2, y / 2, 2) > 0.62) c = mix(c, p.treeLit, 0.3);
+      }
+      for (let dx = -2; dx <= 2; dx++) {
+        const th = tree[x + dx];
+        if (th > 0) {
+          const top = Math.round(near[x + dx]) - th;
+          const row = y - top;
+          if (row >= 0 && row < th && Math.abs(dx) <= Math.floor(row * 0.6)) c = mix(p.tree, p.treeLit, dx > 0 ? 0.45 : 0);
+          if (dx === 0 && row >= th && y < near[x] + 1) c = p.tree;
+        }
+      }
+      if (todayX >= 0) {
+        const dx = x - todayX;
+        if (p.beam) c = mix(c, p.lamp, clamp01(1 - Math.hypot(dx, (y - lampTop) * 1.3) / 7) * 0.55);
+        // 灯杆：夜里用浅色才看得见，白天用深色
+        if (dx === 0 && y > lampTop && y < ridge[x] + 1) c = p.window ? mix(p.tower, p.rock, 0.3) : mix(p.rock, p.tower, 0.15);
+        if (p.window && dx >= 0 && dx <= 1 && y >= lampTop - 1 && y <= lampTop) c = p.lamp;
+        if (!p.window && dx >= 1 && dx <= 3 && y >= lampTop + 1 && y <= lampTop + 2) c = p.roof;
+      }
+      pixelQuantize(img, (y * w + x) * 4, c, x, y);
     }
   }
   ctx.putImageData(img, 0, 0);
@@ -3977,7 +4109,9 @@ class CrispPulseView extends ItemView {
     this.render();
     const container = this.containerEl.children[1];
     this.registerEvent(this.app.workspace.on("css-change", () => {
-      if (this.plugin.settings.showHeaderBanner && this.bannerMode !== "image" && this.bannerMode !== this.currentBannerMode()) this.render();
+      const mode = this.currentBannerMode();
+      if (this.plugin.settings.showHeaderBanner && this.bannerMode !== "image" && this.bannerMode !== mode) this.render();
+      else if (this.footerEls && this.footerMode !== mode) this.paintFooter();
     }));
     this.registerDomEvent(container, 'pointerdown', event => { this.lastPointerType = event.pointerType; }, { capture: true });
     const win = container.ownerDocument.defaultView;
@@ -3990,10 +4124,19 @@ class CrispPulseView extends ItemView {
       });
     });
     this.analyticsResizeObserver.observe(container);
+    // 页脚画布按面板实际宽度画，宽度变了只重画页脚
+    this.footerResizeObserver = new win.ResizeObserver(() => {
+      const ground = this.footerEls?.ground;
+      if (!ground?.isConnected || Math.abs(ground.getBoundingClientRect().width - (this.footerPaintedWidth || 0)) < 4) return;
+      if (this.footerResizeFrame) win.cancelAnimationFrame(this.footerResizeFrame);
+      this.footerResizeFrame = win.requestAnimationFrame(() => { this.footerResizeFrame = null; this.paintFooter(); });
+    });
+    this.footerResizeObserver.observe(container);
   }
 
   async onClose() {
     this.analyticsResizeObserver?.disconnect();
+    this.footerResizeObserver?.disconnect();
     if (this.analyticsResizeFrame) this.containerEl.ownerDocument.defaultView.cancelAnimationFrame(this.analyticsResizeFrame);
   }
 
@@ -4020,7 +4163,8 @@ class CrispPulseView extends ItemView {
     // 1. Header with View Tabs, Scope and DateRange Selectors
     this.renderHeader(wrapper);
 
-    if (this.renderGatedTab(wrapper, this.activeViewTab)) {
+    const locked = this.renderGatedTab(wrapper, this.activeViewTab);
+    if (locked) {
       // 未激活：只显示锁定说明，不计算也不渲染任何统计内容。
     } else if (this.activeViewTab === "dashboard") {
       this.renderDashboardV2(wrapper);
@@ -4032,6 +4176,8 @@ class CrispPulseView extends ItemView {
       // Retrospective View
       this.renderRetrospectivePanel(wrapper);
     }
+    this.footerEls = null;
+    if (this.plugin.settings.showFooterLandscape !== false) this.renderFooter(container, { locked });
 
     container.scrollTop = previousScroll;
     const heatmap = container.querySelector(".crisp-pulse-heatmap-scroll");
@@ -5057,6 +5203,84 @@ class CrispPulseView extends ItemView {
 
   currentBannerMode() {
     return this.containerEl.ownerDocument.body.classList.contains("theme-dark") ? "night" : "day";
+  }
+
+  /* 页脚：和顶部天空呼应的像素地平线。山脊是最近一段时间每天的贡献分，最右边的小灯杆是今天；
+     白天灯杆上挂小旗。未激活时只画地形，不读统计。 */
+  renderFooter(container, { locked = false } = {}) {
+    const footer = container.createDiv({ cls: "crisp-pulse-footer" });
+    const info = footer.createDiv({ cls: "crisp-pulse-footer-info" });
+    const brand = info.createDiv({ cls: "crisp-pulse-footer-brand" });
+    setIcon(brand.createSpan({ cls: "crisp-pulse-footer-icon" }), CRISP_PULSE_ICON_ID);
+    brand.createSpan({ cls: "crisp-pulse-footer-name", text: "Crisp Pulse" });
+    if (this.plugin.manifest?.version) brand.createSpan({ cls: "crisp-pulse-footer-version", text: this.plugin.manifest.version });
+    const caption = info.createDiv({ cls: "crisp-pulse-footer-caption" });
+    const links = info.createDiv({ cls: "crisp-pulse-footer-links" });
+    const link = (text, fn) => {
+      const a = links.createEl("button", { cls: "crisp-pulse-footer-link", text, attr: { type: "button" } });
+      a.addEventListener("click", fn);
+    };
+    link("速记", () => this.plugin.activateMemoView());
+    link("设置", () => { const setting = this.app.setting; if (setting?.open) { setting.open(); setting.openTabById?.(this.plugin.manifest.id); } });
+    const ground = footer.createDiv({ cls: "crisp-pulse-footer-ground" });
+    const canvas = ground.createEl("canvas", { attr: { "aria-hidden": "true" } });
+    const tip = ground.createDiv({ cls: "crisp-pulse-footer-tip", attr: { "aria-hidden": "true" } });
+    this.footerEls = { footer, ground, canvas, tip, caption, locked };
+    this.paintFooter();
+    if (locked) return;
+    const hide = () => tip.removeClass("is-visible");
+    ground.addEventListener("pointermove", (event) => {
+      const d = this.footerData;
+      if (!d?.dates?.length) return hide();
+      const rect = ground.getBoundingClientRect();
+      const col = (event.clientX - rect.left) / rect.width * d.width;
+      const index = Math.max(0, Math.min(d.dates.length - 1, Math.floor(col / ((d.width - PULSE_GROUND_MARGIN) / d.dates.length))));
+      const x = groundDayX(index, d.dates.length, d.width);
+      const row = groundRidgeRow(d.height, d.profile[Math.min(d.width - 1, x)] || 0);
+      const [, m, day] = d.dates[index].split("-").map(Number);
+      const score = d.values[index];
+      tip.setText(`${m}月${day}日 · ${score > 0 ? `${Number(score).toLocaleString("zh-CN", { maximumFractionDigits: 1 })} 分` : "没有记录"}`);
+      tip.addClass("is-visible");
+      // 提示框以那一天为中心，但不伸出面板两侧
+      const half = tip.offsetWidth / 2 + 6;
+      tip.style.left = `${Math.max(half, Math.min(rect.width - half, x / d.width * rect.width))}px`;
+      tip.style.top = `${row / d.height * 100}%`;
+    });
+    ground.addEventListener("pointerleave", hide);
+  }
+
+  paintFooter() {
+    const els = this.footerEls;
+    if (!els?.canvas.isConnected) return;
+    const rect = els.ground.getBoundingClientRect();
+    const cssWidth = rect.width || PULSE_SKY_WIDTH * PULSE_GROUND_SCALE;
+    // 横竖都按同一个倍数放大，像素保持方形
+    const width = Math.max(120, Math.ceil(cssWidth / PULSE_GROUND_SCALE));
+    const height = Math.max(32, Math.round((rect.height || PULSE_GROUND_HEIGHT * PULSE_GROUND_SCALE) / PULSE_GROUND_SCALE));
+    const today = getTodayKey();
+    const todayNumber = reviewDayNumber(today);
+    let dates = [], values = [];
+    if (!els.locked) {
+      // 和看板一样按当前数据范围取分；天数也从这个范围里最早的一条算起
+      const daily = this.plugin.store?.daily || {};
+      const inScope = (d) => !!daily[d] && this.plugin.recordMatchesScope(daily[d], d, this.currentScope);
+      const scored = Object.keys(daily).filter((k) => k <= today && daily[k]?.contribution?.score > 0 && inScope(k)).sort();
+      const n = groundDayCount(width, scored.length ? todayNumber - reviewDayNumber(scored[0]) : 0);
+      dates = Array.from({ length: n }, (_, i) => reviewDayKey(todayNumber - (n - 1 - i)));
+      values = dates.map((d) => (inScope(d) ? Number(daily[d].contribution?.score) || 0 : 0));
+    }
+    const profile = buildGroundProfile(values, width);
+    this.footerMode = this.currentBannerMode();
+    els.canvas.width = width;
+    els.canvas.height = height;
+    paintPulseGround(els.canvas, this.footerMode, profile, dates.length ? groundDayX(dates.length - 1, dates.length, width) : -1);
+    this.footerData = { dates, values, profile, width, height };
+    this.footerPaintedWidth = cssWidth;
+    let peak = -1;
+    values.forEach((v, i) => { if (v > 0 && (peak < 0 || v > values[peak])) peak = i; });
+    const caption = els.locked ? "" : peak < 0 ? "开始写作后，这里会长出你的贡献山脊"
+      : `山脊是最近 ${dates.length} 天的贡献 · 峰值 ${Number(dates[peak].slice(5, 7))}月${Number(dates[peak].slice(8))}日 · ${this.footerMode === "night" ? "小灯" : "小旗"}是今天`;
+    els.caption.setText(caption);
   }
 
   // Banner above the header: the user's image, else a pixel sky (night in dark themes, daytime in light ones).
@@ -9071,6 +9295,15 @@ class CrispPulseSettingTab extends PluginSettingTab {
       this.display();
     }));
     showBannerStatus();
+
+    new Setting(containerEl)
+      .setName("看板底部地平线")
+      .setDesc("在 Pulse 视图底部显示和横幅呼应的像素地平线，山脊是最近一段时间每天的贡献分，最右边的小灯（白天是小旗）是今天。鼠标移上去可以看某天的分数。")
+      .addToggle(toggle => toggle.setValue(this.plugin.settings.showFooterLandscape !== false).onChange(async value => {
+        this.plugin.settings.showFooterLandscape = value;
+        await this.plugin.savePluginData();
+        this.plugin.refreshViews();
+      }));
 
     new Setting(containerEl)
       .setName("周起始日")

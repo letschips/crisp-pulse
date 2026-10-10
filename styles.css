@@ -2478,3 +2478,93 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
   .crisp-pulse-view .crisp-pulse-banner { height: 150px; margin-bottom: -56px; }
 }
 .crisp-pulse-banner-status:empty { display: none; }
+
+/* Footer: a pixel horizon that answers the header sky. Full-bleed like the banner; the top fades in. */
+.crisp-pulse-view .crisp-pulse-footer {
+  margin: 48px -28px -56px;
+}
+.crisp-pulse-view .crisp-pulse-footer-info {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 16px 28px 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 20px;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+.crisp-pulse-view .crisp-pulse-footer-info::before {
+  content: "";
+  grid-column: 1 / -1;
+  height: 1px;
+  margin-bottom: 8px;
+  background: var(--pulse-ui-border);
+}
+.crisp-pulse-view .crisp-pulse-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.crisp-pulse-view .crisp-pulse-footer-icon {
+  display: inline-flex;
+  color: var(--pulse-ui-accent);
+}
+.crisp-pulse-view .crisp-pulse-footer-icon svg { width: 15px; height: 15px; }
+.crisp-pulse-view .crisp-pulse-footer-name { color: var(--text-normal); font-weight: 500; }
+.crisp-pulse-view .crisp-pulse-footer-version { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.crisp-pulse-view .crisp-pulse-footer-caption {
+  min-width: 0;
+  text-align: center;
+  color: var(--text-faint);
+  overflow-wrap: anywhere;
+}
+.crisp-pulse-view .crisp-pulse-footer-links { display: flex; gap: 14px; }
+.crisp-pulse-view button.crisp-pulse-footer-link {
+  height: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  font-size: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.crisp-pulse-view button.crisp-pulse-footer-link:hover { color: var(--text-normal); }
+.crisp-pulse-view button.crisp-pulse-footer-link:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; border-radius: 2px; }
+.crisp-pulse-view .crisp-pulse-footer-ground {
+  position: relative;
+  height: 120px;
+  margin-top: 4px;
+}
+.crisp-pulse-view .crisp-pulse-footer-ground canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 38%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 38%);
+}
+.crisp-pulse-view .crisp-pulse-footer-tip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 8px));
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--pulse-ui-border);
+  background: var(--pulse-ui-surface, var(--background-primary));
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-normal);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.crisp-pulse-view .crisp-pulse-footer-tip.is-visible { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .crisp-pulse-view .crisp-pulse-footer-tip { transition: none; } }
+@container (max-width: 600px) {
+  .crisp-pulse-view .crisp-pulse-footer-info { grid-template-columns: auto auto; justify-content: space-between; }
+  .crisp-pulse-view .crisp-pulse-footer-caption { grid-column: 1 / -1; grid-row: 3; text-align: left; }
+  .crisp-pulse-view .crisp-pulse-footer-ground { height: 96px; }
+}
