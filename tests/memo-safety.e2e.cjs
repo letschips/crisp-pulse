@@ -62,3 +62,27 @@ test('repeated microphone clicks during permission prompt acquire only one strea
 test('closing a view while permission is pending releases the late stream',async()=>{const f=recordingFixture();const job=f.v.toggleRecording();await f.v.onClose();f.grant();await job;assert.equal(f.counts().stops,1);assert.equal(f.counts().starts,0);observations.push('late permission stream released after close');});
 test('recorder start failure releases the microphone and allows retry',async()=>{const f=recordingFixture();f.win.MediaRecorder=class{static isTypeSupported(){return true;}addEventListener(){}start(){throw new Error('codec failure');}};const job=f.v.toggleRecording();f.grant();await job;assert.equal(f.counts().stops,1);assert(!f.v.recording);observations.push('failed recorder start releases microphone');});
 test.after(()=>{fs.writeFileSync(process.env.PULSE_SAFETY_REPORT||path.join(os.tmpdir(),'crisp-pulse-memo-safety-results.json'),JSON.stringify({completed:observations},null,2));});
+
+/* 回收站恢复（1.19.6）。失败模式：
+   - 速记里代码块中的「恢复凭据」示例被当成真凭据删掉，正文丢一行。
+   - 原笔记不在了、写回到别的文件夹时，相对路径的附件链接从新位置指错。 */
+test('restoring keeps a restore-marker example inside a code block',async t=>{
+ const f=fixture(t);
+ f.put(source,'## 速记\n\n> [!memo] 12:00\n> 正文\n> ```html\n> <!-- crisp-pulse-memo-restored: example-id -->\n> ```\n');
+ await f.s.remove(f.memos()[0],now);const [entry]=await f.s.listTrash(now);await f.s.restore(entry.id);
+ const text=f.read(source);
+ assert.match(text,/> ```html\n> <!-- crisp-pulse-memo-restored: example-id -->\n> ```/,'代码块里的示例原样保留');
+ const [memo]=parseMemoBlocks(text);assert.equal(memo.restoredId,entry.id,'真正的恢复凭据只有一条，在代码块外');
+});
+test('a memo restored into another folder keeps its relative attachment links pointing at the same file',async t=>{
+ const f=fixture(t);
+ f.put(source,'## 速记\n\n> [!memo] 12:00\n> ![](../Assets/image.png) 和 [[Assets/other.png]]\n');
+ await f.s.remove(f.memos()[0],now);const [entry]=await f.s.listTrash(now);
+ f.files.delete(source);fs.unlinkSync(path.join(f.root,source));
+ f.app.internalPlugins.getPluginById=()=>({enabled:true,instance:{options:{folder:'Recovered/Nested',format:'YYYY-MM-DD'}}});
+ await f.s.restore(entry.id);
+ const target='Recovered/Nested/'+path.basename(source),text=f.read(target);
+ const link=/!\[\]\(([^)]+)\)/.exec(text)[1];
+ assert.equal(path.posix.normalize(path.posix.join(path.posix.dirname(target),link)),'Assets/image.png');
+ assert.match(text,/\[\[Assets\/other\.png\]\]/,'库内完整路径的链接不改');
+});

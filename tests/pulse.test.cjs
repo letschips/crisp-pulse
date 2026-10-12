@@ -2364,3 +2364,26 @@ test('pausing a break a second time clears the memo prompt again', async () => {
   }
   assert.deepEqual(states, [true, false, true, false, true]);
 });
+
+test('deleting a note re-created at an old note\'s path rolls back only the new note', async () => {
+  const { p, handlers } = setup();
+  await p.loadPluginData();p.registerVaultEvents();
+  const old = { path: 'notes/same.md', extension: 'md', content: 'zero' };
+  p.fileSnapshots.set(old.path, baseline(old.content));
+  old.content = 'zero ' + 'word '.repeat(20);await p.handleFileModification(old);
+  const session = p.activeSessions.get(old.path);
+  if (session) session.isMeaningful = true;
+  await handlers.delete({ path: old.path });
+  let today = p.getOrCreateTodayRecord();
+  const words = today.contribution.wordsAdded, edits = today.contribution.meaningfulEdits;
+  assert.equal(words, 20);
+  await p.handleFileCreation({ path: 'notes/same.md', extension: 'md', content: 'brand new note text' });
+  assert.equal(p.getOrCreateTodayRecord().contribution.notesCreated, 1);
+  await handlers.delete({ path: 'notes/same.md' });
+  today = p.getOrCreateTodayRecord();
+  assert.equal(today.contribution.wordsAdded, words, '旧笔记今天写的 20 字还在');
+  assert.equal(today.contribution.meaningfulEdits, edits, '旧笔记的有效编辑还在');
+  assert.equal(today.contribution.notesCreated, 0);
+  assert.equal(today.files['notes/same.md'].created, false);
+  assert.equal(today.files['notes/same.md'].wordsAdded, 20);
+});

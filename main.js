@@ -1288,6 +1288,7 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
           if (typeof fileMeta.created !== "boolean") fileMeta.created = false;
           if (!Number.isFinite(fileMeta.tasks)) fileMeta.tasks = 0;
           if (!Number.isFinite(fileMeta.links)) fileMeta.links = 0;
+          if (fileMeta.createdBase !== undefined && (!fileMeta.createdBase || typeof fileMeta.createdBase !== "object" || Array.isArray(fileMeta.createdBase))) delete fileMeta.createdBase;
         }
       }
     }
@@ -2357,7 +2358,17 @@ class CrispPulsePlugin extends Plugin {
           if (!today.files[file.path]) {
             today.files[file.path] = { wordsAdded: 0, created: true, tasks: 0, links: 0 };
           } else {
-            today.files[file.path].created = true;
+            // 同一路径今天已有旧笔记的记录（编辑后删掉，又在这里新建）：记下旧笔记当时的数值，
+            // 这篇新笔记再被删掉时只撤回它自己的部分，不连带旧笔记今天的工作
+            const rec = today.files[file.path];
+            if (!rec.created) {
+              rec.createdBase = {
+                wordsAdded: Number(rec.wordsAdded) || 0, links: Number(rec.links) || 0, tasks: Number(rec.tasks) || 0,
+                rewrittenWords: Number(rec.rewrittenWords) || 0, sessions: Number(rec.sessions) || 0,
+                sourceWords: rec.sourceWords ? { ...rec.sourceWords } : null,
+              };
+            }
+            rec.created = true;
           }
           if (words > 0) {
             today.contribution.wordsAdded += words;
@@ -2616,16 +2627,28 @@ class CrispPulsePlugin extends Plugin {
     for (const [path, rec] of Object.entries(today.files)) {
       if (!rec?.created || !isGone(path)) continue;
       const c = today.contribution;
+      // 同一路径先有旧笔记、后新建的：只撤回新建之后的部分，记录还原成旧笔记的样子
+      const base = rec.createdBase && typeof rec.createdBase === "object" ? rec.createdBase : null;
+      const delta = (field, baseValue) => Math.max(0, (Number(rec[field]) || 0) - (Number(baseValue) || 0));
       const sub = (field, value) => { c[field] = Math.max(0, (Number(c[field]) || 0) - (Number(value) || 0)); };
+      const sessions = delta("sessions", base?.sessions);
       sub("notesCreated", 1);
-      sub("wordsAdded", rec.wordsAdded);
-      sub("linksCreated", rec.links);
-      sub("tasksCompleted", rec.tasks);
-      sub("rewrittenWords", rec.rewrittenWords);
-      sub("captureWords", rec.sourceWords?.capture);
-      sub("meaningfulEdits", rec.sessions);
-      if (today.activity) today.activity.editingSessions = Math.max(0, (Number(today.activity.editingSessions) || 0) - (Number(rec.sessions) || 0));
-      delete today.files[path];
+      sub("wordsAdded", delta("wordsAdded", base?.wordsAdded));
+      sub("linksCreated", delta("links", base?.links));
+      sub("tasksCompleted", delta("tasks", base?.tasks));
+      sub("rewrittenWords", delta("rewrittenWords", base?.rewrittenWords));
+      sub("captureWords", Math.max(0, (Number(rec.sourceWords?.capture) || 0) - (Number(base?.sourceWords?.capture) || 0)));
+      sub("meaningfulEdits", sessions);
+      if (today.activity) today.activity.editingSessions = Math.max(0, (Number(today.activity.editingSessions) || 0) - sessions);
+      if (base) {
+        for (const field of ["wordsAdded", "links", "tasks", "rewrittenWords", "sessions"]) rec[field] = Number(base[field]) || 0;
+        if (base.sourceWords) rec.sourceWords = { ...base.sourceWords };
+        else delete rec.sourceWords;
+        rec.created = false;
+        delete rec.createdBase;
+      } else {
+        delete today.files[path];
+      }
       changed = true;
     }
     if (changed) {
@@ -6791,6 +6814,16 @@ function buildMemoNote({ memo, folder }) {
   return { path: `${dir ? `${dir}/` : ""}${title}.md`, title, content };
 }
 
+/** 从 dir 文件夹出发解析 ./、../ 开头的相对路径，得到库内路径；跳出库根返回 null。 */
+function memoResolveRelative(dir, linkpath) {
+  const parts = dir ? dir.split("/") : [];
+  for (const seg of linkpath.split("/")) {
+    if (seg === "" || seg === ".") continue;
+    if (seg === "..") { if (!parts.length) return null; parts.pop(); } else parts.push(seg);
+  }
+  return parts.join("/") || null;
+}
+
 /** 相对路径：从 fromDir 文件夹到 toPath。 */
 function memoRelativePath(fromDir, toPath) {
   const from = fromDir ? fromDir.split("/") : [];
@@ -7698,11 +7731,15 @@ class MemoStore {
     return memos.sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time) || b.startLine - a.startLine);
   }
 
-  /** 速记正文放进 targetPath 前，把从那里解析不到的相对链接改好。 */
+  /** 速记正文放进 targetPath 前，把从那里解析不到的相对链接改好。
+      ./、../ 开头的明确相对路径按路径计算：原笔记已经删掉、附件暂时不在时也保持指向原来那个位置；其余交给 Obsidian 解析。 */
   relinkFor(text, sourcePath, targetPath) {
     const cache = this.app.metadataCache;
-    if (typeof cache?.getFirstLinkpathDest !== "function") return text;
-    return memoRelinkText(text, sourcePath, targetPath, (linkpath, from) => cache.getFirstLinkpathDest(linkpath, from)?.path || null);
+    const resolve = (linkpath, from) => {
+      if (/^\.{1,2}\//.test(linkpath)) return memoResolveRelative(from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : "", linkpath);
+      return typeof cache?.getFirstLinkpathDest === "function" ? cache.getFirstLinkpathDest(linkpath, from)?.path || null : null;
+    };
+    return memoRelinkText(text, sourcePath, targetPath, resolve);
   }
 
   /** 文件被改、删或改名时丢掉它的解析缓存（修改时间精度不够时的保险）。返回它原来是否有速记。 */
@@ -7819,7 +7856,12 @@ class MemoStore {
     const entry = items.find((t) => t.id === id);
     if (!entry) throw new Error("回收站里已经没有这条速记");
     const restored = parseMemoBlocks(entry.raw)[0];
-    const block = `${entry.raw.split("\n").filter((line) => !MEMO_RESTORE_RE.test(line.replace(/^>\s?/, "").trim())).join("\n")}\n> <!-- crisp-pulse-memo-restored: ${entry.id} -->`;
+    // 去掉旧的恢复凭据再盖上新的；代码块里的同形示例是正文，原样保留
+    const rawLines = entry.raw.split("\n");
+    const fenced = memoFencedLines(rawLines.map((line) => line.replace(/^>\s?/, "")));
+    const body = rawLines.filter((line, k) => fenced.has(k) || !MEMO_RESTORE_RE.test(line.replace(/^>\s?/, "").trim())).join("\n");
+    // 恢复到别的笔记（原笔记已不在、写回当天速记文件）时，相对路径的附件链接从新位置重新指向原文件
+    const blockFor = (targetPath) => `${targetPath && targetPath !== entry.path ? this.relinkFor(body, entry.path, targetPath) : body}\n> <!-- crisp-pulse-memo-restored: ${entry.id} -->`;
     const rememberTarget = async (path, initial, heading) => {
       entry.restorePath = path;
       if (initial !== undefined) {
@@ -7834,7 +7876,7 @@ class MemoStore {
       const folder = entry.restorePath.includes("/") ? entry.restorePath.slice(0, entry.restorePath.lastIndexOf("/")) : "";
       if (folder) await this.ensureFolder(folder);
       try {
-        await this.app.vault.create(entry.restorePath, insertMemoBlock(entry.restoreInitial, block, entry.restoreHeading));
+        await this.app.vault.create(entry.restorePath, insertMemoBlock(entry.restoreInitial, blockFor(entry.restorePath), entry.restoreHeading));
       } catch (error) {
         file = this.app.vault.getAbstractFileByPath(entry.restorePath);
         if (!file) throw error;
@@ -7849,14 +7891,14 @@ class MemoStore {
         const blocks = parseMemoBlocks(content);
         const hits = blocks.filter((m) => m.restoredId === entry.id || (restored.id && m.id === restored.id));
         if (hits.length > 1) throw new Error("恢复标识重复，请先检查原笔记");
-        return hits.length ? content : insertMemoBlock(content, block, heading);
+        return hits.length ? content : insertMemoBlock(content, blockFor(file.path), heading);
       });
     } else {
       if (entry.restorePath) throw new Error("上次恢复的目标笔记已不存在，请先检查回收站中的来源");
       const [h, m] = String(entry.time || "00:00").split(":").map(Number);
       const day = memoKeyToDay(entry.date);
       day.setHours(h || 0, m || 0);
-      await this.writeBlock(block, day, rememberTarget);
+      await this.writeBlock(blockFor(await this.memoFilePath(day)), day, rememberTarget);
     }
     await this.writeTrash(items.filter((t) => t.id !== id));
   }
@@ -10082,7 +10124,7 @@ module.exports.CrispPulseEvidenceModal = CrispPulseEvidenceModal;
 module.exports.CrispPulseMemoView = CrispPulseMemoView;
 module.exports.memoHelpers = {
   buildMemoBlock, parseMemoBlocks, extractMemoTags, insertMemoBlock, removeMemoBlock, appendMemoLink,
-  memoStats, memoHeatLevel, memoHasImage, memoHasLink, memoHasAudio, memoTranscriptionState, memoHasTranscriptFor, memoAsrErrorInfo, memoConversionReview, memoWithTag, memoTaskTitle, memoTempoLabel, bindHoldPress, memoAttachmentName, memoRecordingName, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
+  memoStats, memoHeatLevel, memoHasImage, memoHasLink, memoHasAudio, memoTranscriptionState, memoHasTranscriptFor, memoAsrErrorInfo, memoConversionReview, memoWithTag, memoResolveRelative, memoTaskTitle, memoTempoLabel, bindHoldPress, memoAttachmentName, memoRecordingName, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
   buildMemoQuestionNote, buildMemoNote, buildMemoNowLine, memoRelinkText, MemoStore,
   filterMemos, buildTagTree, renameTagInText, renameTagInContent, selectDailyReview, onThisDay, parseMemoUrlParams,
   tokenizeMemo, buildMemoIndex, relatedMemos, walkStep, explainShared,
