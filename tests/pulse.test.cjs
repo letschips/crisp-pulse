@@ -2333,3 +2333,34 @@ test('notes deleted while Obsidian was closed are rolled back on startup', async
   assert.equal(today.contribution.wordsAdded, 1);
   assert.equal(today.contribution.notesCreated, 1);
 });
+
+/* 1.19.2 审计复核。失败模式：
+   - 当天新建的笔记编辑会话已经结算，之后删掉笔记，有效编辑次数和编辑会话没跟着撤回，已删的笔记仍在计分。
+   - 休息中第二次暂停被当成重复事件丢掉，速记仍提示「带 #番茄」。 */
+test('a same-day note deleted after its edit session closed takes the session score with it', async () => {
+  const { p, handlers, advance } = setup();
+  await p.loadPluginData();p.registerVaultEvents();
+  const note = { path: 'drafts/new.md', extension: 'md', content: '' };
+  await p.handleFileCreation(note);
+  p.fileSnapshots.set(note.path, baseline(note.content));
+  note.content = 'word '.repeat(21);await p.handleFileModification(note);
+  advance(10 * 60 * 1000);await p.checkIdleSessions();
+  let today = p.getOrCreateTodayRecord();
+  assert.equal(today.contribution.meaningfulEdits, 1, '会话已结算');
+  await handlers.delete({ path: note.path });
+  today = p.getOrCreateTodayRecord();
+  assert.equal(today.contribution.meaningfulEdits, 0);
+  assert.equal(today.activity.editingSessions, 0);
+  assert.equal(today.contribution.score, 0);
+});
+
+test('pausing a break a second time clears the memo prompt again', async () => {
+  const { p } = setup();await p.loadPluginData();
+  p.settings.enableCrispFocusSync = true;
+  const states = [];
+  for (const [type, at] of [['start', 1], ['pause', 2], ['resume', 3], ['pause', 4], ['resume', 5]]) {
+    await p.handleFocusSessionEvent(focusEvent(type, { id: 'b1', kind: 'break', phase: 'short-break', at }));
+    states.push(!!p.pomodoroBreak);
+  }
+  assert.deepEqual(states, [true, false, true, false, true]);
+});

@@ -1911,11 +1911,14 @@ class CrispPulsePlugin extends Plugin {
      免得开了就停也能刷分。休息只用来提示记速记。 */
   async handleFocusSessionEvent(event) {
     if (!this.settings.enableCrispFocusSync || !event || !(Number(event.apiVersion) >= 1) || this.stopped) return;
-    const key = `${event.id}:${event.type}`;
-    this.focusEventsSeen ||= new Set();
-    if (this.focusEventsSeen.has(key)) return;
-    this.focusEventsSeen.add(key);
-    if (this.focusEventsSeen.size > 200) this.focusEventsSeen.delete(this.focusEventsSeen.values().next().value);
+    // 只有结束事件会写记录，按 id 去重防止记两次；暂停、继续一轮里可以有多次，照原样跟随
+    if (event.type === "complete" || event.type === "stop") {
+      const key = `${event.id}:${event.type}`;
+      this.focusEventsSeen ||= new Set();
+      if (this.focusEventsSeen.has(key)) return;
+      this.focusEventsSeen.add(key);
+      if (this.focusEventsSeen.size > 200) this.focusEventsSeen.delete(this.focusEventsSeen.values().next().value);
+    }
     if (event.kind === "break") {
       this.pomodoroBreak = event.type === "start" || event.type === "resume" ? { id: event.id, phase: event.phase, dismissed: this.pomodoroBreak?.id === event.id && this.pomodoroBreak.dismissed } : null;
       this.refreshMemoComposerStatus();
@@ -2116,7 +2119,7 @@ class CrispPulsePlugin extends Plugin {
         for (const [path, session] of [...this.activeSessions.entries()]) {
           if (!isGone(path)) continue;
           // 当天新建又删掉的笔记，编辑会话也不算
-          if (!createdToday.has(path)) this.closeSession(session);
+          if (!createdToday.has(path)) this.closeSession(session, path);
           this.activeSessions.delete(path);
         }
         if (this.rollbackSameDayCreations(isGone)) {
@@ -2174,13 +2177,8 @@ class CrispPulsePlugin extends Plugin {
             this.activeSessions.delete(key);
             if (this.shouldTrackPath(next) && this.shouldTrackPath(key)) {
               this.activeSessions.set(next, sess);
-            } else if (sess.isMeaningful) {
-              const targetDate = sess.date || getTodayKey();
-              const record = this.getOrCreateRecord(targetDate);
-              record.contribution.meaningfulEdits += 1;
-              record.activity.editingSessions += 1;
-              this.recomputeScore(record);
-              this.dirty = true;
+            } else {
+              this.closeSession(sess, key);
             }
           }
         }
@@ -2212,7 +2210,7 @@ class CrispPulsePlugin extends Plugin {
                 // A deleted note can leave history at the destination path.
                 // Merge file detail only: daily totals already include both notes.
                 const merged = { ...target, ...source, created: !!(target.created || source.created) };
-                for (const field of ['wordsAdded', 'tasks', 'links', 'rewrittenWords']) {
+                for (const field of ['wordsAdded', 'tasks', 'links', 'rewrittenWords', 'sessions']) {
                   merged[field] = (target[field] || 0) + (source[field] || 0);
                 }
                 if (target.sourceWords || source.sourceWords) {
@@ -2551,13 +2549,7 @@ class CrispPulsePlugin extends Plugin {
       const timeoutMs = (this.settings.sessionIdleTimeoutMinutes || 3) * 60 * 1000;
       let session = this.activeSessions.get(file.path);
       if (session && (now - session.lastEventTime >= timeoutMs || session.date !== getTodayKey())) {
-        if (session.isMeaningful) {
-          const targetDate = session.date || getTodayKey();
-          const targetRecord = this.getOrCreateRecord(targetDate);
-          targetRecord.contribution.meaningfulEdits += 1;
-          targetRecord.activity.editingSessions += 1;
-          this.recomputeScore(targetRecord);
-        }
+        this.closeSession(session, file.path);
         this.activeSessions.delete(file.path);
         session = null;
       }
@@ -2595,11 +2587,7 @@ class CrispPulsePlugin extends Plugin {
     for (const [filePath, session] of this.activeSessions.entries()) {
       if (now - session.lastEventTime >= timeoutMs) {
         if (session.isMeaningful) {
-          const targetDate = session.date || getTodayKey();
-          const targetRecord = this.getOrCreateRecord(targetDate);
-          targetRecord.contribution.meaningfulEdits += 1;
-          targetRecord.activity.editingSessions += 1;
-          this.recomputeScore(targetRecord);
+          this.closeSession(session, filePath);
           modified = true;
         }
         this.activeSessions.delete(filePath);
@@ -2613,15 +2601,7 @@ class CrispPulsePlugin extends Plugin {
   }
 
   async flushAllSessions() {
-    for (const [_, session] of this.activeSessions.entries()) {
-      if (session.isMeaningful) {
-        const targetDate = session.date || getTodayKey();
-        const targetRecord = this.getOrCreateRecord(targetDate);
-        targetRecord.contribution.meaningfulEdits += 1;
-        targetRecord.activity.editingSessions += 1;
-        this.recomputeScore(targetRecord);
-      }
-    }
+    for (const [path, session] of this.activeSessions.entries()) this.closeSession(session, path);
     this.activeSessions.clear();
     await this.savePluginData();
   }
@@ -2642,6 +2622,8 @@ class CrispPulsePlugin extends Plugin {
       sub("tasksCompleted", rec.tasks);
       sub("rewrittenWords", rec.rewrittenWords);
       sub("captureWords", rec.sourceWords?.capture);
+      sub("meaningfulEdits", rec.sessions);
+      if (today.activity) today.activity.editingSessions = Math.max(0, (Number(today.activity.editingSessions) || 0) - (Number(rec.sessions) || 0));
       delete today.files[path];
       changed = true;
     }
@@ -2652,11 +2634,14 @@ class CrispPulsePlugin extends Plugin {
     return changed;
   }
 
-  closeSession(session) {
+  closeSession(session, path = null) {
     if (!session?.isMeaningful) return;
     const record = this.getOrCreateRecord(session.date || getTodayKey());
     record.contribution.meaningfulEdits += 1;
     record.activity.editingSessions += 1;
+    // 记在这篇笔记名下：当天新建又删掉时，结算过的会话也能一起撤回
+    const fileRecord = path && record.files?.[path];
+    if (fileRecord) fileRecord.sessions = (Number(fileRecord.sessions) || 0) + 1;
     this.recomputeScore(record);
     this.dirty = true;
   }
@@ -2673,7 +2658,7 @@ class CrispPulsePlugin extends Plugin {
         for (const path of [...this.fileSnapshots.keys()]) if (!this.shouldTrackPath(path)) this.fileSnapshots.delete(path);
         for (const [path, session] of [...this.activeSessions.entries()]) {
           if (this.shouldTrackPath(path)) continue;
-          this.closeSession(session);
+          this.closeSession(session, path);
           this.activeSessions.delete(path);
         }
         const files = typeof this.app.vault.getMarkdownFiles === "function" ? this.app.vault.getMarkdownFiles() : [];
@@ -7348,7 +7333,10 @@ class MemoDraftStore {
     }, null, 2);
     if (payload === this.lastPayload) return this.writing;
     this.lastPayload = payload;
-    this.writing = this.writing.then(() => this.adapter.write(this.path, payload)).catch((error) => {
+    this.writing = this.writing.then(async () => {
+      await this.adapter.write(this.path, payload);
+      if (await this.adapter.read(this.path) !== payload) throw new Error("写入后读回不一致");
+    }).catch((error) => {
       this.lastPayload = null;
       console.warn("[Crisp Pulse] 速记草稿保存失败", error);
       if (!this.warned) { this.warned = true; new Notice(`Crisp Pulse 速记：草稿恢复文件保存失败（${error.message || error}），关闭面板前请先提交或复制草稿`, 8000); }
@@ -8363,6 +8351,7 @@ class CrispPulseMemoView extends ItemView {
       return { text: `录音中 ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`, actions: [["结束录音", () => this.toggleRecording()]] };
     }
     if (this.recordingSaving) return { text: "正在保存录音…", actions: [] };
+    if (this.imagesSaving) return { text: "正在保存图片…", actions: [] };
     const pomodoroBreak = this.plugin.pomodoroBreak;
     if (pomodoroBreak && !pomodoroBreak.dismissed && this.plugin.settings.memoPomodoroPrompt !== false) {
       return { text: "记一下这一轮做了什么（带 #番茄）", actions: [
@@ -8382,7 +8371,8 @@ class CrispPulseMemoView extends ItemView {
     const el = this.statusEl;
     if (!el?.isConnected) return;
     const status = this.composerStatus();
-    const signature = status ? `${status.actions.map((a) => a[0]).join("|")}` : "";
+    // 空状态和「只有文字、没有按钮」的状态要区分开，否则从空闲切到「正在保存…」时文字不出现
+    const signature = status ? `status|${status.actions.map((a) => a[0]).join("|")}` : "";
     el.toggleClass("is-empty", !status);
     if (signature === this.statusSignature && status) { el.querySelector(".crisp-pulse-memo-status-text")?.setText(status.text); return; }
     this.statusSignature = signature;
@@ -8396,9 +8386,14 @@ class CrispPulseMemoView extends ItemView {
     }
   }
 
+  /** 图片或录音还在存进库：存好后链接才插进输入框，这期间提交会让链接落到下一条。 */
+  attachmentSaving() {
+    return !!(this.recordingSaving || this.imagesSaving);
+  }
+
   updateRecordingUi() {
     const send = this.containerEl.children[1]?.querySelector(".crisp-pulse-memo-send");
-    if (send) send.disabled = !!(this.memoSubmitting || this.dictation);
+    if (send) send.disabled = !!(this.memoSubmitting || this.dictation || this.attachmentSaving());
     this.renderComposerStatus();
     const dictate = this.containerEl.children[1]?.querySelector(".crisp-pulse-memo-dictate");
     if (dictate) {
@@ -8466,14 +8461,20 @@ class CrispPulseMemoView extends ItemView {
       const images = [...files].filter((f) => /^image\//.test(f.type) || MEMO_IMAGE_EXT_RE.test(f.name || ""));
       if (!images.length) return false;
       const links = [];
+      // 保存完成前不让提交：否则链接会插进下一条草稿，这一条缺图
+      this.imagesSaving = (this.imagesSaving || 0) + 1;
+      this.updateRecordingUi();
       try {
         for (const file of images) {
           links.push(await this.plugin.memoStore.saveAttachment(memoAttachmentName(file.name, file.type, new Date()), await file.arrayBuffer()));
         }
       } catch (error) {
         new Notice(`Crisp Pulse 速记：图片保存失败：${error.message || error}`, 8000);
+      } finally {
+        this.imagesSaving -= 1;
       }
       if (links.length) this.insertIntoComposer(links.join("\n"));
+      this.updateRecordingUi();
       return true;
     };
     input.addEventListener("paste", (event) => {
@@ -8530,11 +8531,12 @@ class CrispPulseMemoView extends ItemView {
     }
     const send = bar.createEl("button", { cls: "crisp-pulse-memo-send", attr: { "aria-label": "记录（⏎）· 换行（⇧⏎）", type: "button" } });
     setIcon(send, "send");
-    send.disabled = !!(this.memoSubmitting || this.dictation);
+    send.disabled = !!(this.memoSubmitting || this.dictation || this.attachmentSaving());
     const submit = async () => {
       if (this.memoSubmitting || !input.value.trim()) return;
       // 听写还没定稿就提交，会存下未定稿的文字，迟到的定稿又会改到下一条草稿
       if (this.dictation) { new Notice("Crisp Pulse 速记：实时听写还没结束，等文字定稿后再记录"); return; }
+      if (this.attachmentSaving()) { new Notice("Crisp Pulse 速记：附件还在保存，存好后再记录"); return; }
       const submitted = input.value;
       const revision = this.draftRevision;
       this.memoSubmitting = true;
@@ -8552,7 +8554,7 @@ class CrispPulseMemoView extends ItemView {
       } finally {
         this.memoSubmitting = false;
         const button = this.containerEl.children[1].querySelector(".crisp-pulse-memo-send");
-        if (button) button.disabled = !!this.dictation;
+        if (button) button.disabled = !!(this.dictation || this.attachmentSaving());
       }
     };
     send.addEventListener("click", submit);

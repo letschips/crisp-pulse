@@ -158,3 +158,18 @@ test('submitting a memo marks the write as the user\'s own for writing stats', a
   await store.capture('一条速记', new Date());
   assert.deepEqual(marked, ['Daily/2026-10-09.md']);
 });
+
+/* 1.19.2：草稿恢复文件写入后读回核对。失败模式：写入返回成功但文件被截断，插件仍当已保存，同一草稿也不再重写。 */
+test('a draft write that does not read back is reported and retried', async () => {
+  notices.length = 0;
+  const adapter = fakeAdapter();
+  let truncate = true;
+  const write = adapter.write;
+  adapter.write = async function (p, c) { return write.call(this, p, truncate ? c.slice(0, 10) : c); };
+  const drafts = new MemoDraftStore(adapter, 'plugin'); await drafts.load();
+  drafts.setDraft('a', '不能丢的草稿'); await drafts.flush();
+  assert.match(notices.join('\n'), /草稿恢复文件保存失败/);
+  truncate = false;
+  drafts.setDraft('a', '不能丢的草稿'); await drafts.flush();
+  assert.equal(JSON.parse(adapter.files.get('plugin/memo-drafts.json')).drafts.a.text, '不能丢的草稿', '同一草稿会重写');
+});
