@@ -1425,7 +1425,8 @@ class CrispPulsePlugin extends Plugin {
       }));
     }
     if (this.app.vault?.on) {
-      this.registerEvent(this.app.vault.on("modify", (file) => this.memoStore.forgetParsed(file.path)));
+      // 原来有速记块的笔记改了也要刷新：删掉最后一条后新内容里已经没有 [!memo]
+      this.registerEvent(this.app.vault.on("modify", (file) => { if (this.memoStore.forgetParsed(file.path)) this.refreshMemoViews(); }));
       this.registerEvent(this.app.vault.on("delete", (file) => { this.memoStore.forgetParsed(file?.path); this.refreshMemoViews(); }));
       this.registerEvent(this.app.vault.on("rename", (file, oldPath) => { this.memoStore.forgetParsed(oldPath); this.memoStore.forgetParsed(file?.path); this.refreshMemoViews(); }));
     }
@@ -7260,6 +7261,21 @@ class MemoDraftStore {
     this.timer = null;
     this.writing = Promise.resolve();
     this.lastPayload = null;
+    // 关掉的面板 → 接手它草稿的面板；面板关掉后才存好的附件链接据此找到去处
+    this.claimedBy = new Map();
+  }
+
+  /** 这份草稿现在归哪个面板（被接手过就顺着找到最后接手的那个）。 */
+  currentKey(key) {
+    const seen = new Set();
+    while (this.claimedBy.has(key) && !seen.has(key)) { seen.add(key); key = this.claimedBy.get(key); }
+    return key;
+  }
+
+  /** 接到某份草稿末尾（那个面板已经关了）。 */
+  appendDraft(key, text) {
+    const prev = this.drafts[key]?.text || "";
+    this.setDraft(key, `${prev ? `${prev.replace(/\s+$/, "")}\n` : ""}${text}\n`);
   }
 
   load() {
@@ -7304,6 +7320,7 @@ class MemoDraftStore {
     if (!orphan) return "";
     delete this.drafts[orphan[0]];
     this.drafts[key] = orphan[1];
+    this.claimedBy.set(orphan[0], key);
     this.schedule();
     return orphan[1].text;
   }
@@ -7574,9 +7591,11 @@ class MemoStore {
     return memos.sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time) || b.startLine - a.startLine);
   }
 
-  /** 文件被改、删或改名时丢掉它的解析缓存（修改时间精度不够时的保险）。 */
+  /** 文件被改、删或改名时丢掉它的解析缓存（修改时间精度不够时的保险）。返回它原来是否有速记。 */
   forgetParsed(path) {
+    const had = !!this.parsed?.get(path)?.memos?.length;
     this.parsed?.delete(path);
+    return had;
   }
 
   async previewTagRename(from) {
@@ -7966,7 +7985,10 @@ class CrispPulseMemoView extends ItemView {
   }
 
   persistDraft() {
-    this.plugin?.memoDrafts?.setDraft(this.draftKey, this.draft);
+    const drafts = this.plugin?.memoDrafts;
+    // 面板已关、草稿已被新打开的面板接手：迟到的听写定稿等不再写回，免得恢复文件里多出一份旧草稿
+    if (this.memoClosed && drafts?.currentKey && drafts.currentKey(this.draftKey) !== this.draftKey) return;
+    drafts?.setDraft(this.draftKey, this.draft);
   }
 
   clearMemoMarkdown(parent = null) {
@@ -8062,6 +8084,17 @@ class CrispPulseMemoView extends ItemView {
 
   /** 把文字插到输入框光标处（输入框不在了就接到草稿末尾），并同步草稿。 */
   insertIntoComposer(text) {
+    // 面板关掉后才存好的附件：草稿已被新打开的面板接手时，链接跟着草稿走，不再把旧草稿写回恢复文件
+    const drafts = this.plugin?.memoDrafts;
+    if (this.memoClosed && drafts) {
+      const key = drafts.currentKey(this.draftKey);
+      if (key !== this.draftKey) {
+        const heir = (this.app?.workspace?.getLeavesOfType?.(VIEW_TYPE_MEMO) || []).map((leaf) => leaf.view).find((v) => v && v !== this && !v.memoClosed && v.draftKey === key);
+        if (heir) heir.insertIntoComposer(text);
+        else drafts.appendDraft(key, text);
+        return;
+      }
+    }
     const input = this.composerInput();
     if (!input) {
       this.setDraft(`${this.draft ? `${this.draft.replace(/\s+$/, "")}\n` : ""}${text}\n`);
@@ -8291,6 +8324,8 @@ class CrispPulseMemoView extends ItemView {
     if (rec.busy || !store) return;
     rec.busy = true;
     store.changed();
+    this.recordingRetries = (this.recordingRetries || 0) + 1;
+    this.updateRecordingUi();
     try {
       const data = await store.recordingData(rec);
       const startedAt = Number.isFinite(Date.parse(rec.startedAt)) ? new Date(rec.startedAt) : new Date();
@@ -8304,7 +8339,9 @@ class CrispPulseMemoView extends ItemView {
       new Notice(`Crisp Pulse 速记：录音仍没能保存：${rec.error}`, 8000);
     } finally {
       rec.busy = false;
+      this.recordingRetries -= 1;
       store.changed();
+      this.updateRecordingUi();
     }
   }
 
@@ -8350,7 +8387,7 @@ class CrispPulseMemoView extends ItemView {
       const sec = Math.floor((Date.now() - this.recording.startedAt.getTime()) / 1000);
       return { text: `录音中 ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`, actions: [["结束录音", () => this.toggleRecording()]] };
     }
-    if (this.recordingSaving) return { text: "正在保存录音…", actions: [] };
+    if (this.recordingSaving || this.recordingRetries) return { text: "正在保存录音…", actions: [] };
     if (this.imagesSaving) return { text: "正在保存图片…", actions: [] };
     const pomodoroBreak = this.plugin.pomodoroBreak;
     if (pomodoroBreak && !pomodoroBreak.dismissed && this.plugin.settings.memoPomodoroPrompt !== false) {
@@ -8388,7 +8425,7 @@ class CrispPulseMemoView extends ItemView {
 
   /** 图片或录音还在存进库：存好后链接才插进输入框，这期间提交会让链接落到下一条。 */
   attachmentSaving() {
-    return !!(this.recordingSaving || this.imagesSaving);
+    return !!(this.recordingSaving || this.recordingRetries || this.imagesSaving);
   }
 
   updateRecordingUi() {

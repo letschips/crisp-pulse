@@ -173,3 +173,58 @@ test('a draft write that does not read back is reported and retried', async () =
   drafts.setDraft('a', '不能丢的草稿'); await drafts.flush();
   assert.equal(JSON.parse(adapter.files.get('plugin/memo-drafts.json')).drafts.a.text, '不能丢的草稿', '同一草稿会重写');
 });
+
+/* 1.19.3：面板关掉或重试保存时，附件链接不落错地方。失败模式：
+   - 点「重试保存」后、录音存好前提交，录音链接插进下一条草稿。
+   - 图片还在保存时关掉面板、马上重新打开继续写：迟到的链接把旧草稿写回恢复文件，当前草稿缺图。 */
+test('retrying a recording blocks submit until its link is in the draft', async () => {
+  const adapter = fakeAdapter();
+  const drafts = new MemoDraftStore(adapter, 'plugin');
+  let release;
+  const f = recordingView({ drafts, saveAttachment: (name) => new Promise((r) => { release = () => r(`![[${name}]]`); }) });
+  const rec = { id: 'r1', name: '录音 1.webm', type: 'audio/webm', startedAt: new Date().toISOString(), data: new ArrayBuffer(3), error: '' };
+  drafts.recordings.push(rec);
+  const retry = f.v.retryRecording(rec);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(f.v.attachmentSaving(), true, '重试保存期间不能提交');
+  release(); await retry;
+  assert.equal(f.v.attachmentSaving(), false);
+  assert.match(f.v.draft, /!\[\[录音 1\.webm\]\]/);
+});
+
+test('a link that arrives after the panel closed goes to the panel that took over its draft', async () => {
+  const adapter = fakeAdapter();
+  const drafts = new MemoDraftStore(adapter, 'plugin');
+  const views = [];
+  const make = (key) => {
+    const v = recordingView({ drafts, key, saveAttachment: async () => '' }).v;
+    v.app = { workspace: { getLeavesOfType: () => views.filter((x) => !x.memoClosed).map((view) => ({ view })) } };
+    views.push(v);
+    return v;
+  };
+  const a = make('leaf-a');
+  a.setDraft('关掉前写的');
+  a.memoClosed = true; a.persistDraft();
+  const b = make('leaf-b');
+  b.draft = drafts.claimDraft('leaf-b', ['leaf-b']);
+  b.setDraft(`${b.draft}，接着写`);
+  a.insertIntoComposer('![[图片.png]]');
+  assert.equal(b.draft, '关掉前写的，接着写\n![[图片.png]]\n', '链接进了接手的面板');
+  assert.deepEqual(Object.keys(drafts.drafts), ['leaf-b'], '恢复文件里没有多出一份旧草稿');
+  b.memoClosed = true;
+  a.insertIntoComposer('![[第二张.png]]');
+  assert.match(drafts.drafts['leaf-b'].text, /第二张\.png/, '接手的面板也关了：链接接到它留下的草稿');
+  assert.deepEqual(Object.keys(drafts.drafts), ['leaf-b']);
+});
+
+test('a dictation result that arrives after the panel closed does not write back the old draft', async () => {
+  const drafts = new MemoDraftStore(fakeAdapter(), 'plugin');
+  const a = recordingView({ drafts, key: 'leaf-a', saveAttachment: async () => '' }).v;
+  a.setDraft('前文听写');
+  const d = { start: 2, shown: '听写', detached: false };
+  a.memoClosed = true; a.persistDraft();
+  drafts.claimDraft('leaf-b', ['leaf-b']);
+  a.applyDictation(d, '听写定稿');
+  assert.deepEqual(Object.keys(drafts.drafts), ['leaf-b']);
+  assert.equal(drafts.drafts['leaf-b'].text, '前文听写');
+});
