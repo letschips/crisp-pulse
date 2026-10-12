@@ -3275,7 +3275,11 @@ class CrispPulsePlugin extends Plugin {
     // The receipt lives with the created document, so retry also works after a restart or rename.
     for (const candidate of memo.identityCreated ? [] : this.app.vault.getMarkdownFiles()) {
       const text = await this.app.vault.cachedRead(candidate);
-      if (text.split("\n").includes(marker)) { file = candidate; break; }
+      if (!text.includes(marker)) continue;
+      // 只认代码块外的凭据：模板或说明文档里贴的示例不算已转换
+      const lines = text.split("\n");
+      const fenced = memoFencedLines(lines);
+      if (lines.some((line, i) => line === marker && !fenced.has(i))) { file = candidate; break; }
     }
     if (!file) file = await this.createUnique(note.path, `${this.memoStore.relinkFor(note.content, memo.path, note.path)}\n${marker}\n`);
     try {
@@ -3295,7 +3299,9 @@ class CrispPulsePlugin extends Plugin {
       const current = await this.memoStore.ensureIdentity(memo);
       const blockId = `pulse-memo-${current.id}`;
       await this.app.vault.process(file, (text) => {
-        if (text.split("\n").some((line) => line.trimEnd().endsWith(` ^${blockId}`))) return text;
+        const lines = text.split("\n");
+        const fenced = memoFencedLines(lines);
+        if (lines.some((line, i) => !fenced.has(i) && line.trimEnd().endsWith(` ^${blockId}`))) return text;
         return `${text.replace(/\s*$/, "")}\n${this.memoStore.relinkFor(buildMemoNowLine(current), current.path, ANKS_NOW_FILE)} ^${blockId}\n`;
       });
       try {
@@ -8178,14 +8184,25 @@ class CrispPulseMemoView extends ItemView {
     }
   }
 
+  /** 重新读取速记。几次刷新同时进行时只让最后发起的那次落到界面上，晚返回的旧结果直接丢掉，
+      免得刚删掉的卡片又冒出来。 */
   async reload() {
+    const generation = (this.reloadGeneration || 0) + 1;
+    this.reloadGeneration = generation;
+    let mode, memos, error = null;
     try {
-      this.mode = await this.plugin.memoStore.resolveMode();
-      this.memos = await this.plugin.memoStore.list();
+      mode = await this.plugin.memoStore.resolveMode();
+      memos = await this.plugin.memoStore.list();
+    } catch (err) {
+      error = err.message || String(err);
+    }
+    if (generation !== this.reloadGeneration || this.memoClosed) return;
+    if (error) this.error = error;
+    else {
+      this.mode = mode;
+      this.memos = memos;
       this.index = null;
       this.error = null;
-    } catch (error) {
-      this.error = error.message || String(error);
     }
     this.render();
   }

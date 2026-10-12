@@ -2435,3 +2435,43 @@ test('cursor movement and non-editing shortcuts are not writing evidence; real e
   advance(200);listeners['editor-change'](null, { file: { path: file.path } });
   assert.equal(p.hasWritingEvidence(file.path), true);
 });
+
+/* 1.19.8。失败模式：模板或说明文档的代码块里贴了转换凭据 / Now 行动标记的示例，
+   转换时把示例文档当成已转换的目标：不建新笔记、打开示例、回链指向示例。 */
+function conversionStubs(p, files) {
+  const linked = [];const opened = [];const created = [];
+  p.app.vault.getMarkdownFiles = () => Object.keys(files).map((path) => ({ path, basename: path.split('/').pop().replace(/\.md$/, '') }));
+  p.app.vault.cachedRead = async (f) => files[f.path];
+  p.app.vault.getAbstractFileByPath = (path) => (files[path] !== undefined ? { path, basename: path.split('/').pop().replace(/\.md$/, '') } : null);
+  p.app.vault.process = async (f, fn) => { files[f.path] = fn(files[f.path]); };
+  p.app.workspace.getLeaf = () => ({ openFile: async (f) => opened.push(f.path) });
+  p.createUnique = async (path, content) => { files[path] = content; created.push(path); return { path, basename: path.split('/').pop().replace(/\.md$/, '') }; };
+  p.memoStore = { relinkFor: (text) => text, linkBack: async (_m, link) => linked.push(link), ensureIdentity: async (m) => ({ ...m, id: 'memo-a' }) };
+  return { linked, opened, created };
+}
+
+test('a conversion receipt shown inside a code block is an example, not the converted note', async () => {
+  const { p } = setup();await p.loadPluginData();
+  const files = { 'Templates/example.md': '# 示例\n```markdown\n<!-- crisp-pulse-conversion:memo-a:note -->\n```\n' };
+  const { linked, opened, created } = conversionStubs(p, files);
+  const file = await p.finishMemoDocument({ id: 'memo-a', path: 'Daily/2026-10-12.md' }, 'note', { path: 'Output/真实想法.md', content: '> 真实想法' });
+  assert.equal(file.path, 'Output/真实想法.md');
+  assert.deepEqual(created, ['Output/真实想法.md']);
+  assert.deepEqual(opened, ['Output/真实想法.md']);
+  assert.deepEqual(linked, ['Output/真实想法']);
+  // 刚建好的笔记带着代码块外的真凭据：重试复用它，不再新建
+  const again = await p.finishMemoDocument({ id: 'memo-a', path: 'Daily/2026-10-12.md' }, 'note', { path: 'Output/另一个.md', content: 'x' });
+  assert.equal(again.path, 'Output/真实想法.md');
+  assert.deepEqual(created, ['Output/真实想法.md']);
+});
+
+test('a Now action marker shown inside a code block does not stop the memo being added', async () => {
+  const { p } = setup();await p.loadPluginData();
+  const files = { 'Now/行动.md': '# 行动\n```\n- [ ] 示例 ^pulse-memo-memo-a\n```\n' };
+  const { linked } = conversionStubs(p, files);
+  await p.convertMemoToNow({ path: 'Daily/2026-10-12.md', startLine: 3, text: '真实想法' });
+  assert.match(files['Now/行动.md'], /```\n- \[ \] 真实想法 \[\[Daily\/2026-10-12\]\] \^pulse-memo-memo-a\n$/);
+  assert.deepEqual(linked, ['Now/行动#^pulse-memo-memo-a']);
+  await p.convertMemoToNow({ path: 'Daily/2026-10-12.md', startLine: 3, text: '真实想法' });
+  assert.equal(files['Now/行动.md'].split('^pulse-memo-memo-a').length - 1, 2, '再点一次不重复加（示例 1 处 + 真实 1 处）');
+});

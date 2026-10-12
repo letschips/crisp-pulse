@@ -305,3 +305,19 @@ test('a slow draft write started before unload lands before the new instance rea
   assert.equal(reloaded.drafts.new?.text, '新实例新增的重要内容');
   assert.equal(reloaded.drafts.old?.text, '卸载前的旧内容');
 });
+
+test('an older memo reload that finishes late never brings back a deleted card', async () => {
+  const pending = [];
+  const v = Object.create(View.prototype);
+  v.plugin = { memoStore: { resolveMode: async () => 'general', list: () => new Promise((r) => pending.push(r)) } };
+  let renders = 0;v.render = () => { renders++; };
+  v.memos = [];
+  const older = v.reload();
+  const newer = v.reload();
+  await new Promise((r) => setImmediate(r));
+  pending[1]([]);await newer;
+  assert.equal(v.memos.length, 0);
+  pending[0]([{ text: '旧卡片' }]);await older;
+  assert.equal(v.memos.length, 0, '晚返回的旧结果被丢掉');
+  assert.equal(renders, 1);
+});
