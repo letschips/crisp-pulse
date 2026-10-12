@@ -228,3 +228,62 @@ test('a dictation result that arrives after the panel closed does not write back
   assert.deepEqual(Object.keys(drafts.drafts), ['leaf-b']);
   assert.equal(drafts.drafts['leaf-b'].text, '前文听写');
 });
+
+/* 1.19.4：插件重载与草稿接手。失败模式：
+   - 图片还在保存时重载插件，新面板补写的文字已存好；旧实例迟到的保存用旧草稿覆盖恢复文件，新文字丢失。
+   - 接手草稿的新面板不知道上一个面板的附件还在保存，允许提前提交，迟到的链接串入下一条。 */
+function liveView(drafts, key, views, plugins = {}) {
+  const v = recordingView({ drafts, key, saveAttachment: async () => '' }).v;
+  v.app = { workspace: { getLeavesOfType: () => views.filter((x) => !x.memoClosed).map((view) => ({ view })) }, plugins: { plugins } };
+  views.push(v);
+  return v;
+}
+
+for (const sameLeaf of [true, false]) {
+  test(`a link that arrives after a plugin reload lands in the new draft without overwriting it (${sameLeaf ? 'same leaf' : 'new leaf'})`, async () => {
+    const adapter = fakeAdapter();
+    const oldStore = new MemoDraftStore(adapter, 'plugin'); await oldStore.load();
+    const plugins = {};
+    const oldViews = [];
+    const a = liveView(oldStore, 'leaf-a', oldViews, plugins);
+    a.setDraft('重载前写的');
+    await oldStore.flush();
+    // 插件卸载：先关面板，再停掉旧的草稿存储
+    a.memoClosed = true; a.persistDraft(); oldStore.retire();
+    const newStore = new MemoDraftStore(adapter, 'plugin'); await newStore.load();
+    plugins['crisp-pulse'] = { memoDrafts: newStore };
+    const newViews = [];
+    const b = liveView(newStore, sameLeaf ? 'leaf-a' : 'leaf-b', newViews, plugins);
+    a.app.workspace = b.app.workspace;
+    b.draft = newStore.claimDraft(b.draftKey, [b.draftKey]);
+    b.setDraft(`${b.draft}，重载后补写`);
+    await newStore.flush();
+    a.insertIntoComposer('![[图片.png]]');
+    a.setDraft('重载前写的');
+    await oldStore.flush(); await newStore.flush();
+    const reloaded = new MemoDraftStore(adapter, 'plugin'); await reloaded.load();
+    assert.equal(reloaded.claimDraft('leaf-z', ['leaf-z']), '重载前写的，重载后补写\n![[图片.png]]\n');
+    assert.equal(Object.keys(reloaded.drafts).length, 1);
+  });
+}
+
+test('the panel that takes over a draft also waits for its attachments before submitting', async () => {
+  const drafts = new MemoDraftStore(fakeAdapter(), 'plugin');
+  const views = [];
+  let release;
+  const fa = recordingView({ drafts, key: 'leaf-a', saveAttachment: (name) => new Promise((r) => { release = () => r(`![[${name}]]`); }) });
+  const a = fa.v;
+  a.app = { workspace: { getLeavesOfType: () => views.filter((x) => !x.memoClosed).map((view) => ({ view })) } };
+  views.push(a);
+  a.setDraft('关掉前写的');
+  const started = a.toggleRecording(); fa.grant(); await started;
+  const recorder = a.recording.recorder;
+  await a.onClose();
+  const b = liveView(drafts, 'leaf-b', views);
+  b.draft = drafts.claimDraft('leaf-b', ['leaf-b']);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(b.attachmentSaving(), true, '接手的面板也要等附件存好');
+  release(); await recorder.done;
+  assert.equal(b.attachmentSaving(), false);
+  assert.match(b.draft, /^关掉前写的\n!\[\[录音 \d+\.webm\]\]\n$/);
+});

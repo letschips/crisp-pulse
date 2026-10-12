@@ -548,3 +548,33 @@ test('回收站文件损坏时拒绝删除，不能让速记删掉却没进回�
   await assert.rejects(() => s.remove(second), /回收站/);
   assert.match(store.get('Daily/2026-10-09.md').content, /第二条/);
 });
+
+/* 1.19.4：速记转为笔记 / 问题 / Now 时的附件链接。失败模式：附件位置设为「相对当前笔记」时，正文里的相对链接原样复制到别的目录，图片解析不到。
+   到哪都能解析的链接（最短路径、库内完整路径、网址、代码里的示例）保持原样。 */
+test('relative attachment links are rewritten for the new note location; links that resolve anywhere stay as they are', () => {
+  const { memoRelinkText } = memo;
+  const files = new Set(['Topics/a/raw/assets/x y.png', 'Topics/a/raw/assets/img.png', 'Notes/b.md']);
+  const norm = (p) => { const out = []; for (const s of p.split('/')) { if (s === '..') out.pop(); else if (s && s !== '.') out.push(s); } return out.join('/'); };
+  const resolve = (lp, from) => {
+    const dir = from.includes('/') ? from.slice(0, from.lastIndexOf('/')) : '';
+    if (/^\.\.?\//.test(lp)) { const p = norm(`${dir}/${lp}`); return files.has(p) ? p : null; }
+    if (files.has(lp)) return lp;
+    const hits = [...files].filter((f) => f.split('/').pop() === lp || f.split('/').pop() === `${lp}.md`);
+    return hits.length === 1 ? hits[0] : null;
+  };
+  const text = [
+    '![[../assets/img.png|300]] 配图',
+    '![说明](../assets/x%20y.png "t")',
+    '![[img.png]] [[b]] [[Topics/a/raw/assets/img.png]]',
+    '[网页](https://example.com/../a.png) `![[../assets/img.png]]`',
+  ].join('\n');
+  const out = memoRelinkText(text, 'Topics/a/raw/inbox/2026-10-12 速记.md', 'Topics/a/questions/backlog/题.md', resolve);
+  assert.equal(out, [
+    '![[../../raw/assets/img.png|300]] 配图',
+    '![说明](../../raw/assets/x%20y.png "t")',
+    '![[img.png]] [[b]] [[Topics/a/raw/assets/img.png]]',
+    '[网页](https://example.com/../a.png) `![[../assets/img.png]]`',
+  ].join('\n'));
+  assert.equal(resolve('../../raw/assets/img.png', 'Topics/a/questions/backlog/题.md'), 'Topics/a/raw/assets/img.png');
+  assert.equal(memoRelinkText('![[../assets/img.png]]', 'Topics/a/raw/inbox/s.md', 'Now/行动.md', resolve), '![[../Topics/a/raw/assets/img.png]]');
+});

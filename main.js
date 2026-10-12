@@ -1579,7 +1579,7 @@ class CrispPulsePlugin extends Plugin {
     if (this.snapshotSyncTimer) clearTimeout(this.snapshotSyncTimer);
     this.focusAdapter?.detach();
     this.flushAllSessions();
-    void this.memoDrafts?.flush();
+    this.memoDrafts?.retire();
   }
 
   storeFilePath() {
@@ -3248,7 +3248,7 @@ class CrispPulsePlugin extends Plugin {
       const text = await this.app.vault.cachedRead(candidate);
       if (text.split("\n").includes(marker)) { file = candidate; break; }
     }
-    if (!file) file = await this.createUnique(note.path, `${note.content}\n${marker}\n`);
+    if (!file) file = await this.createUnique(note.path, `${this.memoStore.relinkFor(note.content, memo.path, note.path)}\n${marker}\n`);
     try {
       await this.memoStore.linkBack(memo, file.path.replace(/\.md$/, ""));
     } catch (error) {
@@ -3267,7 +3267,7 @@ class CrispPulsePlugin extends Plugin {
       const blockId = `pulse-memo-${current.id}`;
       await this.app.vault.process(file, (text) => {
         if (text.split("\n").some((line) => line.trimEnd().endsWith(` ^${blockId}`))) return text;
-        return `${text.replace(/\s*$/, "")}\n${buildMemoNowLine(current)} ^${blockId}\n`;
+        return `${text.replace(/\s*$/, "")}\n${this.memoStore.relinkFor(buildMemoNowLine(current), current.path, ANKS_NOW_FILE)} ^${blockId}\n`;
       });
       try {
         await this.memoStore.linkBack(current, `${ANKS_NOW_FILE.replace(/\.md$/, "")}#^${blockId}`);
@@ -6769,6 +6769,45 @@ function buildMemoNote({ memo, folder }) {
   return { path: `${dir ? `${dir}/` : ""}${title}.md`, title, content };
 }
 
+/** 相对路径：从 fromDir 文件夹到 toPath。 */
+function memoRelativePath(fromDir, toPath) {
+  const from = fromDir ? fromDir.split("/") : [];
+  const to = toPath.split("/");
+  let i = 0;
+  while (i < from.length && i < to.length - 1 && from[i] === to[i]) i++;
+  return [...from.slice(i).map(() => ".."), ...to.slice(i)].join("/");
+}
+
+/** 速记正文搬进别的笔记时，相对路径的链接（附件位置设为「相对当前笔记」时生成的）从新位置解析不到：改成从新位置出发的相对路径。
+    最短路径、库内完整路径这类到哪都能解析的链接，以及网址和行内代码里的示例，保持原样。
+    resolve(linkpath, fromPath) 返回链接解析到的文件路径，解析不到返回 null。 */
+function memoRelinkText(text, sourcePath, targetPath, resolve) {
+  const dir = targetPath.includes("/") ? targetPath.slice(0, targetPath.lastIndexOf("/")) : "";
+  const moved = (linkpath) => {
+    const hit = linkpath && resolve(linkpath, sourcePath);
+    if (!hit || resolve(linkpath, targetPath) === hit) return null;
+    return memoRelativePath(dir, hit);
+  };
+  return String(text ?? "").split(/(`[^`\n]*`)/).map((part, i) => (i % 2 ? part : part
+    .replace(/(!?\[\[)([^\]|#\n]+)([^\]\n]*\]\])/g, (all, open, linkpath, rest) => {
+      const next = moved(linkpath.trim());
+      return next ? `${open}${next}${rest}` : all;
+    })
+    .replace(/(!?\[[^\]\n]*\]\()(<[^>\n]+>|[^)\s]+)((?:\s+"[^"\n]*")?\))/g, (all, open, raw, rest) => {
+      if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return all;
+      const wrapped = raw.startsWith("<");
+      let target = wrapped ? raw.slice(1, -1) : raw;
+      const hashAt = target.indexOf("#");
+      const sub = hashAt >= 0 ? target.slice(hashAt) : "";
+      if (hashAt >= 0) target = target.slice(0, hashAt);
+      let decoded = target;
+      try { decoded = decodeURI(target); } catch (_) { /* 不是合法编码，按原文解析 */ }
+      const next = moved(decoded);
+      if (!next) return all;
+      return `${open}${wrapped ? `<${next}${sub}>` : `${next.replace(/ /g, "%20")}${sub}`}${rest}`;
+    }))).join("");
+}
+
 function buildMemoNowLine(memo) {
   const first = memo.text.split("\n").map((l) => l.trim()).find(Boolean) || "速记";
   return `- [ ] ${first} [[${memo.path.replace(/\.md$/, "")}]]`;
@@ -7263,6 +7302,26 @@ class MemoDraftStore {
     this.lastPayload = null;
     // 关掉的面板 → 接手它草稿的面板；面板关掉后才存好的附件链接据此找到去处
     this.claimedBy = new Map();
+    // 还在存进库的附件，按发起的面板记：接手草稿的面板也要等它们存好再提交
+    this.pendingAttachments = new Map();
+  }
+
+  beginAttachment(key) {
+    this.pendingAttachments.set(key, (this.pendingAttachments.get(key) || 0) + 1);
+    this.changed();
+  }
+
+  endAttachment(key) {
+    const n = (this.pendingAttachments.get(key) || 0) - 1;
+    if (n > 0) this.pendingAttachments.set(key, n); else this.pendingAttachments.delete(key);
+    this.changed();
+  }
+
+  /** 别的面板发起、草稿已归这个面板的附件还有几个没存好。 */
+  inheritedAttachments(key) {
+    let n = 0;
+    for (const [origin, count] of this.pendingAttachments) if (origin !== key && this.currentKey(origin) === key) n += count;
+    return n;
   }
 
   /** 这份草稿现在归哪个面板（被接手过就顺着找到最后接手的那个）。 */
@@ -7333,8 +7392,17 @@ class MemoDraftStore {
     this.schedule();
   }
 
+  /** 插件卸载：把手上的草稿写完，之后不再写入。重载后由新实例的草稿存储接管同一个文件，旧实例迟到的写入会覆盖新草稿。 */
+  retire() {
+    if (this.retired) return this.writing;
+    const done = this.flush();
+    this.retired = true;
+    clearTimeout(this.timer);
+    return done;
+  }
+
   schedule() {
-    if (this.broken || !this.path) return;
+    if (this.broken || this.retired || !this.path) return;
     clearTimeout(this.timer);
     this.timer = setTimeout(() => { void this.flush(); }, MEMO_DRAFT_SAVE_DELAY);
   }
@@ -7342,7 +7410,7 @@ class MemoDraftStore {
   flush() {
     clearTimeout(this.timer);
     this.timer = null;
-    if (this.broken || !this.path) return this.writing;
+    if (this.broken || this.retired || !this.path) return this.writing;
     const payload = JSON.stringify({
       version: 1,
       drafts: this.drafts,
@@ -7589,6 +7657,13 @@ class MemoStore {
     }
     for (const path of [...this.parsed.keys()]) if (!seen.has(path)) this.parsed.delete(path);
     return memos.sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time) || b.startLine - a.startLine);
+  }
+
+  /** 速记正文放进 targetPath 前，把从那里解析不到的相对链接改好。 */
+  relinkFor(text, sourcePath, targetPath) {
+    const cache = this.app.metadataCache;
+    if (typeof cache?.getFirstLinkpathDest !== "function") return text;
+    return memoRelinkText(text, sourcePath, targetPath, (linkpath, from) => cache.getFirstLinkpathDest(linkpath, from)?.path || null);
   }
 
   /** 文件被改、删或改名时丢掉它的解析缓存（修改时间精度不够时的保险）。返回它原来是否有速记。 */
@@ -7957,7 +8032,7 @@ class CrispPulseMemoView extends ItemView {
       const live = this.app.workspace.getLeavesOfType?.(VIEW_TYPE_MEMO)?.map((leaf) => leaf.id) || [];
       const restored = drafts.claimDraft(this.draftKey, live);
       if (restored && !this.draft) { this.draft = restored; this.draftRestored = true; }
-      this.register(drafts.onChange(() => this.renderPendingRecordings()));
+      this.register(drafts.onChange(() => { this.renderPendingRecordings(); this.updateRecordingUi(); }));
     }
     this.registerEvent(this.app.workspace.on("crisp-asr:state", () => this.refreshMemoTranscriptionControls()));
     this.registerEvent(this.app.workspace.on("crisp-tempo:state", () => this.refreshTempoChips()));
@@ -7986,6 +8061,7 @@ class CrispPulseMemoView extends ItemView {
 
   persistDraft() {
     const drafts = this.plugin?.memoDrafts;
+    if (drafts?.retired) return;
     // 面板已关、草稿已被新打开的面板接手：迟到的听写定稿等不再写回，免得恢复文件里多出一份旧草稿
     if (this.memoClosed && drafts?.currentKey && drafts.currentKey(this.draftKey) !== this.draftKey) return;
     drafts?.setDraft(this.draftKey, this.draft);
@@ -8082,13 +8158,27 @@ class CrispPulseMemoView extends ItemView {
     });
   }
 
+  /** 现在负责草稿的存储：插件重载后旧实例的已停用，换成新实例的。 */
+  liveDrafts() {
+    const own = this.plugin?.memoDrafts;
+    if (!own?.retired) return own || null;
+    const id = this.plugin?.manifest?.id || "crisp-pulse";
+    const live = this.app?.plugins?.plugins?.[id]?.memoDrafts;
+    return live && !live.retired ? live : null;
+  }
+
   /** 把文字插到输入框光标处（输入框不在了就接到草稿末尾），并同步草稿。 */
   insertIntoComposer(text) {
-    // 面板关掉后才存好的附件：草稿已被新打开的面板接手时，链接跟着草稿走，不再把旧草稿写回恢复文件
-    const drafts = this.plugin?.memoDrafts;
+    // 面板关掉后才存好的附件：草稿已被新打开的面板（或重载后的新实例）接手时，链接跟着草稿走，不再把旧草稿写回恢复文件
+    const own = this.plugin?.memoDrafts;
+    const drafts = this.memoClosed ? this.liveDrafts() : own;
+    if (this.memoClosed && own?.retired && !drafts) {
+      new Notice(`Crisp Pulse 速记：插件已重新加载，附件已存进库但没能放回草稿，请手动插入：${text}`, 12000);
+      return;
+    }
     if (this.memoClosed && drafts) {
       const key = drafts.currentKey(this.draftKey);
-      if (key !== this.draftKey) {
+      if (key !== this.draftKey || drafts !== own) {
         const heir = (this.app?.workspace?.getLeavesOfType?.(VIEW_TYPE_MEMO) || []).map((leaf) => leaf.view).find((v) => v && v !== this && !v.memoClosed && v.draftKey === key);
         if (heir) heir.insertIntoComposer(text);
         else drafts.appendDraft(key, text);
@@ -8256,6 +8346,8 @@ class CrispPulseMemoView extends ItemView {
         win.clearInterval(session.timer);
         if (this.recording === session) this.recording = null;
         this.recordingSaving = true;
+        const draftsAtStart = this.plugin?.memoDrafts;
+        draftsAtStart?.beginAttachment?.(this.draftKey);
         this.updateRecordingUi();
         const type = recorder.mimeType || mime || "audio/webm";
         let rec = null;
@@ -8266,16 +8358,18 @@ class CrispPulseMemoView extends ItemView {
           this.insertIntoComposer(link);
         } catch (error) {
           const message = error.message || String(error);
-          if (rec && this.plugin.memoDrafts) {
+          const keeper = this.memoClosed ? this.liveDrafts() : this.plugin?.memoDrafts;
+          if (rec && keeper) {
             // 录音留着：输入框下方可以重试、另存或丢弃，不用重录
             rec.error = message;
-            await this.plugin.memoDrafts.keepRecording(rec);
+            await keeper.keepRecording(rec);
             new Notice(`Crisp Pulse 速记：录音没能存进库（${message}）。录音已保留，可在输入框下方重试或另存`, 10000);
           } else {
             new Notice(`Crisp Pulse 速记：录音保存失败：${message}`, 8000);
           }
         } finally {
           this.recordingSaving = false;
+          draftsAtStart?.endAttachment?.(this.draftKey);
           this.updateRecordingUi();
         }
       });
@@ -8389,6 +8483,7 @@ class CrispPulseMemoView extends ItemView {
     }
     if (this.recordingSaving || this.recordingRetries) return { text: "正在保存录音…", actions: [] };
     if (this.imagesSaving) return { text: "正在保存图片…", actions: [] };
+    if (this.plugin?.memoDrafts?.inheritedAttachments?.(this.draftKey)) return { text: "上一个面板的附件还在保存…", actions: [] };
     const pomodoroBreak = this.plugin.pomodoroBreak;
     if (pomodoroBreak && !pomodoroBreak.dismissed && this.plugin.settings.memoPomodoroPrompt !== false) {
       return { text: "记一下这一轮做了什么（带 #番茄）", actions: [
@@ -8425,7 +8520,7 @@ class CrispPulseMemoView extends ItemView {
 
   /** 图片或录音还在存进库：存好后链接才插进输入框，这期间提交会让链接落到下一条。 */
   attachmentSaving() {
-    return !!(this.recordingSaving || this.recordingRetries || this.imagesSaving);
+    return !!(this.recordingSaving || this.recordingRetries || this.imagesSaving || this.plugin?.memoDrafts?.inheritedAttachments?.(this.draftKey));
   }
 
   updateRecordingUi() {
@@ -8500,6 +8595,8 @@ class CrispPulseMemoView extends ItemView {
       const links = [];
       // 保存完成前不让提交：否则链接会插进下一条草稿，这一条缺图
       this.imagesSaving = (this.imagesSaving || 0) + 1;
+      const draftsAtStart = this.plugin?.memoDrafts;
+      draftsAtStart?.beginAttachment?.(this.draftKey);
       this.updateRecordingUi();
       try {
         for (const file of images) {
@@ -8511,6 +8608,7 @@ class CrispPulseMemoView extends ItemView {
         this.imagesSaving -= 1;
       }
       if (links.length) this.insertIntoComposer(links.join("\n"));
+      draftsAtStart?.endAttachment?.(this.draftKey);
       this.updateRecordingUi();
       return true;
     };
@@ -9946,7 +10044,7 @@ module.exports.CrispPulseMemoView = CrispPulseMemoView;
 module.exports.memoHelpers = {
   buildMemoBlock, parseMemoBlocks, extractMemoTags, insertMemoBlock, removeMemoBlock, appendMemoLink,
   memoStats, memoHeatLevel, memoHasImage, memoHasLink, memoHasAudio, memoTranscriptionState, memoHasTranscriptFor, memoAsrErrorInfo, memoConversionReview, memoWithTag, memoTaskTitle, memoTempoLabel, bindHoldPress, memoAttachmentName, memoRecordingName, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
-  buildMemoQuestionNote, buildMemoNote, buildMemoNowLine, MemoStore,
+  buildMemoQuestionNote, buildMemoNote, buildMemoNowLine, memoRelinkText, MemoStore,
   filterMemos, buildTagTree, renameTagInText, renameTagInContent, selectDailyReview, onThisDay, parseMemoUrlParams,
   tokenizeMemo, buildMemoIndex, relatedMemos, walkStep, explainShared,
 };
