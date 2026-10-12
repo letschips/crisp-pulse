@@ -6482,6 +6482,23 @@ function extractMemoTags(text) {
   return tags;
 }
 
+/** 一组行里被成对围栏包住的行号（含围栏行本身）。没闭合的围栏不算：免得吞掉后面的速记和隐藏凭据。 */
+function memoFencedLines(lines) {
+  const inside = new Set();
+  let fence = null;
+  let open = -1;
+  for (let k = 0; k < lines.length; k++) {
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(lines[k]);
+    if (fence) {
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) {
+        for (let x = open; x <= k; x++) inside.add(x);
+        fence = null;
+      }
+    } else if (marker && (marker[1][0] !== "`" || !marker[2].includes("`"))) { fence = marker[1]; open = k; }
+  }
+  return inside;
+}
+
 function parseMemoBlocks(content) {
   const lines = String(content ?? "").split("\n");
   const memos = [];
@@ -6495,8 +6512,12 @@ function parseMemoBlocks(content) {
     if (marker && (marker[1][0] !== "`" || !marker[2].includes("`"))) { fence = marker[1]; continue; }
     const header = MEMO_HEADER_RE.exec(lines[i]);
     if (!header) continue;
+    // 速记里的代码块（行首带 >）中的 [!memo] 是示例，不是下一条速记
+    let last = i;
+    while (last + 1 < lines.length && /^>/.test(lines[last + 1])) last++;
+    const fenced = memoFencedLines(lines.slice(i + 1, last + 1).map((line) => line.replace(/^>\s?/, "")));
     let end = i;
-    while (end + 1 < lines.length && /^>/.test(lines[end + 1]) && !MEMO_HEADER_RE.test(lines[end + 1])) end++;
+    while (end < last && !(MEMO_HEADER_RE.test(lines[end + 1]) && !fenced.has(end - i))) end++;
     const body = lines.slice(i + 1, end + 1).map((line) => line.replace(/^>\s?/, ""));
     const links = [];
     const textLines = [];
@@ -6505,7 +6526,8 @@ function parseMemoBlocks(content) {
     const transcriptJobs = [];
     const transcriptAudio = [];
     const tempoTasks = [];
-    for (const line of body) {
+    for (const [k, line] of body.entries()) {
+      if (fenced.has(k)) { textLines.push(line); continue; }
       const tempo = MEMO_TEMPO_RE.exec(line.trim());
       if (tempo) { if (!tempoTasks.includes(tempo[1])) tempoTasks.push(tempo[1]); continue; }
       const transcript = MEMO_ASR_RE.exec(line.trim());
@@ -6788,7 +6810,7 @@ function memoRelinkText(text, sourcePath, targetPath, resolve) {
     if (!hit || resolve(linkpath, targetPath) === hit) return null;
     return memoRelativePath(dir, hit);
   };
-  return String(text ?? "").split(/(`[^`\n]*`)/).map((part, i) => (i % 2 ? part : part
+  const relinkLine = (line) => line.split(/(`[^`\n]*`)/).map((part, i) => (i % 2 ? part : part
     .replace(/(!?\[\[)([^\]|#\n]+)([^\]\n]*\]\])/g, (all, open, linkpath, rest) => {
       const next = moved(linkpath.trim());
       return next ? `${open}${next}${rest}` : all;
@@ -6806,6 +6828,10 @@ function memoRelinkText(text, sourcePath, targetPath, resolve) {
       if (!next) return all;
       return `${open}${wrapped ? `<${next}${sub}>` : `${next.replace(/ /g, "%20")}${sub}`}${rest}`;
     }))).join("");
+  // 围栏代码块里的示例保持原样（引用块里的围栏也算）
+  const lines = String(text ?? "").split("\n");
+  const fenced = memoFencedLines(lines.map((line) => line.replace(/^(?:[ \t]*>)*[ \t]?/, "")));
+  return lines.map((line, k) => (fenced.has(k) ? line : relinkLine(line))).join("\n");
 }
 
 function buildMemoNowLine(memo) {
@@ -7288,6 +7314,10 @@ const MEMO_DRAFT_SAVE_DELAY = 500;
 /** 输入框里还没提交的草稿和没存进库的录音，存在插件目录（memo-drafts.json、memo-pending/）。
     关闭面板、停用重载、退出重开后能找回；每个速记面板按自己的标签页分开存，不互相覆盖。
     文件损坏时只读不写，免得把能修复的内容覆盖掉。 */
+// 同一个草稿文件在所有插件实例之间共用一条写入队列（挂在 vault adapter 上，插件重载后仍是同一个对象）：
+// 卸载前已经开始的写入落盘之后，新实例才读取和写入
+const MEMO_DRAFT_WRITES = Symbol.for("crisp-pulse.memo-drafts.writes");
+
 class MemoDraftStore {
   constructor(adapter, dir) {
     this.adapter = adapter;
@@ -7337,8 +7367,15 @@ class MemoDraftStore {
     this.setDraft(key, `${prev ? `${prev.replace(/\s+$/, "")}\n` : ""}${text}\n`);
   }
 
+  writeQueue() {
+    const adapter = this.adapter;
+    if (!adapter || typeof adapter !== "object") return null;
+    try { return adapter[MEMO_DRAFT_WRITES] ||= new Map(); } catch (_) { return null; }
+  }
+
   load() {
     this.ready ||= (async () => {
+      await this.writeQueue()?.get(this.path);
       if (!this.path || !this.adapter || !(await this.adapter.exists(this.path))) return;
       try {
         const raw = await this.adapter.read(this.path);
@@ -7418,7 +7455,8 @@ class MemoDraftStore {
     }, null, 2);
     if (payload === this.lastPayload) return this.writing;
     this.lastPayload = payload;
-    this.writing = this.writing.then(async () => {
+    const queue = this.writeQueue();
+    this.writing = (queue?.get(this.path) || this.writing).then(async () => {
       await this.adapter.write(this.path, payload);
       if (await this.adapter.read(this.path) !== payload) throw new Error("写入后读回不一致");
     }).catch((error) => {
@@ -7426,6 +7464,7 @@ class MemoDraftStore {
       console.warn("[Crisp Pulse] 速记草稿保存失败", error);
       if (!this.warned) { this.warned = true; new Notice(`Crisp Pulse 速记：草稿恢复文件保存失败（${error.message || error}），关闭面板前请先提交或复制草稿`, 8000); }
     });
+    queue?.set(this.path, this.writing);
     return this.writing;
   }
 

@@ -287,3 +287,21 @@ test('the panel that takes over a draft also waits for its attachments before su
   assert.equal(b.attachmentSaving(), false);
   assert.match(b.draft, /^关掉前写的\n!\[\[录音 \d+\.webm\]\]\n$/);
 });
+
+/* 1.19.5：卸载前已经开始、还没写完的草稿写入，不能在新实例保存之后才落盘把新草稿盖掉。 */
+test('a slow draft write started before unload lands before the new instance reads and writes', async () => {
+  const adapter = fakeAdapter();
+  let release; let gated = true;
+  const write = adapter.write;
+  adapter.write = async function (p, c) { if (gated) { gated = false; await new Promise((r) => { release = r; }); } return write.call(this, p, c); };
+  const oldStore = new MemoDraftStore(adapter, 'plugin'); await oldStore.load();
+  oldStore.setDraft('old', '卸载前的旧内容');
+  const retiring = oldStore.retire();
+  const newStore = new MemoDraftStore(adapter, 'plugin');
+  const loading = newStore.load().then(async () => { newStore.setDraft('new', '新实例新增的重要内容'); await newStore.flush(); });
+  await new Promise((r) => setTimeout(r, 10));
+  release(); await retiring; await loading;
+  const reloaded = new MemoDraftStore(adapter, 'plugin'); await reloaded.load();
+  assert.equal(reloaded.drafts.new?.text, '新实例新增的重要内容');
+  assert.equal(reloaded.drafts.old?.text, '卸载前的旧内容');
+});

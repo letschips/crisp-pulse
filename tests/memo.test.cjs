@@ -578,3 +578,27 @@ test('relative attachment links are rewritten for the new note location; links t
   assert.equal(resolve('../../raw/assets/img.png', 'Topics/a/questions/backlog/题.md'), 'Topics/a/raw/assets/img.png');
   assert.equal(memoRelinkText('![[../assets/img.png]]', 'Topics/a/raw/inbox/s.md', 'Now/行动.md', resolve), '![[../Topics/a/raw/assets/img.png]]');
 });
+
+/* 1.19.5：速记里的代码块。失败模式：代码示例里的 [!memo] 被当成另一条速记，删掉它会把原代码块截断；转为笔记时代码示例里的链接被改写。 */
+test('a memo header inside a fenced code block in a memo is part of that memo', () => {
+  const content = '> [!memo] 12:00\n> 这是代码示例\n> ```markdown\n> [!memo] 09:00\n> 示例内容\n> ```\n\n> [!memo] 13:00\n> 下一条\n';
+  const memos = memo.parseMemoBlocks(content);
+  assert.equal(JSON.stringify(memos.map((m) => m.time)), '["12:00","13:00"]');
+  assert.equal(memos[0].text, '这是代码示例\n```markdown\n[!memo] 09:00\n示例内容\n```');
+  assert.equal(memos[0].endLine, 5);
+});
+
+test('relinking leaves fenced code examples untouched', () => {
+  const resolve = (lp, from) => (lp === '../assets/img.png' && from.startsWith('Topics/a/raw/inbox/') ? 'Topics/a/raw/assets/img.png'
+    : lp === '../../raw/assets/img.png' && from.startsWith('Topics/a/questions/backlog/') ? 'Topics/a/raw/assets/img.png' : null);
+  const text = '> ![](../assets/img.png)\n> ```markdown\n> ![](../assets/img.png)\n> ```\n> ~~~\n> ![[../assets/img.png]]\n> ~~~\n> ![[../assets/img.png]]';
+  assert.equal(memo.memoRelinkText(text, 'Topics/a/raw/inbox/s.md', 'Topics/a/questions/backlog/q.md', resolve),
+    '> ![](../../raw/assets/img.png)\n> ```markdown\n> ![](../assets/img.png)\n> ```\n> ~~~\n> ![[../assets/img.png]]\n> ~~~\n> ![[../../raw/assets/img.png]]');
+});
+
+test('deleting a memo that contains a code example removes it whole and leaves its neighbour intact', () => {
+  const content = '> [!memo] 12:00\n> 这是代码示例\n> ```markdown\n> [!memo] 09:00\n> 示例内容\n> ```\n\n> [!memo] 13:00\n> 下一条\n';
+  const [first, second] = memo.parseMemoBlocks(content);
+  assert.equal(memo.removeMemoBlock(content, first), '> [!memo] 13:00\n> 下一条\n');
+  assert.equal(memo.removeMemoBlock(content, second), '> [!memo] 12:00\n> 这是代码示例\n> ```markdown\n> [!memo] 09:00\n> 示例内容\n> ```\n');
+});
