@@ -1314,10 +1314,8 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
           }
           let changed = false;
           if (typeof a.id !== "string" || !a.id.trim()) { a.id = reviewEntryId(); changed = true; }
-          if (typeof a.title !== "string" || !a.title.trim()) {
-            repairedCount++;
-            continue;
-          }
+          // 标题清空的行动照样保留：完成状态和结果笔记关联不能因为标题暂时为空就丢掉
+          if (typeof a.title !== "string") { a.title = typeof a.title === "number" ? String(a.title) : ""; changed = true; }
           if (typeof a.status !== "string" || !Object.hasOwn(REVIEW_ACTION_STATES, a.status)) { a.status = "pending"; changed = true; }
           if (a.outcomePath !== undefined && (typeof a.outcomePath !== "string" || !a.outcomePath.trim())) { delete a.outcomePath; changed = true; }
           if (a.originalOutcomePath !== undefined && (typeof a.originalOutcomePath !== "string" || !a.originalOutcomePath.trim())) { delete a.originalOutcomePath; changed = true; }
@@ -2290,6 +2288,14 @@ class CrispPulsePlugin extends Plugin {
     if (event?.type === "pointerdown") return;
     const target = event?.target;
     if (event?.type === "click" && !target?.closest?.('input[type="checkbox"], .task-list-item-checkbox')) return;
+    if (event?.type === "keydown") {
+      const kind = writingKeyKind(event);
+      // 方向键、翻页、Esc 这类只移动光标的键不算
+      if (!kind) return;
+      this.lastWritingInputAt = now;
+      // 快捷键可能改文字（撤销、加粗、移动行），也可能只是搜索、切换：编辑器紧接着真的变了才算（见 editor-change）
+      if (kind === "shortcut") return;
+    }
     this.lastWritingInputAt = now;
     const leafEl = target?.closest?.(".workspace-leaf");
     if (!leafEl) return;
@@ -6587,6 +6593,18 @@ function parseMemoBlocks(content) {
   return memos;
 }
 
+/** 按键在写作证据里算什么：text 直接产生文字；shortcut 带 Cmd/Ctrl 的组合键或移动行，要编辑器随后真的变了才算；null 只移动光标或界面操作。 */
+function writingKeyKind(event) {
+  const key = String(event?.key ?? "");
+  if (event?.isComposing || key === "Process" || event?.keyCode === 229) return "text";
+  if (["Shift", "Control", "Meta", "Alt", "CapsLock", "Fn"].includes(key)) return null;
+  if (event?.ctrlKey || event?.metaKey) return "shortcut";
+  if (event?.altKey && /^Arrow(Up|Down)$/.test(key)) return "shortcut";
+  if (key.length === 1) return "text";
+  if (["Backspace", "Delete", "Enter", "Tab"].includes(key)) return "text";
+  return null;
+}
+
 function memoHeadingLevel(line) {
   const match = /^(#{1,6})\s/.exec(line);
   return match ? match[1].length : 0;
@@ -6598,11 +6616,14 @@ function insertMemoBlock(content, block, heading) {
   const headingLine = String(heading ?? "").trim();
   if (!headingLine) return trimmedEnd ? `${trimmedEnd}\n\n${block}\n` : `${block}\n`;
   const lines = text.split("\n");
-  const at = lines.findIndex((line) => line.trim() === headingLine);
+  // 代码块里的示例标题（模板里贴的速记格式说明）不算，免得速记写进代码块
+  const fenced = memoFencedLines(lines);
+  const at = lines.findIndex((line, i) => !fenced.has(i) && line.trim() === headingLine);
   if (at < 0) return trimmedEnd ? `${trimmedEnd}\n\n${headingLine}\n\n${block}\n` : `${headingLine}\n\n${block}\n`;
   const level = memoHeadingLevel(headingLine) || 6;
   let next = lines.length;
   for (let i = at + 1; i < lines.length; i++) {
+    if (fenced.has(i)) continue;
     const lv = memoHeadingLevel(lines[i]);
     if (lv && lv <= level) { next = i; break; }
   }
@@ -10124,7 +10145,7 @@ module.exports.CrispPulseEvidenceModal = CrispPulseEvidenceModal;
 module.exports.CrispPulseMemoView = CrispPulseMemoView;
 module.exports.memoHelpers = {
   buildMemoBlock, parseMemoBlocks, extractMemoTags, insertMemoBlock, removeMemoBlock, appendMemoLink,
-  memoStats, memoHeatLevel, memoHasImage, memoHasLink, memoHasAudio, memoTranscriptionState, memoHasTranscriptFor, memoAsrErrorInfo, memoConversionReview, memoWithTag, memoResolveRelative, memoTaskTitle, memoTempoLabel, bindHoldPress, memoAttachmentName, memoRecordingName, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
+  memoStats, memoHeatLevel, memoHasImage, memoHasLink, memoHasAudio, memoTranscriptionState, memoHasTranscriptFor, memoAsrErrorInfo, memoConversionReview, memoWithTag, memoResolveRelative, writingKeyKind, memoTaskTitle, memoTempoLabel, bindHoldPress, memoAttachmentName, memoRecordingName, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
   buildMemoQuestionNote, buildMemoNote, buildMemoNowLine, memoRelinkText, MemoStore,
   filterMemos, buildTagTree, renameTagInText, renameTagInContent, selectDailyReview, onThisDay, parseMemoUrlParams,
   tokenizeMemo, buildMemoIndex, relatedMemos, walkStep, explainShared,

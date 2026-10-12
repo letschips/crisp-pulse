@@ -161,3 +161,15 @@ test('memos written during a pomodoro break get #番茄 once, without matching l
   assert.equal(memoWithTag('只有 #番茄钟', '番茄'), '只有 #番茄钟 #番茄');
   assert.equal(memoWithTag('末尾有换行\n', '番茄'), '末尾有换行 #番茄');
 });
+
+test('a memo never lands inside a template code block that shows the memo heading', () => {
+  const { insertMemoBlock, parseMemoBlocks } = Pulse.memoHelpers;
+  const template = '# 今日\n```markdown\n## 速记\n示例内容\n\n## 其他\n示例段落\n```\n# 正文';
+  const out = insertMemoBlock(template, '> [!memo] 12:00\n> 真实想法', '## 速记');
+  assert.equal(parseMemoBlocks(out).length, 1, '写在代码块外，速记列表能看到');
+  assert.ok(out.startsWith(template), '模板和代码块原样保留');
+  const real = '# 今日\n```markdown\n## 速记\n示例\n```\n\n## 速记\n\n> [!memo] 08:00\n> 早上\n\n## 晚上\n';
+  const out2 = insertMemoBlock(real, '> [!memo] 12:00\n> 中午', '## 速记');
+  assert.equal(parseMemoBlocks(out2).length, 2);
+  assert.ok(out2.indexOf('中午') > out2.indexOf('早上') && out2.indexOf('中午') < out2.indexOf('## 晚上'), '写进真正的速记段落末尾');
+});

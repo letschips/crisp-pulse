@@ -1468,9 +1468,13 @@ test('validateAndRepairStore repairs corrupted reviewDrafts safely',async()=>{
  assert.equal(typeof store.reviewDrafts['bad_draft'],'undefined');
  const draft=store.reviewDrafts['2026-09-02:2026-09-08:all'];
  assert.ok(draft);
- assert.equal(draft.actions.length,1);
- assert.equal(draft.actions[0].title,'valid action');
+ // 标题有问题不丢整条行动（状态、结果笔记关联要保住）：数字标题转成文字，非对象条目才丢
+ assert.equal(draft.actions.length,2);
+ assert.equal(draft.actions[0].title,'456');
+ assert.equal(typeof draft.actions[0].id,'string');
  assert.equal(draft.actions[0].status,'pending');
+ assert.equal(draft.actions[1].title,'valid action');
+ assert.equal(draft.actions[1].status,'pending');
  assert.equal(draft.evidence.length,1);
  assert.equal(typeof draft.evidence[0].quote,'string');
  assert.equal(typeof draft.evidence[0].capturedAt,'string');
@@ -2153,7 +2157,7 @@ test('typing in a note\'s tab counts; another note written meanwhile does not', 
   const other = { path: 'notes/synced.md', extension: 'md', content: 'one' };
   p.fileSnapshots.set(typed.path, baseline(typed.content));p.fileSnapshots.set(other.path, baseline(other.content));
   const target = leafFor(p, typed.path);
-  p.noteWritingEvidence({ type: 'keydown', target });
+  p.noteWritingEvidence({ type: 'keydown', key: 'a', target });
   advance(2000);
   typed.content += ' typed here';await p.handleFileModification(typed);
   other.content += ' synced in';await p.handleFileModification(other);
@@ -2167,7 +2171,7 @@ test('an editor save landing just after switching away still counts as writing; 
   const { p, context, advance } = setup();await p.loadPluginData();p.realEvidence();
   const file = { path: 'notes/a.md', extension: 'md', content: 'one' };
   p.fileSnapshots.set(file.path, baseline(file.content));
-  p.noteWritingEvidence({ type: 'keydown', target: leafFor(p, file.path) });
+  p.noteWritingEvidence({ type: 'keydown', key: 'a', target: leafFor(p, file.path) });
   context.document.hasFocus = () => false;p.noteWindowBlur();advance(3000);
   file.content = 'one two three';await p.handleFileModification(file);
   assert.equal(p.getOrCreateTodayRecord().contribution.wordsAdded, 2);
@@ -2196,7 +2200,7 @@ test('editor-change counts only right after real input, not when an external wri
   p.registerActivityListeners();
   listeners['editor-change'](null, { file: { path: 'canvas/embedded.md' } });
   assert.equal(p.hasWritingEvidence('canvas/embedded.md'), false, '外部写入导致的编辑器重载不算');
-  p.noteWritingEvidence({ type: 'keydown', target: null });
+  p.noteWritingEvidence({ type: 'keydown', key: 'a', target: null });
   advance(100);
   listeners['editor-change'](null, { file: { path: 'canvas/embedded.md' } });
   assert.equal(p.hasWritingEvidence('canvas/embedded.md'), true);
@@ -2386,4 +2390,48 @@ test('deleting a note re-created at an old note\'s path rolls back only the new 
   assert.equal(today.contribution.notesCreated, 0);
   assert.equal(today.files['notes/same.md'].created, false);
   assert.equal(today.files['notes/same.md'].wordsAdded, 20);
+});
+
+/* 1.19.7。失败模式：
+   - 清空复盘行动的标题后重载，整条行动（完成状态、结果笔记）消失。
+   - 在笔记里按方向键、Cmd+F 后，脚本写进这篇笔记的字算成本人写作。 */
+test('a review action whose title was cleared survives save and reload with its status and outcome', async () => {
+  const { p } = setup();await p.loadPluginData();
+  p.app.vault.getAbstractFileByPath = (path) => (path === 'result.md' ? { path, extension: 'md' } : null);
+  const range = ['2026-09-02', '2026-09-08', 'all'];
+  p.addReviewAction(...range, '写完第一稿');
+  const id = p.getReviewModel(...range).actions[0].id;
+  p.updateReviewAction(...range, id, { title: '', status: 'done', outcomePath: 'result.md' });
+  await p.savePluginData();p.loadData = async () => p.persisted;await p.loadPluginData();
+  const [action] = p.getReviewModel(...range).actions;
+  assert.equal(action?.id, id);
+  assert.equal(action.title, '');
+  assert.equal(action.status, 'done');
+  assert.equal(action.outcomePath, 'result.md');
+  assert.match(p.constructor.generateReviewReport(p.getReviewModel(...range)), /待填写行动/);
+});
+
+test('cursor movement and non-editing shortcuts are not writing evidence; real edits are', async () => {
+  const { p, advance } = setup();await p.loadPluginData();p.realEvidence();
+  const file = { path: 'notes/nav.md', extension: 'md', content: 'start' };
+  p.fileSnapshots.set(file.path, baseline(file.content));
+  const target = leafFor(p, file.path);
+  for (const key of ['ArrowDown', 'ArrowUp', 'PageDown', 'Home', 'End', 'Escape', 'Shift']) p.noteWritingEvidence({ type: 'keydown', key, target });
+  p.noteWritingEvidence({ type: 'keydown', key: 'f', metaKey: true, target });
+  assert.equal(p.hasWritingEvidence(file.path), false, '只移动光标或搜索不算');
+  file.content += ' ' + 'script '.repeat(20);await p.handleFileModification(file);
+  assert.equal(p.getOrCreateTodayRecord().contribution.wordsAdded, 0);
+  assert.equal(p.getOrCreateTodayRecord().contribution.externalWords, 20);
+  for (const key of ['a', 'Backspace', 'Enter', 'Process']) {
+    p.writingEvidence = new Map();
+    p.noteWritingEvidence({ type: 'keydown', key, target });
+    assert.equal(p.hasWritingEvidence(file.path), true, key);
+  }
+  // 快捷键要编辑器紧接着真的变了才算（如 Cmd+Z、Alt+↑ 移动行）
+  const listeners = {};p.app.workspace.on = (name, fn) => { listeners[name] = fn; return {}; };
+  p.registerActivityListeners();p.writingEvidence = new Map();
+  p.noteWritingEvidence({ type: 'keydown', key: 'z', metaKey: true, target });
+  assert.equal(p.hasWritingEvidence(file.path), false);
+  advance(200);listeners['editor-change'](null, { file: { path: file.path } });
+  assert.equal(p.hasWritingEvidence(file.path), true);
 });
