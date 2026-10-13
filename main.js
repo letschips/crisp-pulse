@@ -3207,6 +3207,53 @@ class CrispPulsePlugin extends Plugin {
     try { return await job; } finally { this.memoTempoStarting.delete(key); }
   }
 
+  /** 其他插件读这个版本号判断能否调用 captureMemoFromSource / revealMemo。 */
+  get memoCaptureApiVersion() { return MEMO_CAPTURE_API_VERSION; }
+
+  /** 其他插件把内容记成速记（如 Annotations 的「记为想法」）。同一 sourceId 只记一条：
+      再次调用返回原来那条，revision 不同时 changed 为 true，原速记不改写。 */
+  async captureMemoFromSource(request) {
+    const { apiVersion, sourceId, revision = "", note = "", quote = "", sourcePath = null, subpath = null } = request || {};
+    if (!Number.isInteger(apiVersion) || apiVersion < 1) throw new Error("速记接口版本无效");
+    if (apiVersion > MEMO_CAPTURE_API_VERSION) throw new Error("请先更新 Crisp Pulse 再记录");
+    if (typeof sourceId !== "string" || !/^[a-z][a-z0-9-]*:[A-Za-z0-9_-]{1,128}$/.test(sourceId)) throw new Error("来源标识无效");
+    if (typeof revision !== "string" || (revision && !/^[A-Za-z0-9_-]{1,64}$/.test(revision))) throw new Error("来源版本无效");
+    if (!String(note ?? "").trim() && !String(quote ?? "").trim()) throw new Error("速记内容为空");
+    this.memoSourceCaptures ||= new Map();
+    if (this.memoSourceCaptures.has(sourceId)) {
+      const { memo } = await this.memoSourceCaptures.get(sourceId);
+      return { status: "existing", changed: false, memo };
+    }
+    const job = (async () => {
+      const [existing] = await this.memoStore.findSourceMemos(sourceId);
+      if (existing) return { status: "existing", changed: existing.revision !== revision, memo: { id: existing.id, path: existing.path } };
+      const now = new Date();
+      const text = buildSourceMemoText({ note, quote, link: await this.memoSourceLink(sourcePath, subpath, now) });
+      const memo = await this.memoStore.captureFromSource({ sourceId, revision, text }, now);
+      this.refreshMemoViews();
+      return { status: "created", changed: false, memo };
+    })();
+    this.memoSourceCaptures.set(sourceId, job);
+    try { return await job; } finally { this.memoSourceCaptures.delete(sourceId); }
+  }
+
+  /** 出处链接：按 Obsidian 的链接格式设置生成；笔记已不在就只写路径。 */
+  async memoSourceLink(sourcePath, subpath, now) {
+    if (typeof sourcePath !== "string" || !sourcePath) return "";
+    const heading = typeof subpath === "string" ? subpath.replace(/[#|^[\]]/g, " ").replace(/\s+/g, " ").trim() : "";
+    const file = this.app.vault.getAbstractFileByPath(sourcePath);
+    const from = await this.memoStore.memoFilePath(now);
+    if (file && typeof this.app.fileManager?.generateMarkdownLink === "function") return this.app.fileManager.generateMarkdownLink(file, from, heading ? `#${heading}` : undefined);
+    return `[[${sourcePath.replace(/\.md$/, "")}${heading ? `#${heading}` : ""}]]`;
+  }
+
+  /** 打开速记面板，只显示这一条。 */
+  async revealMemo({ id } = {}) {
+    if (!/^[a-zA-Z0-9-]+$/.test(id || "")) throw new Error("速记标识无效");
+    await this.activateMemoView();
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MEMO)) leaf.view?.focusMemo?.(id);
+  }
+
   async validateMemoTranscriptionTarget(job) {
     const { file, memo } = await this.memoStore.findMemoIdentity(job.memoId, job.path);
     if (!memoAudioFiles({ ...memo, path: file.path }, this.app).some((audio) => audio.path === job.sourcePath)) throw new Error("原速记中的录音已被移除，请检查后重试");
@@ -6505,6 +6552,9 @@ const MEMO_ID_RE = /^<!-- crisp-pulse-memo-id: ([a-zA-Z0-9-]+) -->$/;
 const MEMO_RESTORE_RE = /^<!-- crisp-pulse-memo-restored: ([a-zA-Z0-9-]+) -->$/;
 const MEMO_ASR_RE = /^<!-- crisp-pulse-asr: ([a-zA-Z0-9-]+)(?: audio: ([^\s]+))? -->$/;
 const MEMO_TEMPO_RE = /^<!-- crisp-pulse-tempo: ([A-Za-z0-9_-]+) -->$/;
+const MEMO_SOURCE_RE = /^<!-- crisp-pulse-source: ([a-z][a-z0-9-]*:[A-Za-z0-9_-]{1,128})(?: rev: ([A-Za-z0-9_-]{1,64}))? -->$/;
+// 其他插件把内容记成速记的接口版本；不兼容的改动才加一
+const MEMO_CAPTURE_API_VERSION = 1;
 const ANKS_CAPTURE_CONTRACT_PATH = "Sidecar/tools/capture-metadata/contract.json";
 const ANKS_ROUTE_CONTRACT_PATH = ".runtime/snapshot/route-contract.json";
 const ANKS_NOW_FILE = "Now/行动.md";
@@ -6517,6 +6567,27 @@ function memoPad(n) {
 
 function memoClock(date) {
   return `${memoPad(date.getHours())}:${memoPad(date.getMinutes())}`;
+}
+
+/** 别处来的一行文字放进速记前转义：不能被当成下一条速记、转化回链或隐藏凭据。 */
+function memoSafeLine(line) {
+  let safe = MEMO_HEADER_RE.test(`> ${line}`) ? line.replace("[", "\\[") : line;
+  if (MEMO_LINK_RE.test(safe.trim())) safe = safe.replace("[[", "\\[\\[");
+  const t = line.trim();
+  if (MEMO_ID_RE.test(t) || MEMO_RESTORE_RE.test(t) || MEMO_ASR_RE.test(t) || MEMO_TEMPO_RE.test(t) || MEMO_SOURCE_RE.test(t)) safe = safe.replace("<", "&lt;");
+  return safe;
+}
+
+/** 来自其他插件的速记正文：用户自己的话在前，原文摘录单独成引用块，最后是出处。 */
+function buildSourceMemoText({ note = "", quote = "", link = "" }) {
+  const clean = (text) => String(text ?? "").replace(/\r\n?/g, "\n").trim();
+  const parts = [];
+  const own = clean(note);
+  if (own) parts.push(own.split("\n").map(memoSafeLine).join("\n"));
+  const quoted = clean(quote);
+  if (quoted) parts.push(quoted.split("\n").map((line) => (line.trim() ? `> ${line}` : ">")).join("\n"));
+  if (link) parts.push(`出处：${link}`);
+  return parts.join("\n\n");
 }
 
 function buildMemoBlock(text, date) {
@@ -6585,8 +6656,11 @@ function parseMemoBlocks(content) {
     const transcriptJobs = [];
     const transcriptAudio = [];
     const tempoTasks = [];
+    const sources = [];
     for (const [k, line] of body.entries()) {
       if (fenced.has(k)) { textLines.push(line); continue; }
+      const source = MEMO_SOURCE_RE.exec(line.trim());
+      if (source) { if (!sources.some((s) => s.id === source[1])) sources.push({ id: source[1], revision: source[2] || "" }); continue; }
       const tempo = MEMO_TEMPO_RE.exec(line.trim());
       if (tempo) { if (!tempoTasks.includes(tempo[1])) tempoTasks.push(tempo[1]); continue; }
       const transcript = MEMO_ASR_RE.exec(line.trim());
@@ -6610,6 +6684,7 @@ function parseMemoBlocks(content) {
       ...(transcriptJobs.length ? { transcriptJobs } : {}),
       ...(transcriptAudio.length ? { transcriptAudio } : {}),
       ...(tempoTasks.length ? { tempoTasks } : {}),
+      ...(sources.length ? { sources } : {}),
       time: header[1] ? header[1].padStart(5, "0") : "",
       text,
       tags: extractMemoTags(text),
@@ -8050,6 +8125,35 @@ class MemoStore {
     return { path: file.path };
   }
 
+  /** 带某个来源凭据的速记，按隐藏凭据在全库找：速记被挪到别的笔记后也能找到。 */
+  async findSourceMemos(sourceId) {
+    const hits = [];
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      if (!(await this.app.vault.cachedRead(file)).includes(`crisp-pulse-source: ${sourceId}`)) continue;
+      for (const memo of parseMemoBlocks(await this.app.vault.read(file))) {
+        const source = memo.sources?.find((s) => s.id === sourceId);
+        if (source) hits.push({ ...memo, path: file.path, revision: source.revision });
+      }
+    }
+    return hits;
+  }
+
+  /** 写一条来自其他插件的速记，标识和来源凭据随速记一起写入。不经 onOwnWrite：引用和导入不算本人写作。 */
+  async captureFromSource({ sourceId, revision, text }, now = new Date()) {
+    if (!String(text ?? "").trim()) throw new Error("速记内容为空");
+    const id = globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+    const block = [
+      buildMemoBlock(text, now),
+      `> <!-- crisp-pulse-memo-id: ${id} -->`,
+      `> <!-- crisp-pulse-source: ${sourceId}${revision ? ` rev: ${revision}` : ""} -->`,
+    ].join("\n");
+    const { path } = await this.writeBlock(block, now);
+    const file = this.app.vault.getAbstractFileByPath(path);
+    const stored = file ? parseMemoBlocks(await this.app.vault.read(file)).filter((m) => m.id === id && m.sources?.some((s) => s.id === sourceId)) : [];
+    if (stored.length !== 1) throw new Error("速记未通过写回核对，请重试");
+    return { id, path };
+  }
+
   /** 判断「已转写」用的上下文：速记里现有的录音，以及凭据里的旧路径是否还在库里。 */
   transcriptMatch(memo, notePath = memo.path) {
     return {
@@ -8070,11 +8174,8 @@ class MemoStore {
       if (current.transcriptJobs?.includes(jobId) || memoHasTranscriptFor(current, sourcePath, this.transcriptMatch(current, file.path))) return content;
       if (!memoAudioFiles({ ...current, path: file.path }, this.app).some((audio) => audio.path === sourcePath)) throw new Error("原速记中的录音已被移除，转写结果已保留在 ASR 队列");
       const transcript = String(text).replace(/\r\n?/g, "\n").trim().split("\n").map((line) => {
-        // 识别文字恰好是 callout 标题时，不能让它解析成第二条速记。
-        let safe = MEMO_HEADER_RE.test(`> ${line}`) ? line.replace("[", "\\[") : line;
-        // 形如「→ [[笔记]]」的识别文字不能被当成转化回链
-        if (MEMO_LINK_RE.test(safe.trim())) safe = safe.replace("[[", "\\[\\[");
-        if (MEMO_ID_RE.test(line.trim()) || MEMO_RESTORE_RE.test(line.trim()) || MEMO_ASR_RE.test(line.trim()) || MEMO_TEMPO_RE.test(line.trim())) safe = safe.replace("<", "&lt;");
+        // 识别文字恰好是 callout 标题、「→ [[笔记]]」或隐藏凭据时，原样留作文字
+        const safe = memoSafeLine(line);
         return safe ? `> ${safe}` : ">";
       });
       const lines = content.split("\n");
@@ -9085,17 +9186,28 @@ class CrispPulseMemoView extends ItemView {
     this.filters = { query: "", from: "", to: "", includeTags: [], excludeTags: [], untagged: false, converted: null, hasLink: false, hasImage: false, hasAudio: false, onThisDay: "" };
     this.filterDate = null;
     this.filterTag = null;
+    this.filterMemoId = null;
+  }
+
+  /** 只看某一条速记（从其他插件跳过来时用）。 */
+  focusMemo(id) {
+    this.resetFilters();
+    this.filterMemoId = id;
+    this.tab = "all";
+    this.showAdvanced = false;
+    void this.reload();
   }
 
   isFiltered() {
     const f = this.filters;
-    return !!(this.filterDate || this.filterTag || f.query.trim() || f.from || f.to || f.includeTags.length || f.excludeTags.length || f.untagged || f.converted !== null || f.hasLink || f.hasImage || f.hasAudio || f.onThisDay);
+    return !!(this.filterMemoId || this.filterDate || this.filterTag || f.query.trim() || f.from || f.to || f.includeTags.length || f.excludeTags.length || f.untagged || f.converted !== null || f.hasLink || f.hasImage || f.hasAudio || f.onThisDay);
   }
 
   visibleMemos() {
     const f = this.filters;
     let list = filterMemos(this.memos, { ...f, includeTags: this.filterTag ? [...f.includeTags, this.filterTag] : f.includeTags });
     if (this.filterDate) list = list.filter((m) => m.date === this.filterDate);
+    if (this.filterMemoId) list = list.filter((m) => m.id === this.filterMemoId);
     return list;
   }
 
@@ -9107,6 +9219,7 @@ class CrispPulseMemoView extends ItemView {
       const c = chips.createEl("button", { cls: "crisp-pulse-memo-chip is-active", text: `${text} ×` });
       c.addEventListener("click", () => { clear(); this.render(); });
     };
+    if (this.filterMemoId) chip("这一条", () => { this.filterMemoId = null; });
     if (this.filterDate) chip(this.filterDate, () => { this.filterDate = null; });
     if (this.filterTag) chip(`#${this.filterTag}`, () => { this.filterTag = null; });
     const f = this.filters;
@@ -9124,7 +9237,7 @@ class CrispPulseMemoView extends ItemView {
     const list = this.visibleMemos();
     if (this.isFiltered()) chips.createSpan({ cls: "crisp-pulse-memo-muted", text: `找到 ${list.length} 条` });
     // 换了筛选条件就从第一批重新开始
-    const signature = JSON.stringify([this.filters, this.filterDate, this.filterTag]);
+    const signature = JSON.stringify([this.filters, this.filterDate, this.filterTag, this.filterMemoId]);
     if (signature !== this.listSignature) { this.listSignature = signature; this.shown = MEMO_PAGE_SIZE; }
     this.moreObserver?.disconnect();
     this.clearMemoMarkdown(this.listEl);
@@ -10214,7 +10327,7 @@ module.exports.generateReviewReport = generateReviewReport;
 module.exports.CrispPulseEvidenceModal = CrispPulseEvidenceModal;
 module.exports.CrispPulseMemoView = CrispPulseMemoView;
 module.exports.memoHelpers = {
-  buildMemoBlock, parseMemoBlocks, extractMemoTags, insertMemoBlock, removeMemoBlock, appendMemoLink,
+  buildMemoBlock, buildSourceMemoText, parseMemoBlocks, extractMemoTags, insertMemoBlock, removeMemoBlock, appendMemoLink,
   memoStats, memoHeatLevel, memoHasImage, memoHasLink, memoHasAudio, memoTranscriptionState, memoHasTranscriptFor, memoAsrErrorInfo, memoConversionReview, memoWithTag, memoResolveRelative, writingKeyKind, memoTaskTitle, memoTempoLabel, bindHoldPress, memoAttachmentName, memoRecordingName, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
   buildMemoQuestionNote, buildMemoNote, buildMemoNowLine, memoRelinkText, MemoStore,
   filterMemos, buildTagTree, renameTagInText, renameTagInContent, selectDailyReview, onThisDay, parseMemoUrlParams,

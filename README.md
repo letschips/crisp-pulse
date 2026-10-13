@@ -67,6 +67,7 @@
 - **录音**：点麦克风开始，再点一次结束；音频同样存进附件位置，卡片上可以直接播放。存进库失败时录音不丢，可在输入框下方重试或另存。
 - **草稿恢复**：没提交的文字和附件链接自动存到插件目录，关掉面板或重启后再打开速记面板会恢复。
 - **转为 Tempo 任务**：装了 Crisp Tempo 0.2.0 或更高版本时，卡片菜单里「转为 Tempo 任务」，卡片上显示任务状态，点一下回到 Tempo。
+- **批注记为想法**：装了 Crisp Annotations 1.8.0 或更高版本时，标注中心里点「记为想法」，自己的批注、原文摘录和出处链接记成一条速记，之后照常转任务、笔记或问题。同一条标注只记一次；摘录不计入写作统计。
 - **实时听写**：装了 Crisp ASR 0.9.0 或更高版本时，按住麦克风说话，文字直接出现在输入框里，松开结束；轻点麦克风仍是录音。也可以点工具栏的听写按钮或用命令开始、再点一次结束。输入框下方显示当前状态和结束按钮。听写只改写自己写进去的那段文字，等定稿后才能提交。
 - **录音转文字**：装了 Crisp ASR 0.8.0 或更高版本时，录音卡片上点「转文字」，识别结果写回原速记，录音和原文都保留。失败时显示能照着做的原因，原始错误可展开查看。
 - **回收站**：删除的速记保留 30 天，可以恢复到原来的笔记。
@@ -135,7 +136,7 @@ npm test
 
 速记文件流程检查：`npm run test:e2e:memo`，仅在操作系统临时目录创建测试文件。结果写入临时目录的 `crisp-pulse-memo-workflow-results.json`，可通过 `PULSE_MEMO_REPORT` 指定路径。
 
-回收站与录音的并发安全检查：`npm run test:e2e:safety`。速记转 Tempo 任务的跨插件检查：`npm run test:e2e:tempo`，默认使用相邻目录的 `crisp-tempo` 源码（可用 `CRISP_TEMPO_REPO` 指定），找不到时跳过。速记录音转写的跨插件检查：`npm run test:e2e:asr`，默认使用相邻目录的 `crisp-asr` 源码（可用 `CRISP_ASR_REPO` 指定），只在临时目录写文件，识别服务的 HTTP 返回值是模拟的，不用真实密钥；找不到 ASR 源码时跳过。
+回收站与录音的并发安全检查：`npm run test:e2e:safety`。速记转 Tempo 任务的跨插件检查：`npm run test:e2e:tempo`，默认使用相邻目录的 `crisp-tempo` 源码（可用 `CRISP_TEMPO_REPO` 指定），找不到时跳过。批注记为想法的跨插件检查：`npm run test:e2e:annotations`，默认使用相邻目录的 `crisp-annotations` 源码（可用 `CRISP_ANNOTATIONS_REPO` 指定），找不到时跳过。速记录音转写的跨插件检查：`npm run test:e2e:asr`，默认使用相邻目录的 `crisp-asr` 源码（可用 `CRISP_ASR_REPO` 指定），只在临时目录写文件，识别服务的 HTTP 返回值是模拟的，不用真实密钥；找不到 ASR 源码时跳过。
 
 速记界面检查：在已加载当前插件的 Obsidian 中执行 `scripts/memo-runtime.e2e.js`（通过 `obsidian vault="库名" eval code="$(cat scripts/memo-runtime.e2e.js)"`）。它使用隔离 DOM 和延迟的内存保存，验证重复提交、草稿、Markdown、选区与筛选反馈，不写用户笔记；JSON 中 `passed: true` 表示全部通过。
 
