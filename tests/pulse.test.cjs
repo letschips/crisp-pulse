@@ -293,6 +293,50 @@ test('savePluginData returns error state and throwOnError propagates', async () 
   }, /disk write failed/);
 });
 
+/* 1.19.9：插件重载时旧实例还没写完的统计保存，不能在新实例读取、保存之后才落盘把新数据盖掉；
+   卸载后旧实例迟到的保存也不再写盘。adapter 按 Obsidian 的方式串行读写。 */
+test('a slow statistics save from the unloading instance lands before the new instance reads and saves', async () => {
+  const files = new Map();
+  let queue = Promise.resolve(), release, hold = true;
+  const enqueue = (fn) => { const job = queue.then(fn, fn); queue = job.catch(() => {}); return job; };
+  const adapter = {
+    exists: async (p) => files.has(p),
+    read: (p) => enqueue(async () => { if (!files.has(p)) throw new Error('missing'); return files.get(p); }),
+    write: (p, c) => enqueue(async () => { if (hold) { hold = false; await new Promise((r) => { release = r; }); } files.set(p, c); }),
+  };
+  const make = () => {
+    const { p } = setup();
+    p.manifest = { version: '1.7.0', dir: 'plugin' };
+    p.app.vault.adapter = adapter;
+    p.saveData = (value) => adapter.write('plugin/data.json', JSON.stringify(value));
+    p.loadData = async () => (files.has('plugin/data.json') ? JSON.parse(await adapter.read('plugin/data.json')) : null);
+    return p;
+  };
+  const old = make();
+  await old.loadPluginData();
+  old.settings.memoHeading = '## 旧设置';
+  const first = old.savePluginData();
+  await new Promise((r) => setTimeout(r, 0));
+  old.settings.memoHeading = '## 卸载快照';
+  old.onunload();
+  old.settings.memoHeading = '## 卸载后迟到';
+  const late = old.savePluginData();
+  const fresh = make();
+  const loading = fresh.loadPluginData().then(async () => {
+    assert.equal(fresh.settings.memoHeading, '## 卸载快照', '新实例读到旧实例最后的保存');
+    fresh.settings.memoHeading = '## 新实例的重要设置';
+    return fresh.savePluginData();
+  });
+  await new Promise((r) => setTimeout(r, 10));
+  release();
+  await first;
+  assert.equal((await late).success, false, '卸载后的旧实例不再保存');
+  const saved = await loading;
+  assert.equal(saved.success, true);
+  assert.equal(fresh.saveStatus, 'idle');
+  assert.equal(JSON.parse(files.get('plugin/data.json')).settings.memoHeading, '## 新实例的重要设置');
+});
+
 test('validateAndRepairStore fixes missing contribution and activity subtrees', async () => {
   const { helpers } = setup();
   const brokenStore = {

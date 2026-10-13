@@ -6,6 +6,8 @@
 const { Plugin, ItemView, Setting, PluginSettingTab, Notice, TFile, Modal, MarkdownRenderer = null, Component = null, AbstractInputSuggest = null, Platform = {}, addIcon = (() => {}), setIcon = (() => {}), Menu = null, moment = null } = require("obsidian");
 
 const VIEW_TYPE_PULSE = "crisp-pulse-view";
+// data.json 的跨实例写入队列（同 MEMO_DRAFT_WRITES）：Symbol.for 在插件重载后仍是同一个键
+const PULSE_STORE_WRITES = Symbol.for("crisp-pulse.store.writes");
 
 const CRISP_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAiz41HIDpD59SH3DjKnovUO+EEhTJXjvmiug/ev9t4ZQ=
@@ -1578,7 +1580,16 @@ class CrispPulsePlugin extends Plugin {
     if (this.snapshotSyncTimer) clearTimeout(this.snapshotSyncTimer);
     this.focusAdapter?.detach();
     this.flushAllSessions();
+    // 卸载快照已排进共用写入队列；此后旧实例迟到的保存不再落盘，免得盖掉新实例的设置和统计
+    this.storeRetired = true;
     this.memoDrafts?.retire();
+  }
+
+  /** data.json 的写入队列：挂在 vault adapter 上按文件路径共用，插件重载后新旧实例排同一条队。 */
+  storeWriteQueue() {
+    const adapter = this.app?.vault?.adapter;
+    if (!adapter || typeof adapter !== "object" || !this.storeFilePath()) return null;
+    try { return adapter[PULSE_STORE_WRITES] ||= new Map(); } catch (_) { return null; }
   }
 
   storeFilePath() {
@@ -1622,6 +1633,8 @@ class CrispPulsePlugin extends Plugin {
   }
 
   async loadPluginData() {
+    // 旧实例卸载前排进队列的保存全部落盘后再读，读到的才是最新数据
+    await this.storeWriteQueue()?.get(this.storeFilePath());
     const raw = await this.loadData();
     if (raw === undefined) await this.handleUnreadableStore();
     const { store, repairedCount } = validateAndRepairStore(raw, DEFAULT_SETTINGS);
@@ -1647,12 +1660,19 @@ class CrispPulsePlugin extends Plugin {
       if (throwOnError) throw error;
       return { success: false, reason: "load_failed", error };
     }
+    if (this.storeRetired) {
+      const error = new Error("插件已重新加载，旧实例不再保存");
+      if (throwOnError) throw error;
+      return { success: false, reason: "retired", error };
+    }
     this.store.settings = this.settings;
     this.saveStatus = "saving";
     this.dirty = false;
     const payload = JSON.parse(JSON.stringify(this.store));
 
-    const currentSave = (this.saveQueue || Promise.resolve())
+    const queue = this.storeWriteQueue();
+    const path = this.storeFilePath();
+    const currentSave = ((queue && queue.get(path)) || this.saveQueue || Promise.resolve())
       .catch(() => {})
       .then(async () => {
         await this.saveData(payload);
@@ -1679,6 +1699,7 @@ class CrispPulsePlugin extends Plugin {
       });
 
     this.saveQueue = currentSave;
+    queue?.set(path, currentSave.catch(() => {}));
     const result = await currentSave;
     this.updateStatusBar();
     return result;
@@ -6505,7 +6526,10 @@ function buildMemoBlock(text, date) {
 }
 
 function extractMemoTags(text) {
-  const clean = String(text ?? "").replace(/`[^`]*`/g, " ");
+  // 围栏代码块里的 #xxx 是代码示例，不是标签（标签改名也按同样规则跳过）
+  const lines = String(text ?? "").split("\n");
+  const fenced = memoFencedLines(lines);
+  const clean = lines.filter((_, k) => !fenced.has(k)).join("\n").replace(/`[^`]*`/g, " ");
   const tags = [];
   const re = /(^|\s)#([^\s#`]+)/g;
   let match;
@@ -7183,7 +7207,10 @@ function renameTagInContent(content, from, to) {
   let changed = 0;
   for (const m of parseMemoBlocks(content)) {
     let touched = false;
+    // 速记里的围栏代码块原样保留：和 extractMemoTags 一样只认代码块外面的标签
+    const fenced = memoFencedLines(lines.slice(m.startLine + 1, m.endLine + 1).map((line) => line.replace(/^>\s?/, "")));
     for (let i = m.startLine + 1; i <= m.endLine; i++) {
+      if (fenced.has(i - m.startLine - 1)) continue;
       const match = /^(>\s?)(.*)$/.exec(lines[i]);
       if (!match || MEMO_LINK_RE.test(match[2].trim())) continue;
       const next = renameTagInText(match[2], from, to);
@@ -7377,6 +7404,9 @@ const MEMO_DRAFT_SAVE_DELAY = 500;
 // 同一个草稿文件在所有插件实例之间共用一条写入队列（挂在 vault adapter 上，插件重载后仍是同一个对象）：
 // 卸载前已经开始的写入落盘之后，新实例才读取和写入
 const MEMO_DRAFT_WRITES = Symbol.for("crisp-pulse.memo-drafts.writes");
+// 草稿归属（哪个面板接手了哪份草稿）和还在存进库的附件，同样挂在 adapter 上跨实例共用：
+// 插件重载后，新面板仍知道旧面板的附件没存好，提交照样要等
+const MEMO_DRAFT_SHARED = Symbol.for("crisp-pulse.memo-drafts.shared");
 
 class MemoDraftStore {
   constructor(adapter, dir) {
@@ -7390,27 +7420,44 @@ class MemoDraftStore {
     this.timer = null;
     this.writing = Promise.resolve();
     this.lastPayload = null;
+    const shared = this.sharedState();
     // 关掉的面板 → 接手它草稿的面板；面板关掉后才存好的附件链接据此找到去处
-    this.claimedBy = new Map();
-    // 还在存进库的附件，按发起的面板记：接手草稿的面板也要等它们存好再提交
-    this.pendingAttachments = new Map();
+    this.claimedBy = shared?.claimedBy || new Map();
+    // 还在存进库的附件（录音从开始录到存好、重试保存、图片），按发起的面板记：接手草稿的面板也要等它们存好再提交
+    this.pendingAttachments = shared?.pending || new Map();
+    shared?.stores.add(this);
+  }
+
+  sharedState() {
+    const adapter = this.adapter;
+    if (!adapter || typeof adapter !== "object" || !this.path) return null;
+    try {
+      const all = adapter[MEMO_DRAFT_SHARED] ||= new Map();
+      if (!all.has(this.path)) all.set(this.path, { claimedBy: new Map(), pending: new Map(), stores: new Set() });
+      return all.get(this.path);
+    } catch (_) { return null; }
   }
 
   beginAttachment(key) {
     this.pendingAttachments.set(key, (this.pendingAttachments.get(key) || 0) + 1);
-    this.changed();
+    this.attachmentsChanged();
   }
 
   endAttachment(key) {
     const n = (this.pendingAttachments.get(key) || 0) - 1;
     if (n > 0) this.pendingAttachments.set(key, n); else this.pendingAttachments.delete(key);
-    this.changed();
+    this.attachmentsChanged();
   }
 
-  /** 别的面板发起、草稿已归这个面板的附件还有几个没存好。 */
-  inheritedAttachments(key) {
+  /** 附件状态是共用的：重载前旧实例的附件存好了，新实例的面板也要刷新提交按钮。 */
+  attachmentsChanged() {
+    for (const store of new Set([this, ...(this.sharedState()?.stores || [])])) store.changed();
+  }
+
+  /** 草稿现归这个面板的附件（不论哪个面板、哪个插件实例发起）还有几个没存好。 */
+  pendingFor(key) {
     let n = 0;
-    for (const [origin, count] of this.pendingAttachments) if (origin !== key && this.currentKey(origin) === key) n += count;
+    for (const [origin, count] of this.pendingAttachments) if (this.currentKey(origin) === key) n += count;
     return n;
   }
 
@@ -7494,6 +7541,7 @@ class MemoDraftStore {
     if (this.retired) return this.writing;
     const done = this.flush();
     this.retired = true;
+    this.sharedState()?.stores.delete(this);
     clearTimeout(this.timer);
     return done;
   }
@@ -8460,13 +8508,13 @@ class CrispPulseMemoView extends ItemView {
       const startedAt = new Date();
       const session = { recorder, startedAt, timer: null };
       recorder.addEventListener("dataavailable", (e) => { if (e.data?.size) chunks.push(e.data); });
+      const draftsAtStart = this.plugin?.memoDrafts;
+      const draftKey = this.draftKey;
       recorder.addEventListener("stop", async () => {
         stream.getTracks().forEach((t) => t.stop());
         win.clearInterval(session.timer);
         if (this.recording === session) this.recording = null;
         this.recordingSaving = true;
-        const draftsAtStart = this.plugin?.memoDrafts;
-        draftsAtStart?.beginAttachment?.(this.draftKey);
         this.updateRecordingUi();
         const type = recorder.mimeType || mime || "audio/webm";
         let rec = null;
@@ -8488,11 +8536,13 @@ class CrispPulseMemoView extends ItemView {
           }
         } finally {
           this.recordingSaving = false;
-          draftsAtStart?.endAttachment?.(this.draftKey);
+          draftsAtStart?.endAttachment?.(draftKey);
           this.updateRecordingUi();
         }
       });
       recorder.start();
+      // 从开始录到存好算一个附件：录音中关掉面板、重载插件，接手草稿的面板也要等它存好再提交
+      draftsAtStart?.beginAttachment?.(draftKey);
       session.timer = win.setInterval(() => this.updateRecordingUi(), 1000);
       this.recording = session;
     } catch (error) {
@@ -8536,7 +8586,9 @@ class CrispPulseMemoView extends ItemView {
     const store = this.plugin.memoDrafts;
     if (rec.busy || !store) return;
     rec.busy = true;
-    store.changed();
+    const draftKey = this.draftKey;
+    // 和首次保存一样登记附件：重试中关掉再打开面板，接手的面板也要等链接进草稿
+    store.beginAttachment(draftKey);
     this.recordingRetries = (this.recordingRetries || 0) + 1;
     this.updateRecordingUi();
     try {
@@ -8553,7 +8605,7 @@ class CrispPulseMemoView extends ItemView {
     } finally {
       rec.busy = false;
       this.recordingRetries -= 1;
-      store.changed();
+      store.endAttachment(draftKey);
       this.updateRecordingUi();
     }
   }
@@ -8602,7 +8654,7 @@ class CrispPulseMemoView extends ItemView {
     }
     if (this.recordingSaving || this.recordingRetries) return { text: "正在保存录音…", actions: [] };
     if (this.imagesSaving) return { text: "正在保存图片…", actions: [] };
-    if (this.plugin?.memoDrafts?.inheritedAttachments?.(this.draftKey)) return { text: "上一个面板的附件还在保存…", actions: [] };
+    if (this.liveDrafts()?.pendingFor?.(this.draftKey)) return { text: "上一个面板的附件还在保存…", actions: [] };
     const pomodoroBreak = this.plugin.pomodoroBreak;
     if (pomodoroBreak && !pomodoroBreak.dismissed && this.plugin.settings.memoPomodoroPrompt !== false) {
       return { text: "记一下这一轮做了什么（带 #番茄）", actions: [
@@ -8637,9 +8689,9 @@ class CrispPulseMemoView extends ItemView {
     }
   }
 
-  /** 图片或录音还在存进库：存好后链接才插进输入框，这期间提交会让链接落到下一条。 */
+  /** 正在录音（含等麦克风权限）或图片、录音还在存进库：存好后链接才插进输入框，这期间提交会让链接落到下一条。 */
   attachmentSaving() {
-    return !!(this.recordingSaving || this.recordingRetries || this.imagesSaving || this.plugin?.memoDrafts?.inheritedAttachments?.(this.draftKey));
+    return !!(this.recording || this.recordingStarting || this.recordingSaving || this.recordingRetries || this.imagesSaving || this.liveDrafts()?.pendingFor?.(this.draftKey));
   }
 
   updateRecordingUi() {
@@ -8790,6 +8842,7 @@ class CrispPulseMemoView extends ItemView {
       if (this.memoSubmitting || !input.value.trim()) return;
       // 听写还没定稿就提交，会存下未定稿的文字，迟到的定稿又会改到下一条草稿
       if (this.dictation) { new Notice("Crisp Pulse 速记：实时听写还没结束，等文字定稿后再记录"); return; }
+      if (this.recording || this.recordingStarting) { new Notice("Crisp Pulse 速记：正在录音，结束录音后再记录"); return; }
       if (this.attachmentSaving()) { new Notice("Crisp Pulse 速记：附件还在保存，存好后再记录"); return; }
       const submitted = input.value;
       const revision = this.draftRevision;

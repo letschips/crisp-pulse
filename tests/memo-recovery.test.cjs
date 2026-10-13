@@ -321,3 +321,111 @@ test('an older memo reload that finishes late never brings back a deleted card',
   assert.equal(v.memos.length, 0, '晚返回的旧结果被丢掉');
   assert.equal(renders, 1);
 });
+
+/* 1.19.9：录音与附件的提交锁。失败模式：
+   - 等麦克风权限、正在录音时还能提交：正文先存了，结束录音后音频链接落进下一条草稿。
+   - 附件还在保存时重载插件：新实例的面板不知道还有附件没存好，允许提前提交，迟到的链接串进下一条。
+   - 录音「重试保存」时关掉再打开面板：接手的面板不等重试完成就能提交。 */
+class El {
+  constructor(cls = '') { this.cls = cls; this.children = []; this.events = {}; this.value = ''; this.disabled = false; this.isConnected = true; this.selectionStart = 0; this.selectionEnd = 0; }
+  createEl(tag, o = {}) { const x = new El(o.cls); this.children.push(x); return x; }
+  createDiv(o = {}) { return this.createEl('div', o); }
+  createSpan(o = {}) { return this.createEl('span', o); }
+  addEventListener(k, fn) { this.events[k] = fn; }
+  addClass() {} removeClass() {} toggleClass() {} setAttribute() {} setText() {} empty() { this.children = []; } focus() {} setSelectionRange() {}
+  closest() { return null; }
+  contains() { return false; }
+  setRangeText(t, s, e) { this.value = this.value.slice(0, s) + t + this.value.slice(e); this.selectionStart = this.selectionEnd = s + t.length; }
+  querySelector(sel) { for (const x of this.children) { if (x.cls?.split(' ').includes(sel.slice(1))) return x; const y = x.querySelector(sel); if (y) return y; } return null; }
+}
+
+function composerView(drafts, key = 'leaf-a') {
+  const f = recordingView({ drafts, key, saveAttachment: async (name) => `![[${name}]]` });
+  const root = new El();
+  const v = f.v;
+  delete v.updateRecordingUi;
+  v.containerEl.children = [{}, root];
+  v.mode = 'general';
+  v.reload = async () => {};
+  v.plugin.settings = {};
+  v.plugin.memoDictationAsr = () => null;
+  v.plugin.memoStore.capture = async (text) => { (v.captured ||= []).push(text); };
+  v.renderComposer(root);
+  const input = root.querySelector('.crisp-pulse-memo-input'), send = root.querySelector('.crisp-pulse-memo-send');
+  const type = (text) => { input.value = text; input.selectionStart = input.selectionEnd = text.length; input.events.input(); };
+  return { ...f, v, input, send, type };
+}
+
+test('a memo cannot be submitted while waiting for microphone permission or recording; the audio stays with its own draft', async () => {
+  notices.length = 0;
+  const drafts = new MemoDraftStore(fakeAdapter(), 'plugin');
+  const f = composerView(drafts);
+  f.type('第一条');
+  const started = f.v.toggleRecording();
+  assert.equal(f.send.disabled, true, '等麦克风权限时不能提交');
+  await f.send.events.click();
+  f.grant(); await started;
+  assert.equal(f.send.disabled, true, '录音中不能提交');
+  await f.send.events.click();
+  assert.equal(f.v.captured, undefined, '录音没结束，正文没有被提交');
+  assert.match(notices.join('\n'), /正在录音/);
+  const recorder = f.v.recording.recorder;
+  f.v.toggleRecording(); await recorder.done;
+  assert.equal(f.send.disabled, false);
+  await f.send.events.click();
+  assert.equal(f.v.captured.length, 1);
+  assert.match(f.v.captured[0], /^第一条\n!\[\[录音 \d+\.webm\]\]\n$/, '录音和正文在同一条');
+});
+
+for (const sameLeaf of [true, false]) {
+  test(`a panel after a plugin reload waits for attachments the old instance is still saving (${sameLeaf ? 'same leaf' : 'new leaf'})`, async () => {
+    const adapter = fakeAdapter();
+    const oldStore = new MemoDraftStore(adapter, 'plugin'); await oldStore.load();
+    const plugins = {};
+    let release;
+    const fa = recordingView({ drafts: oldStore, key: 'leaf-a', saveAttachment: (name) => new Promise((r) => { release = () => r(`![[${name}]]`); }) });
+    const a = fa.v;
+    a.app = { workspace: { getLeavesOfType: () => [] }, plugins: { plugins } };
+    a.setDraft('重载前写的');
+    const started = a.toggleRecording(); fa.grant(); await started;
+    const recorder = a.recording.recorder;
+    // 插件卸载：面板关掉（录音停下开始存），草稿存储停用
+    await a.onClose(); await oldStore.retire();
+    const newStore = new MemoDraftStore(adapter, 'plugin'); await newStore.load();
+    plugins['crisp-pulse'] = { memoDrafts: newStore };
+    const views = [];
+    const b = liveView(newStore, sameLeaf ? 'leaf-a' : 'leaf-b', views, plugins);
+    a.app.workspace = b.app.workspace;
+    let refreshed = 0;
+    newStore.onChange(() => { refreshed++; });
+    b.draft = newStore.claimDraft(b.draftKey, [b.draftKey]);
+    assert.equal(b.draft, '重载前写的');
+    assert.equal(b.attachmentSaving(), true, '旧实例的录音还没存好，新面板不能提交');
+    release(); await recorder.done;
+    assert.equal(b.attachmentSaving(), false);
+    assert.ok(refreshed > 0, '旧实例存好后，新面板收到刷新');
+    assert.match(b.draft, /^重载前写的\n!\[\[录音 \d+\.webm\]\]\n$/);
+  });
+}
+
+test('closing and reopening the panel during a recording retry keeps submit locked until the link arrives', async () => {
+  const drafts = new MemoDraftStore(fakeAdapter(), 'plugin');
+  const views = [];
+  let release;
+  const fa = recordingView({ drafts, key: 'leaf-a', saveAttachment: (name) => new Promise((r) => { release = () => r(`![[${name}]]`); }) });
+  const a = fa.v;
+  a.app = { workspace: { getLeavesOfType: () => views.filter((x) => !x.memoClosed).map((view) => ({ view })) } };
+  views.push(a);
+  const rec = { id: 'r1', name: '录音 1.webm', type: 'audio/webm', startedAt: new Date().toISOString(), data: new ArrayBuffer(3), error: '' };
+  drafts.recordings.push(rec);
+  a.setDraft('第一条');
+  const retry = a.retryRecording(rec);
+  await new Promise((r) => setTimeout(r, 0));
+  await a.onClose();
+  const b = liveView(drafts, 'leaf-b', views);
+  b.draft = drafts.claimDraft('leaf-b', ['leaf-b']);
+  assert.equal(b.attachmentSaving(), true, '接手的面板要等重试存好');
+  release(); await retry;
+  assert.equal(b.attachmentSaving(), false);
+  assert.equal(b.draft, '第一条\n![[录音 1.webm]]\n');
+});

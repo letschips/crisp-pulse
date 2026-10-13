@@ -285,6 +285,19 @@ test('标签改名落到文件：只改写速记块，日笔记其他段落的�
   assert.equal(out.content, content.replace('> 一 #阅读/方法', '> 一 #读书/方法'));
 });
 
+test('标签改名：速记里的围栏代码（``` 和 ~~~）原样保留，预览和执行按同一规则计数', async () => {
+  const content = '> [!memo] 08:00\n> 真正的 #阅读\n> ```python\n> #阅读 示例，不能改\n> ```\n> ~~~\n> #阅读 另一个示例\n> ~~~\n> 结尾 #阅读/方法\n\n> [!memo] 09:00\n> ```\n> 只有代码里有 #阅读\n> ```\n';
+  const out = memo.renameTagInContent(content, '阅读', '读书');
+  assert.equal(out.changed, 1);
+  assert.equal(out.content, content.replace('> 真正的 #阅读', '> 真正的 #读书').replace('> 结尾 #阅读/方法', '> 结尾 #读书/方法'));
+  const blocks = memo.parseMemoBlocks(content);
+  assert.deepEqual(plain(blocks.map((m) => m.tags)), [['阅读', '阅读/方法'], []], '代码块里的 #xxx 不算标签');
+  const { app } = fakeApp({ files: { 'Daily/2026-10-09.md': content } });
+  const s = new memo.MemoStore(app, () => ({ memoMode: 'general' }));
+  assert.deepEqual(plain(await s.previewTagRename('阅读')), { memos: 1, files: 1 });
+  assert.deepEqual(plain(await s.renameTag('阅读', '读书')), { memos: 1, files: 1 });
+});
+
 test('标签改名：新名字非法（空、含空格或 #）时拒绝', () => {
   for (const bad of ['', '读 书', '#读书', '读书#']) assert.throws(() => memo.renameTagInText('#阅读', '阅读', bad), /标签名/);
 });
