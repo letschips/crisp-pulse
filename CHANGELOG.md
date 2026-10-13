@@ -1,5 +1,10 @@
 # Changelog - Crisp Pulse
 
+## [1.20.2] - 2026-10-13
+
+### Fixed
+- 数据分析的「投入去向」和年度画像的「知识地层」把系统目录（Sidecar/logs、Sidecar/backups、Sidecar/manifests 里的日志、备份）也算成投入，与「写作来源」的「不计入」口径矛盾：现在两处都跳过系统目录。
+
 ## [1.20.1] - 2026-10-13
 
 ### Fixed

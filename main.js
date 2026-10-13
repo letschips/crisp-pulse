@@ -3637,12 +3637,14 @@ function analyticsFolderOf(path) {
 }
 
 // Where recorded work went: one count per note per day, top folders plus a folded "其他" tail.
+// System artifacts (logs, backups, manifests) are left out, as in the writing-source card.
 function buildFolderShare(daily, dates, includeRecord, limit = 5) {
   const groups = new Map();
   for (const date of dates) {
     const record = daily[date];
     if (!record || !includeRecord(record, date)) continue;
     for (const [path, file] of Object.entries(record.files || {})) {
+      if (isSystemArtifact(path)) continue;
       const name = analyticsFolderOf(path);
       const group = groups.get(name) || { name, count: 0, words: 0 };
       group.count += 1;
@@ -3844,6 +3846,7 @@ function buildStrata(daily, dates, includeRecord, limit = 6) {
     const words = record.contribution?.wordsAdded;
     if (Number.isFinite(words) && words > 0) week.words += words;
     for (const path of Object.keys(record.files || {})) {
+      if (isSystemArtifact(path)) continue;
       const folder = analyticsFolderOf(path);
       const name = named.has(folder) ? folder : '其他';
       week.counts[name] = (week.counts[name] || 0) + 1;

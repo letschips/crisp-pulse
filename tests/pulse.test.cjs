@@ -1677,6 +1677,23 @@ test('folder share groups by project folder, folds the tail into 其他 and sums
   assert.equal(empty.total, 0);assert.equal(empty.items.length, 0);
 });
 
+test('folder share and strata leave out system artifacts, matching the writing-source card', () => {
+  const { helpers } = setup();
+  const files = {
+    'Topics/A/n.md': { wordsAdded: 10 },
+    'Sidecar/logs/docs-sync/backups/1/AGENTS.md': { wordsAdded: 900, sourceWords: { system: 900 } },
+    'Sidecar/manifests/snap.md': { wordsAdded: 50 },
+    'Sidecar/tools/readme.md': { wordsAdded: 5 }
+  };
+  const daily = { '2026-01-05': { quality: 'recorded', contribution: { wordsAdded: 15 }, files } };
+  const share = helpers.buildFolderShare(daily, ['2026-01-05'], () => true);
+  assert.equal(share.total, 2);
+  assert.deepEqual([...share.items.map(item => item.name)].sort(), ['Sidecar/tools', 'Topics/A']);
+  const strata = helpers.buildStrata(daily, ['2026-01-05'], () => true, 6);
+  assert.equal(strata.weeks[0].total, 2);
+  assert.equal(strata.weeks[0].counts['其他'] || 0, 0);
+});
+
 test('year profile separates future, missing, excluded and zero days and picks the dominant dimension', () => {
   const { helpers } = setup();
   const rec = (c, a = {}, quality = 'recorded') => ({ quality, contribution: { score: 0, wordsAdded: 0, notesCreated: 0, tasksCompleted: 0, ...c }, activity: { activeMinutes: 0, focusMinutes: 0, ...a } });
