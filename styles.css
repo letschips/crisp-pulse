@@ -2103,10 +2103,56 @@
   touch-action: manipulation;
 }
 
-.is-mobile .crisp-pulse-tab-btn,
-.is-mobile .crisp-pulse-view button {
-  min-height: 38px;
+.is-mobile .crisp-pulse-view button.crisp-pulse-tab-btn,
+.is-mobile .crisp-pulse-view button,
+.is-mobile .crisp-pulse-view select.crisp-pulse-scope-select {
+  min-height: 44px;
   touch-action: manipulation;
+}
+
+/* Keep phone padding above the desktop presentation layer in the cascade. */
+.is-phone .crisp-pulse-view {
+  padding: 16px 12px 56px !important;
+}
+/* Full-bleed banner and footer bleed by the phone padding, not the desktop 28px. */
+.is-phone .crisp-pulse-view .crisp-pulse-banner {
+  margin-top: -16px;
+  margin-inline: -12px;
+}
+.is-phone .crisp-pulse-view .crisp-pulse-footer {
+  margin-inline: -12px;
+}
+.is-phone .crisp-pulse-view .crisp-pulse-footer-info {
+  padding-inline: 12px;
+}
+
+/* Six tools keep their touch targets; destination and send get their own row. */
+.is-mobile .crisp-pulse-memo-toolbar {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px 0;
+}
+.is-mobile .crisp-pulse-memo-composer.is-docked {
+  margin-inline: 0;
+}
+.is-mobile .crisp-pulse-memo-view button.crisp-pulse-memo-tool,
+.is-mobile .crisp-pulse-memo-view button.crisp-pulse-memo-send {
+  width: 100%;
+  min-width: 44px;
+  height: 44px;
+  touch-action: manipulation;
+}
+.is-mobile .crisp-pulse-memo-toolbar-meta {
+  grid-column: 1 / span 5;
+  margin-left: 0;
+  margin-right: 8px;
+}
+.is-mobile .crisp-pulse-memo-view select.crisp-pulse-memo-topic {
+  width: 100%;
+  height: 44px;
+}
+.is-mobile .crisp-pulse-memo-send {
+  grid-column: 6;
 }
 
 /* ==========================================================================
