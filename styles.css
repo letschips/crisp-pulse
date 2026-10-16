@@ -1080,7 +1080,9 @@
 .crisp-pulse-review-files { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; }
 .crisp-pulse-review-workspace button.crisp-pulse-review-file { display: flex; flex-direction: column; align-items: stretch; text-align: left; white-space: normal; height: auto; padding: 12px; box-shadow: none; background: transparent; border: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); border-radius: 10px; gap: 4px; }
 .crisp-pulse-review-workspace button.crisp-pulse-review-file:hover { background: var(--background-modifier-hover); }
-.crisp-pulse-review-path { overflow-wrap: anywhere; font-size: 13px; }
+.crisp-pulse-review-file-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.crisp-pulse-review-path { flex: none; max-width: 100%; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }
+.crisp-pulse-review-dir { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-faint); }
 .crisp-pulse-review-drafts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .crisp-pulse-review-drafts textarea { width: 100%; min-height: 104px; resize: vertical; line-height: 1.6; padding: 12px; background: var(--pulse-ui-soft, var(--background-secondary)); color: var(--text-normal); }
 .crisp-pulse-review-workspace :is(button,input,select,textarea):focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
@@ -2361,7 +2363,7 @@ body.theme-light .crisp-pulse-view { --pulse-ui-surface: #ffffff; --pulse-ui-sof
 body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view.pulse-v2 .pulse-v2-inset :is(.crisp-pulse-heatmap-card, .crisp-pulse-detail-card, .crisp-pulse-breakdown-card) { box-shadow: none !important; }
 .crisp-pulse-view.pulse-v2 .pulse-v2-inset > .crisp-pulse-heatmap-card > .crisp-pulse-heatmap-header,
 .crisp-pulse-view.pulse-v2 .pulse-v2-inset > .crisp-pulse-detail-card > .crisp-pulse-detail-header { display: none; }
-.crisp-pulse-view.pulse-v2 .crisp-pulse-heatmap-footer { font-family: var(--font-monospace); font-size: 11px; }
+.crisp-pulse-view.pulse-v2 .crisp-pulse-heatmap-footer { font-family: var(--font-interface); font-size: 11px; font-variant-numeric: tabular-nums; }
 /* Day detail figures become a two-row divided strip. */
 .crisp-pulse-view.pulse-v2 .pulse-v2-detail .crisp-pulse-stats-grid { display: grid; grid-template-columns: repeat(var(--pulse-detail-cols, 4), minmax(0, 1fr)); gap: 0; row-gap: 18px; }
 .crisp-pulse-view.pulse-v2 .pulse-v2-detail .crisp-pulse-stat-box {
@@ -2424,14 +2426,14 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 /* Month pace: progress against last month's total, a marker where last month stood today. */
 .crisp-pulse-view .pulse-pace-rows { display: flex; flex-direction: column; gap: 18px; margin-bottom: 24px; }
 .crisp-pulse-view .pulse-pace-head, .crisp-pulse-view .pulse-pace-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.crisp-pulse-view .pulse-pace-label { font-family: var(--font-monospace); font-size: 14px; color: var(--text-normal); }
+.crisp-pulse-view .pulse-pace-label { font-family: var(--font-interface); font-size: 14px; color: var(--text-normal); }
 .crisp-pulse-view .pulse-pace-share { font-family: var(--font-monospace); font-size: 13px; color: var(--text-normal); font-variant-numeric: tabular-nums; }
 .crisp-pulse-view .pulse-pace-track { position: relative; height: 8px; margin: 8px 0 7px; border-radius: 2px; background: color-mix(in srgb, var(--text-normal) 9%, transparent); }
 .crisp-pulse-view .pulse-pace-track.is-empty { background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--text-normal) 9%, transparent) 0 6px, transparent 6px 10px); }
 .crisp-pulse-view .pulse-pace-fill { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: color-mix(in srgb, var(--pulse-ui-accent, var(--interactive-accent)) 55%, transparent); }
 .crisp-pulse-view .pulse-pace-track.is-behind .pulse-pace-fill { background: color-mix(in srgb, var(--text-normal) 30%, transparent); }
 .crisp-pulse-view .pulse-pace-mark { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--color-red, #e5484d); }
-.crisp-pulse-view .pulse-pace-delta, .crisp-pulse-view .pulse-pace-outlook { font-family: var(--font-monospace); font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.crisp-pulse-view .pulse-pace-delta, .crisp-pulse-view .pulse-pace-outlook { font-family: var(--font-interface); font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .crisp-pulse-view .pulse-pace-delta.is-ahead { color: var(--pulse-ui-accent, var(--interactive-accent)); }
 .crisp-pulse-view .pulse-pace-delta.is-behind { color: var(--color-red, #e5484d); }
 .crisp-pulse-view .pulse-pace-seg { margin-bottom: 12px; }

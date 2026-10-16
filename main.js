@@ -4338,7 +4338,7 @@ class CrispPulseView extends ItemView {
     this.selectedDate = getTodayKey();
     this.currentScope = plugin?.settings?.dataQualityScope || "reliable";
     this.currentDateRange = plugin?.settings?.defaultDateRange || "year";
-    this.showBreakdown = true;
+    this.showBreakdown = false;
     this.analyticsDays = 7;
     this.activeViewTab = "dashboard"; // "dashboard" | "review"
   }
@@ -6078,7 +6078,7 @@ class CrispPulseView extends ItemView {
       const bTitleLeft = bTitle.createSpan({ cls: "crisp-pulse-breakdown-title-left" });
       const bIcon = bTitleLeft.createSpan({ cls: "crisp-pulse-breakdown-icon-wrap" });
       bIcon.innerHTML = ICON_COMPUTER_SVG;
-      bTitleLeft.createSpan({ text: "贡献得分构成拆解 (Score Breakdown)" });
+      bTitleLeft.createSpan({ text: "贡献得分构成拆解" });
       bTitle.createSpan({ text: "分项相加严格等于总分", cls: "crisp-pulse-kpi-sub" });
 
       const list = bCard.createDiv({ cls: "crisp-pulse-breakdown-list" });
@@ -6100,7 +6100,7 @@ class CrispPulseView extends ItemView {
       }
 
       rows.push({
-        label: "总计贡献分 (Total Score)",
+        label: "总计贡献分",
         formula: "公式求和",
         val: `${breakdown.totalScore.toFixed(1)} 分`
       });
@@ -6301,7 +6301,12 @@ class CrispPulseView extends ItemView {
     const limit = this.reviewFileLimit || 20;
     for (const file of drill.files.slice(0, limit)) {
       const button = list.createEl('button', { cls: 'crisp-pulse-review-file' });
-      button.createSpan({ text: file.path, cls: 'crisp-pulse-review-path' });
+      const slash = file.path.lastIndexOf('/');
+      const name = file.path.slice(slash + 1).replace(/\.md$/i, '');
+      const head = button.createSpan({ cls: 'crisp-pulse-review-file-head' });
+      head.createSpan({ text: name, cls: 'crisp-pulse-review-path' });
+      if (slash > 0) head.createSpan({ text: file.path.slice(0, slash), cls: 'crisp-pulse-review-dir' });
+      button.setAttr('title', file.path);
       button.createSpan({ text: `新增 ${formatPulseMinutes(file.words)} · 改写 ${formatPulseMinutes(file.rewrittenWords)} · 任务 ${formatPulseMinutes(file.tasks)} · ${file.days} 天`, cls: 'crisp-pulse-review-note' });
       button.addEventListener('click', () => {
         const target = this.app.vault.getAbstractFileByPath(file.path);
