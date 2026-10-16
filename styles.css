@@ -816,11 +816,10 @@
 }
 .crisp-pulse-header .crisp-pulse-scope-select { max-width: 100%; }
 
-/* Keep the annual calendar visible as context for every time filter. */
-.crisp-pulse-cell.is-outside-range {
-  background-color: var(--background-modifier-border-hover, var(--background-modifier-border));
-  opacity: 0.55;
-}
+/* Keep the annual calendar visible as context for every time filter:
+   out-of-range days keep their own level color, faded below in-range empty days. */
+.crisp-pulse-cell.is-outside-range { opacity: 0.3; }
+.crisp-pulse-cell.is-outside-range[data-level="0"] { opacity: 0.2; }
 .crisp-pulse-cell.is-outside-range:hover,
 .crisp-pulse-cell.is-outside-range:focus-visible { opacity: 0.85; }
 
