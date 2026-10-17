@@ -195,3 +195,19 @@ test('a failed start ignores any late callbacks from that round', async () => {
   asr.sink.onDone({ text: '迟到的文字' });
   assert.equal(input.value, '买牛奶。');
 });
+
+test('if the recogniser never returns a final result after release, dictation ends on its own and keeps what was heard', async () => {
+  notices.length = 0;
+  const t = fakeTimers();
+  const asr = { sink: null, stops: 0, async startMemoDictation(sink) { this.sink = sink; sink.onState?.('listening'); }, async stopMemoDictation() { this.stops++; } };
+  const { v, input } = dictationView({ asr, value: '', caret: 0 });
+  v.containerEl.win = t;
+  await v.startDictation();
+  asr.sink.onText('先记下这一句', '');
+  await v.stopDictation();
+  assert.ok(v.dictation, '还在等定稿');
+  t.advance(10000);
+  assert.equal(v.dictation, null, '超时后结束，发送按钮不再锁着');
+  assert.equal(input.value, '先记下这一句');
+  assert.match(notices.join('\n'), /已识别的文字已保留/);
+});

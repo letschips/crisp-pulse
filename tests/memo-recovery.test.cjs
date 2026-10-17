@@ -195,6 +195,7 @@ test('retrying a recording blocks submit until its link is in the draft', async 
 test('a link that arrives after the panel closed goes to the panel that took over its draft', async () => {
   const adapter = fakeAdapter();
   const drafts = new MemoDraftStore(adapter, 'plugin');
+  await drafts.load(); // 面板打开时已读过恢复文件
   const views = [];
   const make = (key) => {
     const v = recordingView({ drafts, key, saveAttachment: async () => '' }).v;
@@ -428,4 +429,25 @@ test('closing and reopening the panel during a recording retry keeps submit lock
   release(); await retry;
   assert.equal(b.attachmentSaving(), false);
   assert.equal(b.draft, '第一条\n![[录音 1.webm]]\n');
+});
+
+test('after a reload, a late attachment on a store whose recovery file was never read keeps the existing drafts and recordings', async () => {
+  const adapter = fakeAdapter();
+  const first = new MemoDraftStore(adapter, 'plugin');
+  await first.load();
+  first.setDraft('leaf-1', '还没提交的草稿');
+  await first.keepRecording({ id: 'r0', name: '旧录音.webm', type: 'audio/webm', startedAt: '', stash: '', error: '保存失败', data: 'audio-0' });
+  await first.retire();
+  // 新实例：速记面板还没打开过，恢复文件没读
+  const second = new MemoDraftStore(adapter, 'plugin');
+  await second.appendDraft('leaf-1', '![[录音 1.webm]]');
+  await second.keepRecording({ id: 'r1', name: '新录音.webm', type: 'audio/webm', startedAt: '', stash: '', error: '保存失败', data: 'audio-1' });
+  await second.flush();
+  const saved = JSON.parse(adapter.files.get('plugin/memo-drafts.json'));
+  assert.equal(saved.drafts['leaf-1'].text, '还没提交的草稿\n![[录音 1.webm]]\n', '原草稿还在，链接接在后面');
+  assert.deepEqual(saved.recordings.map((r) => r.id), ['r0', 'r1'], '旧录音的索引没丢');
+  const third = new MemoDraftStore(adapter, 'plugin');
+  await third.load();
+  assert.equal(third.recordings.length, 2);
+  assert.match(third.drafts['leaf-1'].text, /还没提交的草稿/);
 });

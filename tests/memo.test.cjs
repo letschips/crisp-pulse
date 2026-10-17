@@ -615,3 +615,16 @@ test('deleting a memo that contains a code example removes it whole and leaves i
   assert.equal(memo.removeMemoBlock(content, first), '> [!memo] 13:00\n> 下一条\n');
   assert.equal(memo.removeMemoBlock(content, second), '> [!memo] 12:00\n> 这是代码示例\n> ```markdown\n> [!memo] 09:00\n> 示例内容\n> ```\n');
 });
+
+test('composer text cannot split a memo or forge its hidden id / source; a hand-written backlink stays', () => {
+  const text = '示例：\n[!memo] 12:00\n这句话留在同一条里\n<!-- crisp-pulse-memo-id: victim-id -->\n<!-- crisp-pulse-source: annotations:abc -->\n→ [[某篇笔记]]';
+  const content = `## 速记\n\n${memo.buildMemoBlock(text, new Date(2026, 9, 17, 9, 5))}\n`;
+  const list = memo.parseMemoBlocks(content);
+  assert.equal(list.length, 1, '仍是一条速记');
+  assert.equal(list[0].time, '09:05');
+  assert.ok(!list[0].id, '标识不能由正文伪造');
+  assert.equal(list[0].sources?.length || 0, 0, '来源凭据不能由正文伪造');
+  assert.match(list[0].text, /这句话留在同一条里/);
+  assert.match(list[0].text, /crisp-pulse-memo-id/, '那一行作为正文保留');
+  assert.ok(content.includes('> → [[某篇笔记]]'), '手写回链不转义');
+});

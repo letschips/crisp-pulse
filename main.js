@@ -2989,24 +2989,23 @@ class CrispPulsePlugin extends Plugin {
 
     const startDate = this.settings.trackingStartDate;
     const activeDateSet = new Set();
+    const isActive = (rec) => (scope !== "reliable" || rec.quality !== "estimated") && ((rec.contribution.score || 0) > 0 || (rec.contribution.meaningfulEdits || 0) >= 1);
 
     for (const dStr of filteredDates) {
       const rec = daily[dStr];
       if (!this.recordMatchesScope(rec, dStr, scope)) continue;
 
-      const score = rec.contribution.score || 0;
-      const edits = rec.contribution.meaningfulEdits || 0;
-
-      totalScore += score;
+      totalScore += rec.contribution.score || 0;
       totalActiveMins += (rec.activity?.activeMinutes || 0);
       totalFocusMins += (rec.activity?.focusMinutes || 0);
 
-      const canCountActive = scope !== "reliable" || rec.quality !== "estimated";
-      if (canCountActive && (score > 0 || edits >= 1)) {
+      if (isActive(rec)) {
         activeDays += 1;
         activeDateSet.add(dStr);
       }
     }
+    // 当前连续天数不受时间范围影响：选「近 7 天」时，连续 30 天也照实显示 30
+    const streakDateSet = new Set(allSortedDates.filter((dStr) => this.recordMatchesScope(daily[dStr], dStr, scope) && isActive(daily[dStr])));
 
     let currentStreak = 0;
     let longestStreak = 0;
@@ -3017,10 +3016,10 @@ class CrispPulsePlugin extends Plugin {
     const checkKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
     let curr = new Date(checkDate);
-    if (!activeDateSet.has(checkKey(curr))) {
+    if (!streakDateSet.has(checkKey(curr))) {
       curr.setDate(curr.getDate() - 1);
     }
-    while (activeDateSet.has(checkKey(curr))) {
+    while (streakDateSet.has(checkKey(curr))) {
       currentStreak++;
       curr.setDate(curr.getDate() - 1);
     }
@@ -3270,7 +3269,8 @@ class CrispPulsePlugin extends Plugin {
     const { workspace } = this.app;
     let leaf = workspace.getLeavesOfType(VIEW_TYPE_MEMO)[0];
     if (!leaf) {
-      leaf = workspace.getRightLeaf(false);
+      // 右侧栏不可用时 getRightLeaf 返回 null，改在主区新开标签页
+      leaf = workspace.getRightLeaf(false) ?? workspace.getLeaf(true);
       await leaf.setViewState({ type: VIEW_TYPE_MEMO, active: true });
     }
     workspace.revealLeaf(leaf);
@@ -6577,10 +6577,11 @@ function memoClock(date) {
   return `${memoPad(date.getHours())}:${memoPad(date.getMinutes())}`;
 }
 
-/** 别处来的一行文字放进速记前转义：不能被当成下一条速记、转化回链或隐藏凭据。 */
-function memoSafeLine(line) {
+/** 别处来的一行文字放进速记前转义：不能被当成下一条速记、转化回链或隐藏凭据。
+    keepLinks：输入框里自己写的「→ [[笔记]]」回链照常保留。 */
+function memoSafeLine(line, { keepLinks = false } = {}) {
   let safe = MEMO_HEADER_RE.test(`> ${line}`) ? line.replace("[", "\\[") : line;
-  if (MEMO_LINK_RE.test(safe.trim())) safe = safe.replace("[[", "\\[\\[");
+  if (!keepLinks && MEMO_LINK_RE.test(safe.trim())) safe = safe.replace("[[", "\\[\\[");
   const t = line.trim();
   if (MEMO_ID_RE.test(t) || MEMO_RESTORE_RE.test(t) || MEMO_ASR_RE.test(t) || MEMO_TEMPO_RE.test(t) || MEMO_SOURCE_RE.test(t)) safe = safe.replace("<", "&lt;");
   return safe;
@@ -6591,7 +6592,7 @@ function buildSourceMemoText({ note = "", quote = "", link = "" }) {
   const clean = (text) => String(text ?? "").replace(/\r\n?/g, "\n").trim();
   const parts = [];
   const own = clean(note);
-  if (own) parts.push(own.split("\n").map(memoSafeLine).join("\n"));
+  if (own) parts.push(own.split("\n").map((line) => memoSafeLine(line)).join("\n"));
   const quoted = clean(quote);
   if (quoted) parts.push(quoted.split("\n").map((line) => (line.trim() ? `> ${line}` : ">")).join("\n"));
   if (link) parts.push(`出处：${link}`);
@@ -6600,7 +6601,8 @@ function buildSourceMemoText({ note = "", quote = "", link = "" }) {
 
 function buildMemoBlock(text, date) {
   const body = String(text ?? "").replace(/\r\n?/g, "\n").trim();
-  const lines = body.split("\n").map((line) => (line.trim() ? `> ${line.replace(/\s+$/, "")}` : ">"));
+  // 正文里的「[!memo] 12:00」、隐藏标识行要转义：否则一条速记被拆成两条，或伪造出标识 / 来源凭据
+  const lines = body.split("\n").map((line) => (line.trim() ? `> ${memoSafeLine(line.replace(/\s+$/, ""), { keepLinks: true })}` : ">"));
   return [`> [!memo] ${memoClock(date)}`, ...lines].join("\n");
 }
 
@@ -7480,6 +7482,8 @@ function memoSafeTitle(text) {
 
 const MEMO_TRASH_DAYS = 30;
 const MEMO_DRAFT_SAVE_DELAY = 500;
+// 松开听写后识别服务一直不回定稿：等这么久就按已识别的文字结束，输入框不再一直锁着
+const MEMO_DICTATION_FINALIZE_TIMEOUT = 10000;
 
 /** 输入框里还没提交的草稿和没存进库的录音，存在插件目录（memo-drafts.json、memo-pending/）。
     关闭面板、停用重载、退出重开后能找回；每个速记面板按自己的标签页分开存，不互相覆盖。
@@ -7551,8 +7555,9 @@ class MemoDraftStore {
     return key;
   }
 
-  /** 接到某份草稿末尾（那个面板已经关了）。 */
+  /** 接到某份草稿末尾（那个面板已经关了）。重载后新实例可能还没读过恢复文件，先读再接，免得拿空草稿覆盖。 */
   appendDraft(key, text) {
+    if (!this.loaded) return this.load().then(() => this.appendDraft(key, text));
     const prev = this.drafts[key]?.text || "";
     this.setDraft(key, `${prev ? `${prev.replace(/\s+$/, "")}\n` : ""}${text}\n`);
   }
@@ -7566,15 +7571,18 @@ class MemoDraftStore {
   load() {
     this.ready ||= (async () => {
       await this.writeQueue()?.get(this.path);
-      if (!this.path || !this.adapter || !(await this.adapter.exists(this.path))) return;
       try {
+        if (!this.path || !this.adapter || !(await this.adapter.exists(this.path))) return;
         const raw = await this.adapter.read(this.path);
         const data = JSON.parse(raw);
         if (data?.version !== 1 || typeof data.drafts !== "object" || !data.drafts || Array.isArray(data.drafts) || !Array.isArray(data.recordings)) throw new Error("格式不对");
         for (const [key, entry] of Object.entries(data.drafts)) {
-          if (typeof entry?.text === "string" && entry.text.trim()) this.drafts[key] = { text: entry.text, updatedAt: Number(entry.updatedAt) || 0 };
+          const updatedAt = Number(entry?.updatedAt) || 0;
+          // 读完之前内存里已经有的草稿（比文件里的新）保留，不被旧内容盖掉
+          if (typeof entry?.text === "string" && entry.text.trim() && !((this.drafts[key]?.updatedAt || 0) > updatedAt)) this.drafts[key] = { text: entry.text, updatedAt };
         }
         for (const r of data.recordings) {
+          if (this.recordings.some((x) => x.id === r?.id)) continue;
           if (!r || !/^[a-zA-Z0-9-]+$/.test(r.id || "") || typeof r.name !== "string" || r.name.includes("/") || typeof r.stash !== "string" || !r.stash.startsWith(`${this.pendingDir}/`)) continue;
           if (!(await this.adapter.exists(r.stash))) continue;
           this.recordings.push({ id: r.id, name: r.name, type: String(r.type || ""), startedAt: String(r.startedAt || ""), stash: r.stash, error: String(r.error || "") });
@@ -7583,6 +7591,8 @@ class MemoDraftStore {
       } catch (error) {
         this.broken = true;
         console.warn(`[Crisp Pulse] 速记草稿文件无法读取（${this.path}），本次不再写入草稿`, error);
+      } finally {
+        this.loaded = true;
       }
     })();
     return this.ready;
@@ -7639,6 +7649,8 @@ class MemoDraftStore {
     clearTimeout(this.timer);
     this.timer = null;
     if (this.broken || this.retired || !this.path) return this.writing;
+    // 还没读过恢复文件（插件重载后速记面板没打开过）：先读进来再写，否则会拿空壳覆盖整份文件
+    if (!this.loaded) return this.load().then(() => this.flush());
     const payload = JSON.stringify({
       version: 1,
       drafts: this.drafts,
@@ -7661,6 +7673,7 @@ class MemoDraftStore {
 
   /** 录音没能存进附件：留在待保存列表，并尽量在插件目录存一份，重载后也能重试。 */
   async keepRecording(rec) {
+    await this.load();
     if (!this.recordings.includes(rec)) this.recordings.push(rec);
     if (!rec.stash && this.pendingDir && !this.broken) {
       try {
@@ -7682,6 +7695,7 @@ class MemoDraftStore {
   }
 
   async dropRecording(rec) {
+    await this.load();
     this.recordings = this.recordings.filter((r) => r !== rec);
     if (rec.stash) { try { await this.adapter.remove(rec.stash); } catch (_) { /* 暂存文件已不在 */ } }
     await this.flush();
@@ -8457,7 +8471,7 @@ class CrispPulseMemoView extends ItemView {
       if (key !== this.draftKey || drafts !== own) {
         const heir = (this.app?.workspace?.getLeavesOfType?.(VIEW_TYPE_MEMO) || []).map((leaf) => leaf.view).find((v) => v && v !== this && !v.memoClosed && v.draftKey === key);
         if (heir) heir.insertIntoComposer(text);
-        else drafts.appendDraft(key, text);
+        else void drafts.appendDraft(key, text);
         return;
       }
     }
@@ -8538,6 +8552,7 @@ class CrispPulseMemoView extends ItemView {
       onDone: ({ text, error }) => {
         if (d.done) return;
         d.done = true;
+        (this.containerEl?.win || window).clearTimeout(d.watchdog);
         const heard = d.state !== "connecting";
         // 定稿文字取代过程中的预览；没有定稿时保留已经显示的定稿部分
         const final = text || d.text;
@@ -8549,10 +8564,11 @@ class CrispPulseMemoView extends ItemView {
         else if (!final && heard) new Notice("Crisp Pulse 速记：这次没有识别到文字");
       },
     };
+    d.finish = sink.onDone;
     try {
       await asr.startMemoDictation(sink);
-      // 连接期间已经松开：连上后立即结束
-      if (d.stopRequested && !d.done) await asr.stopMemoDictation();
+      // 连接期间已经松开：连上后立即结束（等不及已按超时结束的，也要让识别服务停下）
+      if (d.stopRequested && (!d.done || d.timedOut)) await asr.stopMemoDictation();
     } catch (error) {
       // 启动失败后不再接受这一轮的任何回调，免得改到之后的草稿
       d.done = true;
@@ -8566,7 +8582,17 @@ class CrispPulseMemoView extends ItemView {
     const d = this.dictation;
     if (!d) return;
     d.stopRequested = true;
-    await this.plugin.memoDictationAsr?.()?.stopMemoDictation();
+    const win = this.containerEl?.win || window;
+    d.watchdog ||= win.setTimeout(() => {
+      if (d.done) return;
+      d.timedOut = true;
+      d.finish?.({ text: d.text, error: new Error("识别服务没有返回定稿") });
+    }, MEMO_DICTATION_FINALIZE_TIMEOUT);
+    try {
+      await this.plugin.memoDictationAsr?.()?.stopMemoDictation();
+    } catch (error) {
+      if (!d.done) d.finish?.({ text: d.text, error });
+    }
   }
 
   applyDictation(d, middle) {
@@ -8617,6 +8643,14 @@ class CrispPulseMemoView extends ItemView {
       const startedAt = new Date();
       const session = { recorder, startedAt, timer: null };
       recorder.addEventListener("dataavailable", (e) => { if (e.data?.size) chunks.push(e.data); });
+      // 设备出错或被拔掉：停下录音，已录到的部分照常走 stop 里的保存 / 保留流程，不让面板一直停在「录音中」
+      const halt = () => { try { if (recorder.state !== "inactive") recorder.stop(); } catch (_) { /* 已经停了 */ } };
+      recorder.addEventListener("error", (e) => {
+        console.warn("[Crisp Pulse] 录音出错", e?.error || e);
+        new Notice(`Crisp Pulse 速记：录音出错（${e?.error?.message || "设备异常"}），已停止录音`, 8000);
+        halt();
+      });
+      stream.getTracks().forEach((t) => t.addEventListener?.("ended", halt));
       const draftsAtStart = this.plugin?.memoDrafts;
       const draftKey = this.draftKey;
       recorder.addEventListener("stop", async () => {
@@ -9867,7 +9901,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("日笔记里的速记段落")
-      .setDesc("通用模式下速记追加到这个标题下面；没有这个标题时会在文末补上。留空则直接追加到文末。")
+      .setDesc("通用模式下速记追加到这个标题下面；没有这个标题时会在文末补上。留空则直接追加到文末。只认顶层标题，写在引用块或 Callout 里的不算。")
       .addText((text) => text
         .setPlaceholder("## 速记")
         .setValue(this.plugin.settings.memoHeading ?? "## 速记")

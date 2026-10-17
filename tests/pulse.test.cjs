@@ -2536,3 +2536,28 @@ test('a Now action marker shown inside a code block does not stop the memo being
   await p.convertMemoToNow({ path: 'Daily/2026-10-12.md', startLine: 3, text: '真实想法' });
   assert.equal(files['Now/行动.md'].split('^pulse-memo-memo-a').length - 1, 2, '再点一次不重复加（示例 1 处 + 真实 1 处）');
 });
+
+test('the current streak does not depend on the selected date range', async () => {
+  const { p, helpers } = setup();
+  await p.loadPluginData();
+  p.settings.trackingStartDate = '';
+  const key = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  for (let i = 0; i < 30; i++) {
+    const k = key(new Date(2026, 8, 8 - i));
+    const rec = helpers.createEmptyDailyRecord(k);
+    rec.contribution.score = 10; rec.contribution.meaningfulEdits = 1;
+    p.store.daily[k] = rec;
+  }
+  for (const range of ['7d', '30d', '90d']) assert.equal(p.calcStats('reliable', range).currentStreak, 30, range);
+  assert.equal(p.calcStats('reliable', '7d').activeDays, 7, '总量类指标仍按范围算');
+});
+
+test('opening the memo view falls back to a new tab when the right sidebar has no leaf', async () => {
+  const { p } = setup();
+  const leaf = { state: null, async setViewState(s) { this.state = s; } };
+  let revealed = null;
+  p.app = { ...p.app, workspace: { getLeavesOfType: () => [], getRightLeaf: () => null, getLeaf: () => leaf, revealLeaf: (l) => { revealed = l; } } };
+  await p.activateMemoView();
+  assert.equal(leaf.state?.type, 'crisp-pulse-memo-view');
+  assert.equal(revealed, leaf);
+});
