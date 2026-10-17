@@ -3024,10 +3024,11 @@ class CrispPulsePlugin extends Plugin {
       curr.setDate(curr.getDate() - 1);
     }
 
-    if (filteredDates.length > 0) {
+    // 最长连续和当前连续同一口径（全部历史），否则选「近 7 天」时会出现当前 20 天、最长 7 天
+    if (allSortedDates.length > 0) {
       let prevDate = null;
-      for (const dStr of filteredDates) {
-        if (!activeDateSet.has(dStr)) continue;
+      for (const dStr of allSortedDates) {
+        if (!streakDateSet.has(dStr)) continue;
         const [y, m, d] = dStr.split("-").map(Number);
         const thisDate = new Date(y, m - 1, d);
 
@@ -4447,10 +4448,13 @@ class CrispPulseView extends ItemView {
       }
     }
     else if (chartFocus) {
-      const chart = [...container.querySelectorAll("svg")].find(el => el.getAttribute("aria-label") === chartFocus.chart);
-      const target = chart?.querySelector(`[data-analytics-date="${chartFocus.date}"]`);
+      // 年度月相日历的格子不在 svg 里（没有图表标签），直接在面板里按日期找
+      const chart = chartFocus.chart ? [...container.querySelectorAll("svg")].find(el => el.getAttribute("aria-label") === chartFocus.chart) : null;
+      const target = chartFocus.chart
+        ? chart?.querySelector(`[data-analytics-date="${chartFocus.date}"]`)
+        : container.querySelector(`.crisp-pulse-moon[data-analytics-date="${chartFocus.date}"]`);
       if (target) {
-        chart.querySelectorAll('[data-analytics-date][tabindex="0"]').forEach(el => el.setAttribute('tabindex', '-1'));
+        (chart || target.closest('.crisp-pulse-moon-months') || target.parentElement).querySelectorAll('[data-analytics-date][tabindex="0"]').forEach(el => el.setAttribute('tabindex', '-1'));
         target.setAttribute('tabindex', '0');
         target.focus({ preventScroll: true });
       }
@@ -6592,7 +6596,11 @@ function buildSourceMemoText({ note = "", quote = "", link = "" }) {
   const clean = (text) => String(text ?? "").replace(/\r\n?/g, "\n").trim();
   const parts = [];
   const own = clean(note);
-  if (own) parts.push(own.split("\n").map((line) => memoSafeLine(line)).join("\n"));
+  if (own) {
+    const lines = own.split("\n");
+    const fenced = memoFencedLines(lines);
+    parts.push(lines.map((line, i) => (fenced.has(i) ? line : memoSafeLine(line))).join("\n"));
+  }
   const quoted = clean(quote);
   if (quoted) parts.push(quoted.split("\n").map((line) => (line.trim() ? `> ${line}` : ">")).join("\n"));
   if (link) parts.push(`出处：${link}`);
@@ -6601,8 +6609,15 @@ function buildSourceMemoText({ note = "", quote = "", link = "" }) {
 
 function buildMemoBlock(text, date) {
   const body = String(text ?? "").replace(/\r\n?/g, "\n").trim();
-  // 正文里的「[!memo] 12:00」、隐藏标识行要转义：否则一条速记被拆成两条，或伪造出标识 / 来源凭据
-  const lines = body.split("\n").map((line) => (line.trim() ? `> ${memoSafeLine(line.replace(/\s+$/, ""), { keepLinks: true })}` : ">"));
+  // 正文里的「[!memo] 12:00」、隐藏标识行要转义：否则一条速记被拆成两条，或伪造出标识 / 来源凭据。
+  // 闭合围栏代码块里的读取时本来就跳过，原样保留；没闭合的围栏不算，照常转义
+  const raw = body.split("\n");
+  const fenced = memoFencedLines(raw);
+  const lines = raw.map((line, i) => {
+    if (!line.trim()) return ">";
+    const trimmed = line.replace(/\s+$/, "");
+    return `> ${fenced.has(i) ? trimmed : memoSafeLine(trimmed, { keepLinks: true })}`;
+  });
   return [`> [!memo] ${memoClock(date)}`, ...lines].join("\n");
 }
 
@@ -7028,15 +7043,15 @@ const MEMO_MD_IMAGE_RE = /!\[[^\]]*\]\([^)]*\)/g;
 
 /** 速记里是否有图片：wiki 嵌入的图片文件或 Markdown 图片。 */
 function memoHasImage(text) {
-  const s = String(text ?? "");
+  const s = memoStripCode(text);
   for (const m of s.matchAll(MEMO_WIKI_EMBED_RE)) if (MEMO_IMAGE_EXT_RE.test(m[1].trim())) return true;
   return new RegExp(MEMO_MD_IMAGE_RE.source).test(s);
 }
 
-/** 速记正文里是否有链接：双链、网址或 Markdown 链接；图片嵌入不算，转化回链不在正文里。 */
+/** 速记正文里是否有链接：双链、网址或 Markdown 链接；图片、语音嵌入和代码里的不算，转化回链不在正文里。 */
 function memoHasLink(text) {
-  const s = String(text ?? "")
-    .replace(MEMO_WIKI_EMBED_RE, (all, target) => (MEMO_IMAGE_EXT_RE.test(target.trim()) ? "" : all))
+  const s = memoStripCode(text)
+    .replace(MEMO_WIKI_EMBED_RE, (all, target) => (MEMO_IMAGE_EXT_RE.test(target.trim()) || MEMO_AUDIO_EXT_RE.test(target.trim()) ? "" : all))
     .replace(MEMO_MD_IMAGE_RE, "");
   return /\[\[[^\]]+\]\]|https?:\/\/\S|\[[^\]]+\]\([^)]+\)/.test(s);
 }
@@ -7048,8 +7063,13 @@ function memoHasAudio(text) {
   return memoAudioLinks(text).length > 0;
 }
 
+/** 去掉围栏代码块和行内代码：里面的嵌入、链接是示例。 */
+function memoStripCode(text) {
+  return String(text ?? "").replace(/(`{3,}|~{3,})[^\n]*\n[\s\S]*?\1/g, "").replace(/`[^`\n]*`/g, "");
+}
+
 function memoAudioLinks(text) {
-  const clean = String(text ?? "").replace(/(`{3,}|~{3,})[^\n]*\n[\s\S]*?\1/g, "").replace(/`[^`\n]*`/g, "");
+  const clean = memoStripCode(text);
   const links = [...clean.matchAll(MEMO_WIKI_EMBED_RE)].map((m) => m[1].trim());
   for (const m of clean.matchAll(/!\[[^\]]*\]\(\s*(?:<([^>]+)>|([^\s)]+))(?:\s+"[^"]*")?\s*\)/g)) {
     let link = m[1] || m[2];
@@ -7560,6 +7580,7 @@ class MemoDraftStore {
     if (!this.loaded) return this.load().then(() => this.appendDraft(key, text));
     const prev = this.drafts[key]?.text || "";
     this.setDraft(key, `${prev ? `${prev.replace(/\s+$/, "")}\n` : ""}${text}\n`);
+    return this.flush();
   }
 
   writeQueue() {
@@ -7632,7 +7653,8 @@ class MemoDraftStore {
   /** 插件卸载：把手上的草稿写完，之后不再写入。重载后由新实例的草稿存储接管同一个文件，旧实例迟到的写入会覆盖新草稿。 */
   retire() {
     if (this.retired) return this.writing;
-    const done = this.flush();
+    // 恢复文件还没读完时，读完后的最后一次写入也要落盘，不能被下面的 retired 拦掉
+    const done = this.flush({ retiring: true });
     this.retired = true;
     this.sharedState()?.stores.delete(this);
     clearTimeout(this.timer);
@@ -7645,12 +7667,12 @@ class MemoDraftStore {
     this.timer = setTimeout(() => { void this.flush(); }, MEMO_DRAFT_SAVE_DELAY);
   }
 
-  flush() {
+  flush({ retiring = false } = {}) {
     clearTimeout(this.timer);
     this.timer = null;
-    if (this.broken || this.retired || !this.path) return this.writing;
+    if (this.broken || (this.retired && !retiring) || !this.path) return this.writing;
     // 还没读过恢复文件（插件重载后速记面板没打开过）：先读进来再写，否则会拿空壳覆盖整份文件
-    if (!this.loaded) return this.load().then(() => this.flush());
+    if (!this.loaded) return this.load().then(() => this.flush({ retiring }));
     const payload = JSON.stringify({
       version: 1,
       drafts: this.drafts,
@@ -7696,7 +7718,8 @@ class MemoDraftStore {
 
   async dropRecording(rec) {
     await this.load();
-    this.recordings = this.recordings.filter((r) => r !== rec);
+    // 重载后新实例读出的是另一个对象，按 id 认
+    this.recordings = this.recordings.filter((r) => r !== rec && !(rec.id && r.id === rec.id));
     if (rec.stash) { try { await this.adapter.remove(rec.stash); } catch (_) { /* 暂存文件已不在 */ } }
     await this.flush();
     this.changed();
@@ -8740,6 +8763,9 @@ class CrispPulseMemoView extends ItemView {
       const link = await this.plugin.memoStore.saveAttachment(rec.name, data, startedAt);
       rec.busy = false;
       await store.dropRecording(rec);
+      // 重试期间插件重载过：新实例从恢复文件读到的同一条录音也要清掉，否则留下点了必报错的待保存条
+      const live = this.liveDrafts();
+      if (live && live !== store) await live.dropRecording(rec);
       this.insertIntoComposer(link);
       new Notice("Crisp Pulse 速记：录音已存进库");
     } catch (error) {

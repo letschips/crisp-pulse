@@ -2552,6 +2552,24 @@ test('the current streak does not depend on the selected date range', async () =
   assert.equal(p.calcStats('reliable', '7d').activeDays, 7, '总量类指标仍按范围算');
 });
 
+test('the longest streak is never shorter than the current streak, whatever the range', async () => {
+  const { p, helpers } = setup();
+  await p.loadPluginData();
+  p.settings.trackingStartDate = '';
+  const key = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  for (let i = 0; i < 20; i++) {
+    const k = key(new Date(2026, 8, 8 - i));
+    const rec = helpers.createEmptyDailyRecord(k);
+    rec.contribution.score = 10; rec.contribution.meaningfulEdits = 1;
+    p.store.daily[k] = rec;
+  }
+  for (const range of ['7d', '30d', 'year']) {
+    const stats = p.calcStats('reliable', range);
+    assert.equal(stats.currentStreak, 20, range);
+    assert.equal(stats.longestStreak, 20, range);
+  }
+});
+
 test('opening the memo view falls back to a new tab when the right sidebar has no leaf', async () => {
   const { p } = setup();
   const leaf = { state: null, async setViewState(s) { this.state = s; } };

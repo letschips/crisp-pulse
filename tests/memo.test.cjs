@@ -628,3 +628,20 @@ test('composer text cannot split a memo or forge its hidden id / source; a hand-
   assert.match(list[0].text, /crisp-pulse-memo-id/, '那一行作为正文保留');
   assert.ok(content.includes('> → [[某篇笔记]]'), '手写回链不转义');
 });
+
+test('memo syntax inside a closed code fence is kept as written; outside it is still escaped', () => {
+  const { buildMemoBlock, buildSourceMemoText, parseMemoBlocks } = load().memo;
+  const body = '代码示例：\n```markdown\n[!memo] 12:00\n<!-- crisp-pulse-memo-id: demo-id -->\n```\n[!memo] 13:00';
+  const [memo] = parseMemoBlocks(buildMemoBlock(body, new Date(2026, 9, 17, 9)));
+  assert.equal(memo.text, '代码示例：\n```markdown\n[!memo] 12:00\n<!-- crisp-pulse-memo-id: demo-id -->\n```\n\\[!memo] 13:00');
+  const note = buildSourceMemoText({ note: '```\n[!memo] 12:00\n```' });
+  assert.equal(note, '```\n[!memo] 12:00\n```');
+});
+
+test('a voice-only memo does not count as having a link; links inside code do not either', () => {
+  const { memoHasLink, memoHasImage } = load().memo;
+  assert.equal(memoHasLink('今天录一段想法\n![[录音 20261017120000.webm]]'), false);
+  assert.equal(memoHasLink('示例 `[[笔记]]`\n```\nhttps://example.com\n```'), false);
+  assert.equal(memoHasLink('看 [[笔记]]'), true);
+  assert.equal(memoHasImage('```\n![[图.png]]\n```'), false);
+});

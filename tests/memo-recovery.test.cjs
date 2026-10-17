@@ -451,3 +451,40 @@ test('after a reload, a late attachment on a store whose recovery file was never
   assert.equal(third.recordings.length, 2);
   assert.match(third.drafts['leaf-1'].text, /还没提交的草稿/);
 });
+
+test('unloading before the recovery file is read still writes a late attachment', async () => {
+  const files = new Map([['plugin/memo-drafts.json', JSON.stringify({ version: 1, drafts: { 'leaf-old': { text: '原有草稿', updatedAt: 1 } }, recordings: [] })]]);
+  const adapter = fakeAdapter(files);
+  let release;
+  const read = adapter.read.bind(adapter);
+  adapter.read = async (p) => { await new Promise((r) => { release = r; }); adapter.read = read; return read(p); };
+  const store = new MemoDraftStore(adapter, 'plugin');
+  const appended = store.appendDraft('leaf-old', '![[迟到附件.png]]');
+  await new Promise((r) => setTimeout(r, 0));
+  const retired = store.retire();
+  release();
+  await appended; await retired;
+  const saved = JSON.parse(files.get('plugin/memo-drafts.json'));
+  assert.equal(saved.drafts['leaf-old'].text, '原有草稿\n![[迟到附件.png]]\n');
+});
+
+test('a recording retry that finishes after a reload clears the new instance\'s pending entry too', async () => {
+  const adapter = fakeAdapter();
+  const first = new MemoDraftStore(adapter, 'plugin');
+  await first.load();
+  await first.keepRecording({ id: 'r1', name: '录音 1.webm', type: 'audio/webm', startedAt: '', stash: '', error: '保存失败', data: 'audio' });
+  const rec = first.recordings[0];
+  let release;
+  const f = recordingView({ drafts: first, key: 'leaf-a', saveAttachment: (name) => new Promise((r) => { release = () => r(`![[${name}]]`); }) });
+  const second = new MemoDraftStore(adapter, 'plugin');
+  f.v.app = { workspace: { getLeavesOfType: () => [] }, plugins: { plugins: { 'crisp-pulse': { memoDrafts: second } } } };
+  const retry = f.v.retryRecording(rec);
+  await new Promise((r) => setTimeout(r, 0));
+  await f.v.onClose(); await first.retire();
+  await second.load();
+  assert.equal(second.recordings.length, 1);
+  release(); await retry; await second.flush();
+  assert.equal(second.recordings.length, 0, '新实例的待保存列表也清掉');
+  assert.deepEqual(JSON.parse(adapter.files.get('plugin/memo-drafts.json')).recordings, []);
+  assert.match(second.drafts['leaf-a'].text, /!\[\[录音 1\.webm\]\]/);
+});
