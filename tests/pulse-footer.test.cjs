@@ -15,7 +15,7 @@ const context = {
   module: { exports: {} }, console, Date, window: { setTimeout, clearTimeout }, document: {}, setTimeout, clearTimeout, structuredClone, crypto: globalThis.crypto, TextEncoder, TextDecoder, Buffer, atob,
 };
 vm.runInNewContext(`${fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8')}
-module.exports.F = { buildGroundProfile, groundDayCount, groundDayX, paintPulseGround, getTodayKey, reviewDayKey, reviewDayNumber, PULSE_GROUND_MARGIN, CrispPulseView };`, context);
+module.exports.F = { celestialPlacement, lunarPhase, paintCelestial, buildGroundProfile, groundDayCount, groundDayX, paintPulseGround, getTodayKey, reviewDayKey, reviewDayNumber, PULSE_GROUND_MARGIN, CrispPulseView };`, context);
 const F = context.module.exports.F;
 
 test('one huge day does not flatten the rest; no data stays flat', () => {
@@ -74,4 +74,49 @@ test('days outside the selected data scope do not raise the ridge', () => {
   assert.match(v.footerEls.caption.text, new RegExp(`峰值 ${Number(ago(2).slice(5, 7))}月${Number(ago(2).slice(8))}日`));
   assert.match(v.footerEls.caption.text, /小旗是今天/, '浅色主题下是小旗');
   assert.equal(v.footerEls.canvas.height * 2, 120, '画布高度跟显示高度走，像素保持方形');
+});
+
+/* 顶部天空的太阳和月亮。失败模式：
+   - 太阳/月亮位置不随时间走，或跑出天空（盖住标题、掉到地平线下）。
+   - 白天主题深夜、夜间主题白天时乱跳或压到标签栏上，应停在右上角。
+   - 月相算反（上弦月亮在左边）或新月时画出一轮满月。 */
+test('the sun crosses 6–18 and the moon 18–6, resting at the upper right otherwise', () => {
+  const at = (h, m = 0) => new Date(2026, 9, 19, h, m);
+  const noon = F.celestialPlacement(at(12), 'day');
+  assert.equal(noon.t, 0.5);
+  const morning = F.celestialPlacement(at(8), 'day'), evening = F.celestialPlacement(at(16), 'day');
+  assert.ok(morning.x < noon.x && noon.x < evening.x, '从左往右走');
+  assert.ok(noon.y < morning.y && noon.y < evening.y, '正午最高');
+  for (const [h, mode] of [[3, 'day'], [22, 'day'], [9, 'night'], [15, 'night']]) {
+    const rest = F.celestialPlacement(at(h), mode);
+    assert.deepEqual([rest.t, rest.x, rest.y], [null, 86, 20], `${mode} ${h}:00 不在自己的时段，停在右上角`);
+  }
+  assert.equal(F.celestialPlacement(at(0), 'night').t, 0.5, '午夜月亮最高');
+  assert.ok(Math.abs(F.celestialPlacement(at(21), 'night').t - 0.25) < 1e-9);
+  for (let h = 0; h < 24; h++) for (const mode of ['day', 'night']) {
+    const { x, y } = F.celestialPlacement(at(h, 30), mode);
+    assert.ok(x >= 40 && x <= 94 && y >= 13 && y <= 36, `${mode} ${h}:30 留在天空里：${x},${y}`);
+  }
+});
+
+test('the moon phase follows the synodic month', () => {
+  // 2026-10-10 前后为新月、2026-10-26 前后为满月（容差一天）
+  const near = (a, b, tol) => Math.min(Math.abs(a - b), 1 - Math.abs(a - b)) < tol;
+  assert.ok(near(F.lunarPhase(new Date(Date.UTC(2026, 9, 10, 16))), 0, 0.04), String(F.lunarPhase(new Date(Date.UTC(2026, 9, 10, 16)))));
+  assert.ok(near(F.lunarPhase(new Date(Date.UTC(2026, 9, 26, 4))), 0.5, 0.04), String(F.lunarPhase(new Date(Date.UTC(2026, 9, 26, 4)))));
+});
+
+test('pixel moon lights the correct side and a new moon shows only a faint disc', () => {
+  const draw = (phase) => {
+    const data = new Uint8ClampedArray(25 * 25 * 4);
+    const canvas = { width: 25, height: 25, getContext: () => ({ createImageData: (w, h) => ({ data, width: w, height: h }), putImageData() {} }) };
+    F.paintCelestial(canvas, 'night', phase);
+    const lum = (x, y) => { const o = (y * 25 + x) * 4; return data[o + 3] ? data[o] + data[o + 1] + data[o + 2] : 0; };
+    return { left: lum(9, 12), right: lum(15, 12) };
+  };
+  const waxing = draw(0.25), waning = draw(0.75), full = draw(0.5), fresh = draw(0.01);
+  assert.ok(waxing.right > waxing.left + 150, '上弦：右边亮');
+  assert.ok(waning.left > waning.right + 150, '下弦：左边亮');
+  assert.ok(full.left > 400 && full.right > 400, '满月两边都亮');
+  assert.ok(fresh.left < 300 && fresh.right < 300, '新月只有暗盘');
 });

@@ -4472,6 +4472,52 @@ function createBannerImageSuggest(app, inputEl, onPick) {
 
 // One painted canvas per mode; each render copies it instead of repainting.
 const PULSE_SKY_WIDTH = 900, PULSE_SKY_HEIGHT = 112;
+
+/* 天空里的太阳和月亮：独立的小画布叠在天空上，按百分比定位，窄屏时天空右侧被裁也不会切掉它。
+   太阳 6:00—18:00、月亮 18:00—6:00 从左到右走一道弧；时间不在自己的时段（如浅色主题的深夜），就停在右上角。 */
+const PULSE_CELESTIAL_SIZE = 25;
+function celestialPlacement(date, mode) {
+  const h = date.getHours() + date.getMinutes() / 60;
+  const hours = mode === 'night' ? (h >= 18 ? h - 18 : h < 6 ? h + 6 : -1) : (h >= 6 && h < 18 ? h - 6 : -1);
+  if (hours < 0) return { t: null, x: 86, y: 20 };
+  const t = hours / 12;
+  return { t, x: 40 + 54 * t, y: 36 - 23 * Math.sin(Math.PI * t) };
+}
+
+/** 月相 0—1：0 新月、0.25 上弦、0.5 满月、0.75 下弦。以 2000-01-06 18:14 UTC 的新月为基准，按朔望月推算。 */
+function lunarPhase(date) {
+  const days = (date.getTime() - Date.UTC(2000, 0, 6, 18, 14)) / 86400000;
+  const p = (days / 29.530588853) % 1;
+  return p < 0 ? p + 1 : p;
+}
+
+/** 和天空一样的抖动像素：太阳带暖色光晕；月亮按月相画亮面，暗面留一点地照。 */
+function paintCelestial(canvas, mode, phase = 0.5) {
+  const n = canvas.width, c = (n - 1) / 2, r = 6;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(n, n);
+  const put = (x, y, rgb, a = 255) => { const o = (y * n + x) * 4; img.data[o] = rgb[0]; img.data[o + 1] = rgb[1]; img.data[o + 2] = rgb[2]; img.data[o + 3] = a; };
+  const bayer = (x, y) => (PIXEL_BAYER[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
+  const night = mode === 'night';
+  const halo = night ? [150, 172, 214] : [255, 240, 196], haloR = night ? 9.5 : 12.5;
+  const craters = new Set(['11,10', '14,14', '10,14', '15,10']);
+  const term = Math.cos(2 * Math.PI * phase);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const dx = x - c, dy = y - c, d = Math.hypot(dx, dy);
+    if (d <= r + 0.5) {
+      if (!night) { put(x, y, pixelMix([255, 244, 196], [255, 198, 96], pixelClamp01(d / (r + 0.5)))); continue; }
+      const w = Math.sqrt(Math.max(0, (r + 0.5) ** 2 - dy * dy));
+      const lit = phase < 0.5 ? dx >= term * w : dx <= -term * w;
+      if (lit) put(x, y, craters.has(`${x},${y}`) ? [204, 204, 190] : [236, 232, 214]);
+      else put(x, y, [70, 84, 120], 220);
+      continue;
+    }
+    // 光晕：越远越稀，用有序抖动决定哪些像素亮
+    const glow = 1 - (d - r - 0.5) / (haloR - r - 0.5);
+    if (glow > 0 && bayer(x, y) < glow * (night ? 0.35 : 0.6)) put(x, y, halo, night ? 120 : 170);
+  }
+  ctx.putImageData(img, 0, 0);
+}
 const pulseSkyCache = {};
 function getPulseSky(doc, mode) {
   if (!pulseSkyCache[mode]) {
@@ -4512,6 +4558,7 @@ class CrispPulseView extends ItemView {
   async onOpen() {
     this.render();
     const container = this.containerEl.children[1];
+    this.registerInterval(container.ownerDocument.defaultView.setInterval(() => this.updateCelestial(), 5 * 60 * 1000));
     this.registerEvent(this.app.workspace.on("css-change", () => {
       const mode = this.currentBannerMode();
       if (this.plugin.settings.showHeaderBanner && this.bannerMode !== "image" && this.bannerMode !== mode) this.render();
@@ -5723,6 +5770,19 @@ class CrispPulseView extends ItemView {
     }
     const canvas = banner.createEl("canvas", { attr: { width: PULSE_SKY_WIDTH, height: PULSE_SKY_HEIGHT } });
     canvas.getContext("2d").drawImage(getPulseSky(parent.ownerDocument, this.bannerMode), 0, 0);
+    this.celestialEl = banner.createEl("canvas", { cls: "crisp-pulse-celestial", attr: { width: PULSE_CELESTIAL_SIZE, height: PULSE_CELESTIAL_SIZE } });
+    this.updateCelestial();
+  }
+
+  /** 按当前时间摆放太阳或月亮，并按今天的月相重画；看板打开时每 5 分钟走一次。 */
+  updateCelestial() {
+    const el = this.celestialEl;
+    if (!el?.isConnected || this.bannerMode === "image") return;
+    const now = new Date();
+    paintCelestial(el, this.bannerMode, lunarPhase(now));
+    const { x, y } = celestialPlacement(now, this.bannerMode);
+    el.style.left = `${x}%`;
+    el.style.top = `${y}%`;
   }
 
   renderHeader(parent) {
