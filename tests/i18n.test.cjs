@@ -1,6 +1,6 @@
 /* 界面语言测试：Pulse 跟随 Obsidian 的界面语言显示中文或英文。
-   失败模式：英文界面仍显示中文；中文界面被改成英文；旧版 Obsidian 取不到语言；
-   切成英文后写进笔记、会被再次解析的数据格式（速记块、ANKS 采集件）跟着变了。 */
+   失败模式：英文界面仍显示中文；中文界面被改成英文；旧版 Obsidian 把「跟随系统」误判成英文；
+   切成英文后写进库里的东西（速记块、ANKS 采集件、番茄标签、录音和归档文件名）跟着变了。 */
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -10,7 +10,7 @@ const path = require('node:path');
 
 const SOURCE = fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8');
 
-function load({ language, storedLanguage } = {}) {
+function load({ language, storedLanguage, systemLanguage } = {}) {
   class Plugin { registerEvent() {} registerInterval() {} addCommand() {} }
   class TFile {}
   class Setting { setName() { return this; } setDesc() { return this; } }
@@ -21,7 +21,7 @@ function load({ language, storedLanguage } = {}) {
   const context = {
     require: () => obsidian,
     module: { exports: {} }, console, Date, window,
-    document: { hidden: false }, navigator: { clipboard: { writeText: async () => {} } },
+    document: { hidden: false }, navigator: { clipboard: { writeText: async () => {} }, ...(systemLanguage ? { language: systemLanguage } : {}) },
     setTimeout, clearTimeout, structuredClone, crypto: globalThis.crypto, atob, TextDecoder, TextEncoder, Buffer,
   };
   vm.runInNewContext(SOURCE + '\nmodule.exports.i18nProbe = { formatDateDisplay, DEFAULT_SETTINGS };', context);
@@ -39,7 +39,6 @@ test('英文界面：报告、转写状态和日期都显示英文', () => {
   const state = pulse.memoHelpers.memoTranscriptionState({ memo: { text: '' }, job: pendingJob, filePath: 'a.webm' });
   assert.equal(state.label, 'Queued');
   assert.equal(pulse.i18nProbe.formatDateDisplay('2026-10-18'), 'Oct 18, 2026');
-  assert.match(pulse.memoHelpers.memoRecordingName('audio/webm', new Date(2026, 9, 18, 9, 5, 7)), /^Recording 20261018090507\.webm$/);
 });
 
 test('中文界面：保持原来的中文', () => {
@@ -55,9 +54,27 @@ test('繁体中文界面也显示中文', () => {
   assert.equal(load({ language: 'zh-TW' }).i18nProbe.formatDateDisplay('2026-10-18'), '2026年10月18日');
 });
 
-test('旧版 Obsidian 没有 getLanguage：按 localStorage 判断，没存语言就是英文', () => {
-  assert.equal(load({ storedLanguage: null }).i18nProbe.formatDateDisplay('2026-10-18'), 'Oct 18, 2026');
-  assert.equal(load({ storedLanguage: 'zh' }).i18nProbe.formatDateDisplay('2026-10-18'), '2026年10月18日');
+test('旧版 Obsidian 没有 getLanguage：先看 localStorage，没存就跟随系统语言', () => {
+  const date = (opts) => load(opts).i18nProbe.formatDateDisplay('2026-10-18');
+  assert.equal(date({ storedLanguage: null, systemLanguage: 'zh-CN' }), '2026年10月18日');
+  assert.equal(date({ storedLanguage: null, systemLanguage: 'en-US' }), 'Oct 18, 2026');
+  assert.equal(date({ storedLanguage: 'zh', systemLanguage: 'en-US' }), '2026年10月18日');
+  assert.equal(date({ storedLanguage: 'en', systemLanguage: 'zh-CN' }), 'Oct 18, 2026');
+});
+
+test('切换界面语言不改写进库里的名字：番茄标签、录音名、归档文件名', async () => {
+  const at = new Date(2026, 9, 18, 9, 5, 7);
+  for (const language of ['en', 'zh']) {
+    const pulse = load({ language });
+    assert.equal(pulse.memoHelpers.memoRecordingName('audio/webm', at), '录音 20261018090507.webm');
+    const names = [];
+    const plugin = Object.create(pulse.prototype);
+    plugin.settings = { reviewArchiveFolder: 'reviews' };
+    plugin.app = { vault: { adapter: { exists: async () => false }, create: async (p) => { names.push(p); }, createFolder: async () => {} }, workspace: { openLinkText() {} } };
+    await plugin.archiveWeeklyReviewToVault(review, '2026-10-12', '2026-10-18');
+    assert.match(names[0] || '', /^reviews\/\d{4}-W\d{2}-知识工作周报\.md$/, `${language}: ${names[0]}`);
+  }
+  assert.match(SOURCE, /const MEMO_POMODORO_TAG = "番茄";/);
 });
 
 test('英文界面：新装的速记段落标题用英文，已有设置不改', () => {

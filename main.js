@@ -6,15 +6,17 @@
 const { Plugin, ItemView, Setting, PluginSettingTab, Notice, TFile, Modal, MarkdownRenderer = null, Component = null, AbstractInputSuggest = null, Platform = {}, addIcon = (() => {}), setIcon = (() => {}), Menu = null, moment = null, getLanguage = null } = require("obsidian");
 
 /* 界面语言跟随 Obsidian：中文界面（含繁体）显示中文，其他语言显示英文。Obsidian 改语言要重启，加载时读一次即可。
-   旧版没有 getLanguage 时读 localStorage 的 language，没存就是英文；两者都取不到（测试环境）按中文。
-   只翻译界面和报告；写进笔记、会被再次解析的格式（速记块、ANKS 采集件和回链）不随语言变化。 */
+   旧版（1.8.7 前）没有 getLanguage：读 localStorage 的 language；没存表示跟随系统，和 Obsidian 一样回退 navigator.language。
+   只翻译界面和报告；写进库里的东西（速记块、ANKS 采集件、番茄标签、录音和周报文件名）不随语言变化，切换语言后不会分裂成两套。 */
 function detectPulseLanguage() {
   try { if (typeof getLanguage === "function") return String(getLanguage() || "en"); } catch (_) { /* 取不到时往下找 */ }
   try {
     const storage = typeof window !== "undefined" ? window.localStorage : null;
-    if (storage) return String(storage.getItem("language") || "en");
+    const stored = storage ? storage.getItem("language") : null;
+    if (stored) return String(stored);
   } catch (_) { /* 无法访问 localStorage */ }
-  return "zh";
+  try { if (typeof navigator !== "undefined" && navigator.language) return String(navigator.language); } catch (_) { /* 取不到系统语言 */ }
+  return "zh"; // 真实环境总有 navigator.language，走到这里只会是测试环境
 }
 const PULSE_ZH = /^zh\b/i.test(detectPulseLanguage());
 const tr = (zh, en) => (PULSE_ZH ? zh : en);
@@ -31,8 +33,8 @@ const PULSE_ROOT_DIR = tr("(根目录)", "(root)");
 const PULSE_OTHER_GROUP = tr("其他", "Other");
 // 新装时日笔记里速记段落的默认标题；已保存的设置不受影响
 const MEMO_DEFAULT_HEADING = tr("## 速记", "## Memos");
-// 番茄钟休息时自动加的标签
-const MEMO_POMODORO_TAG = tr("番茄", "pomodoro");
+// 番茄钟休息时自动加的标签：写进速记正文，不随界面语言变化
+const MEMO_POMODORO_TAG = "番茄";
 // 速记面板「高级筛选」按钮的标签，渲染后还要按它找回按钮
 const MEMO_FILTER_LABEL = tr("高级筛选", "Advanced filters");
 const MEMO_DICTATE_LABEL = tr("实时听写（点一下开始，再点结束）", "Live dictation (click to start, click again to stop)");
@@ -2043,7 +2045,7 @@ class CrispPulsePlugin extends Plugin {
     }
     const targetFolder = rawFolder.replace(/^\/+|\/+$/g, "");
     const isoWeek = getIsoWeekString(new Date());
-    const fileName = report?.fileName || tr(`${isoWeek}-知识工作周报.md`, `${isoWeek}-Weekly Review.md`);
+    const fileName = report?.fileName || `${isoWeek}-知识工作周报.md`;
     const fullPath = targetFolder ? `${targetFolder}/${fileName}` : fileName;
 
     if (targetFolder && this.app?.vault?.adapter) {
@@ -2900,7 +2902,7 @@ class CrispPulsePlugin extends Plugin {
     const frontmatter = ['---', 'type: review', 'review_type: content-data', ...(topic ? [`topic: ${JSON.stringify(topic)}`] : []),
       `created: ${getTodayKey()}`, `period_start: ${start}`, `period_end: ${end}`, `data_quality_scope: ${model.scope}`, 'generator: crisp-pulse', '---', ''];
     return this.archiveWeeklyReviewToVault(model.current, start, end, {
-      fileName: tr(`${start}_${end}-${model.scope}-知识工作复盘.md`, `${start}_${end}-${model.scope}-Knowledge Work Review.md`),
+      fileName: `${start}_${end}-${model.scope}-知识工作复盘.md`, // 文件名不随界面语言变化，避免同一期归档出两份
       content: frontmatter.join('\n') + '\n' + generateReviewReport(model)
     });
   }
@@ -5359,7 +5361,7 @@ class CrispPulseView extends ItemView {
       const title = `${tr(`第 ${weekNo} 周`, `Week ${weekNo}`)} · ${range}`;
       if (!week.recorded) return week.span > 1 ? `${week.start.slice(5).replace('-', '/')}–${week.end.slice(5).replace('-', '/')} · ${tr(`连续 ${week.span} 周未记录`, `${week.span} weeks not recorded`)}` : `${title} · ${tr('未记录', 'not recorded')}`;
       const parts = strata.folders.filter(name => week.counts[name]).map(name => `${name} ${Math.round(week.counts[name] / week.total * 100)}%`);
-      return `${title} · ${tr(`新增 ${Number(week.words).toLocaleString(PULSE_NUMBER_LOCALE)} 词`, `${Number(week.words).toLocaleString('en-US')} words added`)}` + (parts.length ? ` · ${parts.join(' · ')}` : '');
+      return `${title} · ${tr(`新增 ${Number(week.words).toLocaleString(PULSE_NUMBER_LOCALE)} 词`, `${Number(week.words).toLocaleString(PULSE_NUMBER_LOCALE)} words added`)}` + (parts.length ? ` · ${parts.join(' · ')}` : '');
     };
     const targets = layers.map((layer, k) => {
       const target = draw('rect', { x: left, y: layer.top, width: right - left, height: layer.bottom - layer.top, class: 'pulse-chart-target pulse-strata-target', role: 'img', tabindex: k === 0 ? 0 : -1, 'aria-label': describe(layer.week) });
@@ -7279,7 +7281,7 @@ function memoStamp(now) {
 /** 录音文件名：扩展名跟随浏览器实际录出的格式（桌面多为 webm，iOS 为 m4a）。 */
 function memoRecordingName(mime, now = new Date()) {
   const ext = /mp4|aac|m4a/.test(mime || "") ? "m4a" : /ogg/.test(mime || "") ? "ogg" : "webm";
-  return `${tr("录音", "Recording")} ${memoStamp(now)}.${ext}`;
+  return `录音 ${memoStamp(now)}.${ext}`;
 }
 
 /** 附件文件名：剪贴板截图没有像样的名字，按 Obsidian 的习惯命名为 Pasted image 时间戳。 */
@@ -9426,7 +9428,7 @@ class CrispPulseMemoView extends ItemView {
     head.createSpan({ cls: "crisp-pulse-memo-section-title", text: tr(`今日回顾 · ${review.length} 条`, `Today’s review · ${review.length}`) });
     const again = head.createEl("button", { cls: "crisp-pulse-memo-chip", text: tr("换一批", "Shuffle") });
     again.addEventListener("click", () => { this.reviewBatch = (this.reviewBatch || 0) + 1; this.render(); });
-    const scope = [tags.length ? tags.map((t) => `#${t}`).join(" ") : tr("全部标签", "All tags"), Number(s.memoReviewWithinDays) ? tr(`近 ${s.memoReviewWithinDays} 天`, `last ${s.memoReviewWithinDays} days`) : tr("全部时间", "All time")].join(" · ");
+    const scope = [tags.length ? tags.map((t) => `#${t}`).join(" ") : tr("全部标签", "All tags"), Number(s.memoReviewWithinDays) ? tr(`近 ${s.memoReviewWithinDays} 天`, `last ${plural(Number(s.memoReviewWithinDays), "day")}`) : tr("全部时间", "All time")].join(" · ");
     root.createDiv({ cls: "crisp-pulse-memo-muted", text: tr(`范围：${scope}（在设置里调整）。同一天打开看到的是同一组。`, `Scope: ${scope} (change it in Settings). You see the same set all day.`) });
     const box = root.createDiv({ cls: "crisp-pulse-memo-timeline" });
     if (!review.length) box.createDiv({ cls: "crisp-pulse-memo-empty", text: tr("还没有可回顾的旧速记。今天记下的内容，从明天起会出现在这里。", "No older memos to review yet. What you capture today will show up here from tomorrow.") });
