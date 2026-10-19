@@ -69,7 +69,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8').replace(PUBLIC_PEM_RE, '`' + LOCAL_PUBLIC_PEM + '`') +
-    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined,splitActiveInterval:typeof splitActiveInterval === "function" ? splitActiveInterval : undefined,buildHourlyProfile:typeof buildHourlyProfile === "function" ? buildHourlyProfile : undefined};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined,splitActiveInterval:typeof splitActiveInterval === "function" ? splitActiveInterval : undefined,buildHourlyProfile:typeof buildHourlyProfile === "function" ? buildHourlyProfile : undefined,getReviewClues,reviewWeekRange};',
     context
   );
   const Pulse = context.module.exports;
@@ -1257,19 +1257,71 @@ test('range reports keep quality scopes separate in filenames and reject escapin
 test('period navigation and draft input are wired to the live review model', async()=>{
  const {p,helpers}=setup();await p.loadPluginData();
  function element(tag='div',options={}){
-  const el={tag,options,children:[],dataset:{},attrs:{},handlers:{},value:'',setAttr(k,v){this.attrs[k]=v;},addEventListener(k,v){this.handlers[k]=v;},setText(v){this.text=v;}};
+  const el={tag,options,children:[],dataset:{},attrs:{...(options.attr||{})},handlers:{},style:{},value:'',setAttr(k,v){this.attrs[k]=v;},addEventListener(k,v){this.handlers[k]=v;},setText(v){this.text=v;},empty(){this.children=[];}};
   el.createEl=(t,o={})=>{const child=element(t,o);el.children.push(child);return child;};
   el.createDiv=o=>el.createEl('div',o);el.createSpan=o=>el.createEl('span',o);return el;
  }
  const all=e=>[e,...e.children.flatMap(all)];const view=new helpers.CrispPulseView({},p);view.app=p.app;let renders=0;view.render=()=>renders++;
+ // 默认打开最近一个完整自然周（设置默认周日开始；今天 2026-09-08 是周二）。
  let root=element();view.renderRetrospectivePanel(root);
+ assert.deepEqual([view.reviewStart,view.reviewEnd],['2026-08-30','2026-09-05']);
+ view.reviewStart='2026-09-02';view.reviewEnd='2026-09-08';
+ root=element();view.renderRetrospectivePanel(root);
  const fields=all(root);const progress=fields.find(e=>e.dataset.reviewField==='progress');
  progress.value='A verified finding';progress.handlers.input();
  assert.equal(p.getReviewModel('2026-09-02','2026-09-08','reliable').draft.progress,'A verified finding');
  progress.handlers.compositionstart();assert.equal(view.reviewComposing,true);progress.handlers.compositionend();assert.equal(view.reviewComposing,false);
- fields.find(e=>e.options.text==='前一个周期').handlers.click();assert.equal(view.reviewStart,'2026-08-26');assert.equal(view.reviewEnd,'2026-09-01');assert.equal(renders,1);
+ fields.find(e=>e.attrs['aria-label']==='前一个周期').handlers.click();assert.equal(view.reviewStart,'2026-08-26');assert.equal(view.reviewEnd,'2026-09-01');assert.equal(renders,1);
  root=element();view.renderRetrospectivePanel(root);assert.equal(all(root).find(e=>e.dataset.reviewField==='progress').value,'');
+ // 写过的草稿出现在「历史复盘」里，选中即回到那一期。
+ const history=all(root).find(e=>e.attrs['aria-label']==='历史复盘');
+ assert.ok(history.children.some(o=>o.options.value==='2026-09-02:2026-09-08'));
+ history.value='2026-09-02:2026-09-08';history.handlers.change();assert.deepEqual([view.reviewStart,view.reviewEnd],['2026-09-02','2026-09-08']);
  const input=all(root).find(e=>e.dataset.reviewField==='period-start');input.value='2026-08-20';input.handlers.input();all(root).find(e=>e.options.text==='应用日期').handlers.click();assert.equal(view.reviewStart,'2026-08-20');
+});
+
+test('natural weeks keep fixed boundaries and clip the running week to today', ()=>{
+ const {helpers}=setup();const week=(...args)=>({...helpers.reviewWeekRange(...args)});
+ assert.deepEqual(week('2026-10-19','monday',-1),{start:'2026-10-12',end:'2026-10-18'});
+ assert.deepEqual(week('2026-10-19','monday',0),{start:'2026-10-19',end:'2026-10-19'});
+ assert.deepEqual(week('2026-10-21','monday',0),{start:'2026-10-19',end:'2026-10-21'});
+ assert.deepEqual(week('2026-10-19','sunday',-1),{start:'2026-10-11',end:'2026-10-17'});
+ // 同一周里哪天打开，上一周都是同一个区间，草稿键不漂移。
+ for(const day of ['2026-10-19','2026-10-22','2026-10-25'])assert.deepEqual(week(day,'monday',-1),{start:'2026-10-12',end:'2026-10-18'});
+});
+
+test('review clues stay factual: capped at three, no memo clue when memos are unknown', ()=>{
+ const {helpers}=setup();const clues=helpers.getReviewClues;
+ const files=[{path:'Topics/a/Report.md',words:5808,rewrittenWords:20,captureWords:5740,days:2,created:true,tasks:0},{path:'Core/b.md',words:320,rewrittenWords:400,captureWords:0,days:3,created:false,tasks:0}];
+ const model=(current={},previous={})=>({current:{coverage:{recorded:7},wordsAdded:6128,notesCreated:9,focusMinutes:150,allFiles:files,...current},previous:{coverage:{recorded:7},focusMinutes:25,...previous}});
+ const memos={total:11,converted:0,pending:Array.from({length:11},(_,i)=>({id:String(i)}))};
+ const full=clues(model(),{memos,carry:2});
+ assert.equal(full.length,3);
+ assert.deepEqual([...full.map(c=>c.key)],['carry','focus-file','memos']);
+ assert.match(full[1].title,/Report/);assert.match(full[1].detail,/5,808 \/ 6,128/);
+ assert.match(full[2].title,/11/);
+ // 速记读取失败或尚未读取：不出速记线索，也不说成 0 条。
+ for(const unknown of [null,{error:'boom'}])assert.ok(!clues(model(),{memos:unknown}).some(c=>c.key==='memos'));
+ assert.ok(!clues(model(),{memos:{total:3,converted:3,pending:[]}}).some(c=>c.key==='memos'));
+ // 新增不集中时不点名某篇，改给新建入口；专注给绝对差，不给倍数。
+ const spread=clues(model({allFiles:[{...files[1],words:100}],wordsAdded:6128}));
+ assert.ok(!spread.some(c=>c.key==='focus-file'));assert.ok(spread.some(c=>c.key==='created'));
+ const focus=spread.find(c=>c.key==='focus');assert.match(focus.title,/多 125 分钟/);assert.doesNotMatch(focus.title,/%/);
+ // 上一期没有记录时，不比较专注。
+ assert.doesNotMatch(clues(model({},{coverage:{recorded:0}})).find(c=>c.key==='focus').title,/上期/);
+ // 没有可用记录：只给一条中性提示。
+ const empty=clues(model({coverage:{recorded:0}}),{memos,carry:2});assert.equal(empty.length,1);assert.equal(empty[0].key,'empty');
+});
+
+test('exported report carries the memo summary, and says so when memos could not be read', async()=>{
+ const {p}=setup();await p.loadPluginData();
+ const report=p.constructor.generateReviewReport;
+ const model=p.getReviewModel('2026-09-02','2026-09-08','all');
+ assert.doesNotMatch(report(model),/速记与转化/);
+ model.memos={total:4,converted:2,toTasks:1,tasksDone:1,tasksOpen:0,tasksMissing:0,tasksUnknown:0,toNotes:2,toNow:0,pending:[]};
+ const text=report(model);assert.match(text,/## 速记与转化/);assert.match(text,/本期记下 4 条，已转化 2 条/);assert.match(text,/转为任务 1 条（完成 1，未完成 0）/);
+ model.memos={error:'disk'};assert.match(report(model),/速记读取失败，未计入/);
+ model.memos={total:2,converted:1,toTasks:1,tasksDone:0,tasksOpen:0,tasksMissing:0,tasksUnknown:1,toNotes:0,toNow:0,pending:[]};assert.match(report(model),/完成情况未知/);
 });
 
 // 1.7: source provenance, cross-period actions, cited review evidence.

@@ -824,6 +824,26 @@
 .crisp-pulse-cell.is-outside-range:focus-visible { opacity: 0.85; }
 
 /* Analytics: quiet axes, generous spacing, and independent measured series. */
+/* The review workspace draws with the same palette as analytics. */
+.crisp-pulse-review-workspace {
+  --pulse-chart-blue: #3075ce;
+  --pulse-chart-orange: #d98a37;
+  --pulse-chart-green: #48a27c;
+  --pulse-chart-purple: #7b5cc8;
+  --pulse-chart-rose: #d0577a;
+  --pulse-chart-teal: #2f97a3;
+  --pulse-chart-gray: #8a8f98;
+  --pulse-chart-faint: var(--background-modifier-border);
+}
+.theme-dark .crisp-pulse-review-workspace {
+  --pulse-chart-blue: #6b9feb;
+  --pulse-chart-orange: #edac68;
+  --pulse-chart-green: #79c4a0;
+  --pulse-chart-purple: #a48ef0;
+  --pulse-chart-rose: #ec87a4;
+  --pulse-chart-teal: #62c0ca;
+  --pulse-chart-gray: #8d939c;
+}
 .crisp-pulse-analytics {
   --pulse-chart-blue: #3075ce;
   --pulse-chart-orange: #d98a37;
@@ -1065,58 +1085,18 @@
   .crisp-pulse-topfile-item > .crisp-pulse-file-meta { margin-left: 0; }
 }
 
-/* Review workspace: local evidence, adjacent periods and editable reports. */
+/* Review workspace: shared basics; the redesigned layout lives with the v2 tray styles. */
 .crisp-pulse-review-workspace { min-width: 0; }
-.crisp-pulse-review-workspace h2 { margin: 0 0 8px; font-size: 22px; }
-.crisp-pulse-review-workspace h3 { margin: 0 0 12px; font-size: 17px; }
-.crisp-pulse-review-section { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); }
 .crisp-pulse-review-note { color: var(--text-muted); font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
 .crisp-pulse-review-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: 12px 0; min-width: 0; }
 .crisp-pulse-review-controls label, .crisp-pulse-review-drafts label { display: flex; flex-direction: column; gap: 8px; font-size: 13px; min-width: 0; }
 .crisp-pulse-review-controls input, .crisp-pulse-review-controls select { min-width: 0; max-width: 100%; }
-.crisp-pulse-review-controls select { flex: 0 1 320px; }
-.crisp-pulse-review-comparison { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.crisp-pulse-review-files { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; }
-.crisp-pulse-review-workspace button.crisp-pulse-review-file { display: flex; flex-direction: column; align-items: stretch; text-align: left; white-space: normal; height: auto; padding: 12px; box-shadow: none; background: transparent; border: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); border-radius: 10px; gap: 4px; }
-.crisp-pulse-review-workspace button.crisp-pulse-review-file:hover { background: var(--background-modifier-hover); }
-.crisp-pulse-review-file-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.crisp-pulse-review-path { flex: none; max-width: 100%; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }
-.crisp-pulse-review-dir { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-faint); }
-.crisp-pulse-review-drafts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.crisp-pulse-review-drafts textarea { width: 100%; min-height: 104px; resize: vertical; line-height: 1.6; padding: 12px; background: var(--pulse-ui-soft, var(--background-secondary)); color: var(--text-normal); }
-.crisp-pulse-review-workspace :is(button,input,select,textarea):focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
-.crisp-pulse-review-memos .crisp-pulse-review-comparison { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.crisp-pulse-review-memo-results { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
-.crisp-pulse-review-workspace button.crisp-pulse-review-memo-result { display: flex; align-items: baseline; gap: 8px; height: auto; padding: 8px 12px; text-align: left; white-space: normal; box-shadow: none; background: transparent; border: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); border-radius: 10px; }
-.crisp-pulse-review-workspace button.crisp-pulse-review-memo-result:hover { background: var(--background-modifier-hover); }
-.crisp-pulse-review-memo-kind { flex: none; font-size: var(--font-ui-smaller); color: var(--text-muted); }
-.crisp-pulse-review-memo-text { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
-@container (max-width: 600px) {
-  .crisp-pulse-review-comparison, .crisp-pulse-review-memos .crisp-pulse-review-comparison { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .crisp-pulse-review-drafts { grid-template-columns: minmax(0, 1fr); }
-}
-@container (max-width: 340px) {
-  .crisp-pulse-review-comparison { grid-template-columns: minmax(0, 1fr); }
-}
-.crisp-pulse-view .crisp-pulse-review-workspace { display: block; }
-.crisp-pulse-review-workspace > .crisp-pulse-review-note { margin: 8px 0 16px; }
-
-/* Review follow-through and captured evidence. */
-.crisp-pulse-review-sources { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.crisp-pulse-review-action-list, .crisp-pulse-review-evidence-list { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
-.crisp-pulse-review-action, .crisp-pulse-review-evidence { padding: 14px; border: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); border-radius: 12px; min-width: 0; }
-.crisp-pulse-review-action .crisp-pulse-review-controls { margin: 4px 0 8px; }
-.crisp-pulse-review-controls input[type="text"] { flex: 1 1 220px; width: 100%; }
-.crisp-pulse-review-action select { flex: 0 1 100px; }
-.crisp-pulse-view button.crisp-pulse-review-evidence-link { white-space: normal; height: auto; overflow-wrap: anywhere; max-width: 100%; text-align: left; }
-.crisp-pulse-review-quote { white-space: pre-wrap; overflow-wrap: anywhere; margin: 12px 0 0; padding: 0 12px; border-left: 2px solid var(--interactive-accent); color: var(--text-muted); }
+.crisp-pulse-review-workspace :is(button,input,select,textarea,summary):focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
 .crisp-pulse-evidence-modal { display: flex; flex-direction: column; gap: 12px; }
 .crisp-pulse-evidence-modal :is(input,textarea) { width: 100%; min-width: 0; }
 .crisp-pulse-evidence-modal textarea { resize: vertical; line-height: 1.6; }
 .crisp-pulse-evidence-choices { max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 .crisp-pulse-evidence-choices button { white-space: normal; height: auto; text-align: left; padding: 8px; overflow-wrap: anywhere; }
-@container (max-width: 700px) { .crisp-pulse-review-sources { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@container (max-width: 340px) { .crisp-pulse-review-sources { grid-template-columns: minmax(0, 1fr); } }
 
 /* 活跃时段：24 小时条与星期 × 小时矩阵，色阶取主题强调色。 */
 .crisp-pulse-analytics-card:has(.pulse-hours-strip) {
@@ -2447,27 +2427,183 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 @container (max-width: 520px) {
   .crisp-pulse-view.pulse-v2 .pulse-v2-inset.crisp-pulse-review-section { padding: 16px 14px; }
 }
-/* Review figures read as a divided strip like the dashboard, not as filled tiles (a third layer). */
-.crisp-pulse-view.pulse-v2 .crisp-pulse-review-workspace :is(.crisp-pulse-review-comparison, .crisp-pulse-review-sources) { column-gap: 0; row-gap: 20px; }
-.crisp-pulse-view.pulse-v2 .crisp-pulse-review-workspace :is(.crisp-pulse-review-comparison, .crisp-pulse-review-sources) > .crisp-pulse-stat-box {
-  background: transparent; border: 0; border-left: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); border-radius: 0; box-shadow: none; padding: 2px 18px; gap: 6px;
-}
-.crisp-pulse-view.pulse-v2 .crisp-pulse-review-workspace :is(.crisp-pulse-review-comparison, .crisp-pulse-review-sources) .crisp-pulse-stat-label { min-height: 0; color: var(--text-muted); font-size: 12.5px; font-weight: 400; }
-.crisp-pulse-view.pulse-v2 .crisp-pulse-review-workspace :is(.crisp-pulse-review-comparison, .crisp-pulse-review-sources) .crisp-pulse-stat-value { font-family: var(--font-monospace); font-size: 20px; font-weight: 500; }
-.crisp-pulse-view.pulse-v2 .crisp-pulse-review-comparison > .crisp-pulse-stat-box:nth-child(3n + 1),
-.crisp-pulse-view.pulse-v2 .crisp-pulse-review-sources > .crisp-pulse-stat-box:nth-child(4n + 1) { border-left: 0; padding-left: 2px; }
-@container (max-width: 700px) {
-  .crisp-pulse-view.pulse-v2 .crisp-pulse-review-sources > .crisp-pulse-stat-box:nth-child(n) { border-left: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); padding-left: 18px; }
-  .crisp-pulse-view.pulse-v2 .crisp-pulse-review-sources > .crisp-pulse-stat-box:nth-child(odd) { border-left: 0; padding-left: 2px; }
-}
-@container (max-width: 600px) {
-  .crisp-pulse-view.pulse-v2 .crisp-pulse-review-comparison > .crisp-pulse-stat-box:nth-child(n) { border-left: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); padding-left: 18px; }
-  .crisp-pulse-view.pulse-v2 .crisp-pulse-review-comparison > .crisp-pulse-stat-box:nth-child(odd) { border-left: 0; padding-left: 2px; }
-}
-@container (max-width: 340px) {
-  .crisp-pulse-view.pulse-v2 :is(.crisp-pulse-review-comparison, .crisp-pulse-review-sources) > .crisp-pulse-stat-box:nth-child(n) { border-left: 0; padding-left: 2px; }
+/* Knowledge review: period bar, clue cards, then materials beside the review notebook. */
+.crisp-pulse-view .crisp-pulse-review-workspace button { cursor: pointer; }
+.crisp-pulse-view .crisp-pulse-review-workspace button:disabled { cursor: default; }
+.crisp-pulse-view .crisp-pulse-review-icon-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border-radius: 9px; background: transparent; border: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); box-shadow: none; color: var(--text-muted); }
+.crisp-pulse-view .crisp-pulse-review-icon-btn:hover:not(:disabled) { color: var(--text-normal); background: var(--background-modifier-hover); }
+.crisp-pulse-view .crisp-pulse-review-icon-btn:disabled { opacity: .35; }
+.crisp-pulse-view .crisp-pulse-review-icon-btn svg { width: 16px; height: 16px; }
+.crisp-pulse-view .crisp-pulse-review-icon-btn.is-small { width: 24px; height: 24px; border: 0; border-radius: 7px; }
+.crisp-pulse-view .crisp-pulse-review-icon-btn.is-small svg { width: 14px; height: 14px; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-inset.crisp-pulse-review-period { padding: 16px 20px; }
+.crisp-pulse-review-period-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px 24px; flex-wrap: wrap; }
+.crisp-pulse-review-period-nav { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.crisp-pulse-review-period-label { min-width: 0; }
+.crisp-pulse-review-period-range { font-family: var(--font-monospace); font-size: 22px; font-weight: 500; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.crisp-pulse-review-period-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.crisp-pulse-view.pulse-v2 .crisp-pulse-review-workspace .pulse-v2-seg { margin-bottom: 0; }
+.crisp-pulse-view .crisp-pulse-review-history { max-width: 240px; }
+.crisp-pulse-review-custom { margin-top: 10px; font-size: 12.5px; color: var(--text-muted); }
+.crisp-pulse-review-custom > summary { cursor: pointer; width: max-content; border-radius: 6px; }
+.crisp-pulse-review-custom .crisp-pulse-review-controls { margin: 10px 0 0; }
+
+.crisp-pulse-view.pulse-v2 .pulse-v2-inset.crisp-pulse-review-clue-inset { padding: 0; background: transparent; box-shadow: none !important; }
+.crisp-pulse-review-clues { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; }
+.crisp-pulse-review-clue { position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 16px 18px 14px 20px; border-radius: 14px; background: var(--pulse-ui-surface, var(--background-primary)); box-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 0 0 1px color-mix(in srgb, var(--text-normal) 5%, transparent); overflow: hidden; }
+.crisp-pulse-review-clue-mark { position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; border-radius: 0 3px 3px 0; }
+.crisp-pulse-review-clue-title { font-size: 14px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+.crisp-pulse-review-clue-detail { flex: 1; color: var(--text-muted); font-size: 12.5px; line-height: 1.6; font-variant-numeric: tabular-nums; }
+.crisp-pulse-view .crisp-pulse-review-clue-go { align-self: flex-start; height: auto; margin-top: 4px; padding: 2px 0; background: none; border: 0; box-shadow: none; color: var(--pulse-ui-accent, var(--interactive-accent)); font-size: 12.5px; font-weight: 500; }
+.crisp-pulse-view .crisp-pulse-review-clue-go:hover { text-decoration: underline; }
+
+.crisp-pulse-review-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+.crisp-pulse-review-main, .crisp-pulse-review-side { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+/* Wide panes: the notebook stays in reach while the materials scroll past. */
+@container (min-width: 1060px) {
+  .crisp-pulse-review-grid { grid-template-columns: minmax(0, 1.5fr) minmax(340px, 1fr); }
+  .crisp-pulse-review-side { position: sticky; top: 12px; max-height: calc(100vh - 140px); overflow-y: auto; scrollbar-width: thin; padding: 2px; margin: -2px; }
 }
 
+/* Period comparison: one pair of bars per metric, each on its own scale. */
+.crisp-pulse-review-changes { display: flex; flex-direction: column; }
+.crisp-pulse-view .crisp-pulse-review-change { display: grid; grid-template-columns: 92px minmax(0, 1fr) minmax(150px, auto); align-items: center; gap: 16px; width: 100%; height: auto; margin: 0; padding: 10px 8px; border: 0; border-radius: 10px; background: transparent; box-shadow: none; text-align: left; color: var(--text-normal); font-weight: 400; }
+.crisp-pulse-view button.crisp-pulse-review-change:hover { background: var(--background-modifier-hover); }
+.crisp-pulse-review-change + .crisp-pulse-review-change { border-top: 1px solid color-mix(in srgb, var(--pulse-ui-border, var(--background-modifier-border)) 60%, transparent); }
+.crisp-pulse-review-change-name { font-size: 13px; color: var(--text-muted); }
+.crisp-pulse-review-change-bars { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.crisp-pulse-review-change-track { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--text-normal) 5%, transparent); overflow: hidden; }
+.crisp-pulse-review-change-track:last-child { height: 5px; }
+.crisp-pulse-review-change-fill { height: 100%; border-radius: 999px; }
+.crisp-pulse-review-change-fill.is-previous, .crisp-pulse-review-dot-previous { background: color-mix(in srgb, var(--text-normal) 24%, transparent); }
+.crisp-pulse-review-change-figures { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.crisp-pulse-review-change-value { font-family: var(--font-monospace); font-size: 15px; font-weight: 500; }
+.crisp-pulse-review-change-delta { font-size: 12px; color: var(--text-muted); }
+.crisp-pulse-review-change-delta.is-up { color: var(--color-green, var(--text-success)); }
+.crisp-pulse-review-change-delta.is-down { color: var(--text-muted); }
+.crisp-pulse-review-change-prev { font-size: 11px; color: var(--text-faint); }
+.crisp-pulse-review-legend { margin-top: 14px; gap: 8px 18px; }
+
+/* Materials: folder bars drill down, then a short list of notes with a metric bar each. */
+.crisp-pulse-review-crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; margin-bottom: 10px; font-size: 12.5px; }
+.crisp-pulse-view .crisp-pulse-review-crumb { height: auto; padding: 3px 6px; background: none; border: 0; box-shadow: none; color: var(--pulse-ui-accent, var(--interactive-accent)); font-size: 12.5px; border-radius: 6px; }
+.crisp-pulse-view .crisp-pulse-review-crumb:disabled { color: var(--text-normal); font-weight: 600; opacity: 1; }
+.crisp-pulse-review-crumb-sep { color: var(--text-faint); }
+.crisp-pulse-review-folders { display: flex; flex-direction: column; gap: 2px; margin-bottom: 18px; }
+.crisp-pulse-view .crisp-pulse-review-folder { display: grid; grid-template-columns: minmax(80px, 160px) minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; height: auto; padding: 6px 8px; margin: 0; border: 0; border-radius: 8px; background: transparent; box-shadow: none; color: var(--text-normal); font-size: 13px; font-weight: 400; text-align: left; }
+.crisp-pulse-view button.crisp-pulse-review-folder:hover { background: var(--background-modifier-hover); }
+.crisp-pulse-review-folder.is-static { color: var(--text-muted); }
+.crisp-pulse-review-folder-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crisp-pulse-review-folder-track { display: block; height: 10px; border-radius: 999px; background: color-mix(in srgb, var(--text-normal) 4%, transparent); overflow: hidden; }
+.crisp-pulse-review-folder-fill { display: block; height: 100%; border-radius: 999px; }
+.crisp-pulse-review-folder-meta { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.crisp-pulse-view.pulse-v2 .crisp-pulse-review-modes { margin-bottom: 8px; }
+.crisp-pulse-review-files { display: flex; flex-direction: column; margin: 4px 0 0; }
+.crisp-pulse-review-file { display: flex; align-items: center; gap: 8px; min-width: 0; border-radius: 10px; }
+.crisp-pulse-review-file + .crisp-pulse-review-file { border-top: 1px solid color-mix(in srgb, var(--pulse-ui-border, var(--background-modifier-border)) 60%, transparent); }
+.crisp-pulse-view .crisp-pulse-review-file-open { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 5px; height: auto; padding: 10px 8px; margin: 0; border: 0; border-radius: 10px; background: transparent; box-shadow: none; text-align: left; white-space: normal; color: var(--text-normal); font-weight: 400; }
+.crisp-pulse-view .crisp-pulse-review-file-open:hover { background: var(--background-modifier-hover); }
+.crisp-pulse-review-file-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.crisp-pulse-review-path { flex: none; max-width: 100%; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }
+.crisp-pulse-review-dir { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-faint); }
+.crisp-pulse-review-tag { flex: none; padding: 0 6px; border-radius: 999px; font-size: 11px; line-height: 18px; color: var(--pulse-chart-rose); background: color-mix(in srgb, var(--pulse-chart-rose) 12%, transparent); }
+.crisp-pulse-review-file-track { display: block; height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--text-normal) 4%, transparent); overflow: hidden; }
+.crisp-pulse-review-file-fill { display: block; height: 100%; border-radius: 999px; background: var(--pulse-ui-accent, var(--interactive-accent)); opacity: .7; }
+.crisp-pulse-view .crisp-pulse-review-cite, .crisp-pulse-view .crisp-pulse-review-outcome-pick { flex: none; height: auto; padding: 4px 10px; border-radius: 8px; font-size: 12px; background: transparent; border: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); box-shadow: none; color: var(--text-muted); }
+.crisp-pulse-view .crisp-pulse-review-cite:hover:not(:disabled), .crisp-pulse-view .crisp-pulse-review-outcome-pick:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
+.crisp-pulse-view .crisp-pulse-review-cite:disabled { border-color: transparent; color: var(--text-faint); opacity: 1; }
+.crisp-pulse-view .crisp-pulse-review-more { align-self: flex-start; height: auto; margin-top: 8px; padding: 4px 8px; background: none; border: 0; box-shadow: none; color: var(--pulse-ui-accent, var(--interactive-accent)); font-size: 12.5px; }
+
+/* Memo flow: the period's memos branch to tasks, notes and Now. */
+.crisp-pulse-review-flow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0 28px; }
+.crisp-pulse-review-flow-source, .crisp-pulse-review-flow-summary { position: relative; min-width: 96px; }
+.crisp-pulse-review-flow-source { padding: 14px 16px; border-radius: 12px; background: color-mix(in srgb, var(--pulse-chart-purple) 8%, transparent); }
+.crisp-pulse-review-flow-source::after { content: ""; position: absolute; left: 100%; top: 50%; width: 14px; border-top: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); }
+.crisp-pulse-review-flow-big { font-family: var(--font-monospace); font-size: 26px; font-weight: 500; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.crisp-pulse-review-flow-of { font-size: 15px; color: var(--text-muted); }
+.crisp-pulse-review-flow-branches { position: relative; display: flex; flex-direction: column; padding-left: 14px; }
+.crisp-pulse-review-flow-branches::before { content: ""; position: absolute; left: 0; top: 17px; bottom: 17px; border-left: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); }
+.crisp-pulse-review-flow-branch { position: relative; display: grid; grid-template-columns: 9px 72px minmax(40px, 1fr) 28px; grid-template-areas: "dot name track count" ". note note note"; align-items: center; column-gap: 10px; min-height: 34px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.crisp-pulse-review-flow-branch::before { content: ""; position: absolute; left: -14px; top: 17px; width: 10px; border-top: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); }
+.crisp-pulse-review-flow-branch > .pulse-chart-dot { grid-area: dot; }
+.crisp-pulse-review-flow-name { grid-area: name; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crisp-pulse-review-flow-track { grid-area: track; display: block; height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--text-normal) 4%, transparent); overflow: hidden; }
+.crisp-pulse-review-flow-fill { display: block; height: 100%; border-radius: 999px; }
+.crisp-pulse-review-flow-fill.is-pending { background: repeating-linear-gradient(135deg, var(--text-faint) 0 2px, transparent 2px 4px); }
+.crisp-pulse-review-flow-count { grid-area: count; text-align: right; font-family: var(--font-monospace); }
+.crisp-pulse-review-flow-note { grid-area: note; margin: -4px 0 6px; color: var(--text-faint); font-size: 11.5px; }
+.crisp-pulse-review-flow-branch.is-zero { color: var(--text-faint); }
+.crisp-pulse-review-memo-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 8px 20px; margin-top: 18px; }
+.crisp-pulse-review-memo-results { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.crisp-pulse-review-memo-results > .crisp-pulse-stat-label { color: var(--text-muted); font-size: 12px; margin-bottom: 4px; }
+.crisp-pulse-view .crisp-pulse-review-memo-result { display: flex; align-items: baseline; gap: 10px; width: 100%; height: auto; padding: 7px 8px; margin: 0; text-align: left; white-space: normal; box-shadow: none; background: transparent; border: 0; border-radius: 8px; color: var(--text-normal); font-weight: 400; }
+.crisp-pulse-view .crisp-pulse-review-memo-result:hover { background: var(--background-modifier-hover); }
+.crisp-pulse-review-memo-kind { flex: none; font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.crisp-pulse-review-memo-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+
+/* Source mix reuses the analytics stacked bar. */
+.crisp-pulse-view .crisp-pulse-review-mix { margin: 6px 0 16px; }
+.crisp-pulse-review-mix-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 2px 16px; }
+.crisp-pulse-view .crisp-pulse-review-mix-item { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto 44px; align-items: center; gap: 10px; width: 100%; height: auto; padding: 6px 8px; margin: 0; border: 0; border-radius: 8px; background: transparent; box-shadow: none; color: var(--text-normal); font-size: 13px; font-weight: 400; text-align: left; font-variant-numeric: tabular-nums; }
+.crisp-pulse-view button.crisp-pulse-review-mix-item:hover { background: var(--background-modifier-hover); }
+.crisp-pulse-review-mix-item.is-zero { color: var(--text-faint); }
+.crisp-pulse-review-mix-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crisp-pulse-review-mix-value { color: var(--text-muted); font-size: 12px; }
+.crisp-pulse-review-mix-pct { text-align: right; font-weight: 550; }
+.crisp-pulse-review-system { margin: 14px 0 0; align-items: center; }
+
+/* Notebook: evidence → learning → next steps, numbered like a short form. */
+.crisp-pulse-view.pulse-v2 .pulse-v2-inset.crisp-pulse-review-notebook { display: flex; flex-direction: column; gap: 0; }
+.crisp-pulse-review-step { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 20px; }
+.crisp-pulse-review-step + .crisp-pulse-review-step { padding-top: 18px; border-top: 1px solid color-mix(in srgb, var(--pulse-ui-border, var(--background-modifier-border)) 70%, transparent); }
+.crisp-pulse-review-step-head { display: flex; align-items: baseline; gap: 10px; }
+.crisp-pulse-review-step-num { font-family: var(--font-monospace); font-size: 12px; color: var(--pulse-ui-accent, var(--interactive-accent)); }
+.crisp-pulse-review-step-title { font-size: 14.5px; font-weight: 600; }
+.crisp-pulse-review-notebook textarea, .crisp-pulse-review-notebook input[type="text"] { width: 100%; min-width: 0; color: var(--text-normal); background: var(--pulse-ui-soft, var(--background-secondary)); border: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); border-radius: 10px; }
+.crisp-pulse-review-notebook textarea { min-height: 72px; resize: vertical; line-height: 1.6; padding: 10px 12px; font-size: 13.5px; }
+.crisp-pulse-review-more-fields { margin-top: 4px; font-size: 12.5px; color: var(--text-muted); }
+.crisp-pulse-review-more-fields > summary { cursor: pointer; width: max-content; border-radius: 6px; }
+.crisp-pulse-review-drafts { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+.crisp-pulse-review-drafts label { color: var(--text-muted); font-size: 12.5px; gap: 6px; }
+.crisp-pulse-review-evidence-list, .crisp-pulse-review-action-list { display: flex; flex-direction: column; gap: 8px; }
+.crisp-pulse-review-evidence { padding: 10px 12px; border-radius: 10px; background: var(--pulse-ui-soft, var(--background-secondary)); min-width: 0; }
+.crisp-pulse-review-evidence-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.crisp-pulse-view .crisp-pulse-review-evidence-link { min-width: 0; height: auto; padding: 0; background: none; border: 0; box-shadow: none; color: var(--pulse-ui-accent, var(--interactive-accent)); font-size: 13px; font-weight: 500; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.crisp-pulse-review-quote { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 4px; padding: 0 10px; border-left: 2px solid var(--pulse-ui-accent, var(--interactive-accent)); color: var(--text-muted); font-size: 12.5px; line-height: 1.6; }
+.crisp-pulse-view .crisp-pulse-review-add { align-self: flex-start; height: auto; padding: 6px 12px; border-radius: 9px; font-size: 12.5px; background: transparent; border: 1px dashed var(--pulse-ui-border, var(--background-modifier-border)); box-shadow: none; color: var(--text-muted); }
+.crisp-pulse-view .crisp-pulse-review-add:hover:not(:disabled) { color: var(--text-normal); border-color: var(--text-faint); }
+.crisp-pulse-review-action-strip { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+.crisp-pulse-view .crisp-pulse-review-action-meter { height: 6px; margin: 2px 0 0; }
+.crisp-pulse-review-action { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; border: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); min-width: 0; }
+.crisp-pulse-review-notebook .crisp-pulse-review-action input.crisp-pulse-review-action-title { border-color: transparent; background: transparent; padding: 4px 6px; font-size: 13.5px; }
+.crisp-pulse-review-notebook .crisp-pulse-review-action input.crisp-pulse-review-action-title:hover, .crisp-pulse-review-notebook .crisp-pulse-review-action input.crisp-pulse-review-action-title:focus { background: var(--pulse-ui-soft, var(--background-secondary)); }
+.crisp-pulse-review-action.is-done input.crisp-pulse-review-action-title, .crisp-pulse-review-action.is-cancelled input.crisp-pulse-review-action-title { color: var(--text-faint); text-decoration: line-through; }
+.crisp-pulse-view.pulse-v2 .crisp-pulse-review-action-states { align-self: flex-start; }
+.crisp-pulse-view.pulse-v2 .crisp-pulse-review-action-states button { padding: 4px 10px; font-size: 12px; }
+.crisp-pulse-review-outcome { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+.crisp-pulse-view .crisp-pulse-review-outcome-link { display: inline-flex; align-items: center; gap: 6px; min-width: 0; height: auto; padding: 3px 8px; border-radius: 8px; background: color-mix(in srgb, var(--pulse-chart-green) 10%, transparent); border: 0; box-shadow: none; color: var(--text-normal); font-size: 12.5px; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.crisp-pulse-review-outcome-icon { display: inline-flex; color: var(--pulse-chart-green); }
+.crisp-pulse-review-outcome-icon svg { width: 14px; height: 14px; }
+.crisp-pulse-review-new-action { display: flex; gap: 8px; margin-top: 2px; }
+.crisp-pulse-review-new-action input[type="text"] { flex: 1; padding: 6px 10px; font-size: 13px; }
+.crisp-pulse-review-footer { margin-top: 6px; padding-top: 16px; border-top: 1px solid color-mix(in srgb, var(--pulse-ui-border, var(--background-modifier-border)) 70%, transparent); }
+.crisp-pulse-review-footer .crisp-pulse-review-controls { margin: 0 0 6px; align-items: center; }
+
+@container (max-width: 560px) {
+  .crisp-pulse-view.pulse-v2 .pulse-v2-inset.crisp-pulse-review-period { padding: 14px; }
+  .crisp-pulse-review-period-range { font-size: 18px; }
+  .crisp-pulse-view .crisp-pulse-review-change { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name figures" "bars bars"; row-gap: 6px; }
+  .crisp-pulse-review-change-name { grid-area: name; }
+  .crisp-pulse-review-change-bars { grid-area: bars; }
+  .crisp-pulse-review-change-figures { grid-area: figures; flex-direction: row; align-items: baseline; gap: 8px; }
+  .crisp-pulse-review-change-prev { display: none; }
+  .crisp-pulse-view .crisp-pulse-review-folder { grid-template-columns: minmax(70px, 34%) minmax(0, 1fr) auto; gap: 8px; }
+  .crisp-pulse-review-flow { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .crisp-pulse-review-flow-source::after { display: none; }
+  .crisp-pulse-review-flow-source { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .crisp-pulse-review-flow-summary { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .crisp-pulse-view .crisp-pulse-review-history { max-width: 100%; }
+}
 /* Month pace: progress against last month's total, a marker where last month stood today. */
 .crisp-pulse-view .pulse-pace-rows { display: flex; flex-direction: column; gap: 18px; margin-bottom: 24px; }
 .crisp-pulse-view .pulse-pace-head, .crisp-pulse-view .pulse-pace-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
