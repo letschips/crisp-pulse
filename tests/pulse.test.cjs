@@ -1070,6 +1070,16 @@ test('Animated blocks-wave icon is registered for tab header and ribbon without 
   assert.equal(view.getIcon(), helpers.CRISP_PULSE_ICON_ID);
 });
 
+test('the memo panel, ribbon and review card share the registered pen icon', async () => {
+  const { p, registeredIcons, context } = setup();
+  await p.loadPluginData();
+  const svg = registeredIcons.get('crisp-pulse-memo');
+  assert.ok(svg && svg.includes('viewBox="0 0 18 18"') && (svg.match(/<path /g) || []).length === 3, '钢笔图标已注册');
+  assert.match(svg, /var\(--icon-stroke/, '线宽跟随 Obsidian 图标粗细');
+  assert.doesNotMatch(svg, /stroke-width="/, '不写死线宽');
+  assert.equal(context.module.exports.CrispPulseMemoView.prototype.getIcon(), 'crisp-pulse-memo');
+});
+
 test('schema validation preserves large valid daily records and their legacy warning',()=>{
  const {helpers}=setup();const r=helpers.createEmptyDailyRecord('2026-09-08');r.legacyUnverified=true;r.contribution.wordsAdded=150000;r.contribution.notesCreated=1;r.contribution.score=35;r.files['Research.md']={wordsAdded:150000,created:true,tasks:0,links:0};
  const before=JSON.stringify(r);const {store}=helpers.validateAndRepairStore({trackingVersion:3,daily:{[r.date]:r}});assert.equal(JSON.stringify(store.daily[r.date]),before);

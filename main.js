@@ -400,10 +400,20 @@ const ICON_BLOCKS_WAVE_REGISTERED_SVG = buildBlocksWaveSvg(true, "");
 
 const CRISP_PULSE_ICON_ID = "crisp-pulse";
 
+// 速记图标：钢笔落笔写字（作者提供的 pen-writing2-outline）。原图是 18 单位坐标放大到 24，
+// 这里直接用 18 的 viewBox，线宽按 0.75 倍跟随 Obsidian 的 --icon-stroke，和旁边的图标一样粗。
+const CRISP_PULSE_MEMO_ICON_ID = "crisp-pulse-memo";
+const ICON_MEMO_PEN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="stroke-width: calc(var(--icon-stroke, 2px) * 0.75)" aria-hidden="true">'
+  + '<path d="M12.0467 4.93201L14.7627 6.98199"/>'
+  + '<path d="M6.53272 15.2503C6.47902 15.2503 6.4263 15.2327 6.3823 15.2C6.3247 15.1565 6.28849 15.0901 6.28369 15.0184C6.27589 14.9095 6.103 12.3289 7.3179 10.7205L12.7426 3.52591C13.1137 3.03271 13.6821 2.75 14.3012 2.75C14.728 2.75 15.1342 2.88619 15.475 3.14359C16.3334 3.79199 16.5053 5.01811 15.8568 5.87701L10.4321 13.0721C9.2182 14.6805 6.60312 15.2503 6.53272 15.2503Z"/>'
+  + '<path d="M3.38388 14.6147C2.15528 13.5762 1.82266 12.6569 1.76096 11.9801C1.56696 9.8401 3.95698 8.6991 3.94098 6.3111C3.93098 4.7791 2.93497 3.54109 2.12397 2.75009"/>'
+  + '</svg>';
+
 function crispPulseRegisterIcons() {
   try {
     if (typeof addIcon === "function") {
       addIcon(CRISP_PULSE_ICON_ID, ICON_BLOCKS_WAVE_REGISTERED_SVG);
+      addIcon(CRISP_PULSE_MEMO_ICON_ID, ICON_MEMO_PEN_SVG);
     }
   } catch (e) {
     console.warn("[Crisp Pulse] Failed to register custom icon:", e);
@@ -1497,7 +1507,7 @@ class CrispPulsePlugin extends Plugin {
     });
     this.memoDrafts = new MemoDraftStore(this.app.vault?.adapter, this.manifest?.dir || `${this.app.vault?.configDir || ".obsidian"}/plugins/crisp-pulse`);
     this.registerView(VIEW_TYPE_MEMO, (leaf) => new CrispPulseMemoView(leaf, this));
-    this.addRibbonIcon("feather", tr("打开 Crisp Pulse 速记", "Open Crisp Pulse memos"), () => this.activateMemoView());
+    this.addRibbonIcon(CRISP_PULSE_MEMO_ICON_ID, tr("打开 Crisp Pulse 速记", "Open Crisp Pulse memos"), () => this.activateMemoView());
     this.addCommand({ id: "open-memo-view", name: tr("打开速记", "Open memos"), callback: () => this.activateMemoView() });
     this.addCommand({
       id: "toggle-memo-dictation",
@@ -6714,7 +6724,7 @@ class CrispPulseView extends ItemView {
 
   /** 速记走向：本期记下的速记，现在去了任务、笔记还是 Now；一条可以去几处，已转化按速记去重。 */
   renderReviewMemos(parent, model, memoSummary, live) {
-    const section = this.reviewSection(parent, 'feather', tr('速记走到了哪里', 'Where your memos went'), tr('本期记下的速记，现在转成了什么。一条可以同时去几处，已转化按速记去重；状态截至现在，条数不代表知识质量。', 'What this period’s memos have turned into so far. One memo can go to several places; converted counts each memo once. Status is as of now, and counts do not reflect knowledge quality.'));
+    const section = this.reviewSection(parent, CRISP_PULSE_MEMO_ICON_ID, tr('速记走到了哪里', 'Where your memos went'), tr('本期记下的速记，现在转成了什么。一条可以同时去几处，已转化按速记去重；状态截至现在，条数不代表知识质量。', 'What this period’s memos have turned into so far. One memo can go to several places; converted counts each memo once. Status is as of now, and counts do not reflect knowledge quality.'));
     section.addClass?.('crisp-pulse-review-memo-card');
     const body = section.createDiv({ cls: 'crisp-pulse-review-memos' });
     body.createDiv({ cls: 'crisp-pulse-review-note', text: tr('正在读取速记…', 'Loading memos…') });
@@ -8857,7 +8867,7 @@ class CrispPulseMemoView extends ItemView {
 
   getViewType() { return VIEW_TYPE_MEMO; }
   getDisplayText() { return tr("Crisp Pulse 速记", "Crisp Pulse Memos"); }
-  getIcon() { return "feather"; }
+  getIcon() { return CRISP_PULSE_MEMO_ICON_ID; }
 
   async onOpen() {
     this.memoClosed = false;
