@@ -1498,6 +1498,39 @@ test('daily review reminder only uses up the day when it actually has memos to s
  assert.notEqual(p.settings.memoReviewNotifiedOn,'2026-09-08','无效时间不提醒');
 });
 
+test('month pace leaves last month blank until its records start, so nothing compares against fake zeros', ()=>{
+ const {helpers}=setup();
+ const rec=(score)=>{const r=helpers.createEmptyDailyRecord('x','recorded');r.contribution.score=score;r.contribution.meaningfulEdits=1;return r;};
+ const daily={'2026-09-24':rec(100),'2026-09-30':rec(50)};
+ for(let d=1;d<=19;d++)daily[`2026-10-${String(d).padStart(2,'0')}`]=rec(10);
+ const pace=helpers.buildMonthPace(daily,'2026-10-19',()=>true,'score');
+ assert.equal(pace.prevFirstDay,24);
+ assert.equal(pace.baseline[18],null,'10/19 时上月还没开始记录：上月同日是未知，不是 0');
+ assert.equal(pace.baselineToDate,null);
+ assert.equal(pace.deltaPct,null);
+ assert.equal(pace.baseline[23],100);assert.equal(pace.baseline[30],150);
+});
+
+test('an active day means a score or a meaningful edit everywhere', ()=>{
+ const {helpers}=setup();
+ const r=helpers.createEmptyDailyRecord('2026-09-08','recorded');r.contribution.score=0;r.contribution.meaningfulEdits=2;
+ const daily={'2026-09-08':r};
+ const profile=helpers.buildDayProfile(daily,['2026-09-08'],()=>true,'2026-09-08');
+ assert.equal(profile.activeDays,1,'年度画像：有效编辑但 0 分的日子也算活跃');
+ const pace=helpers.buildMonthPace(daily,'2026-09-08',()=>true,'active');
+ assert.equal(pace.actualToDate,1,'本月节奏的活跃天数同一口径');
+});
+
+test('generateReviewData honours its scope when no filter is given', ()=>{
+ const {helpers}=setup();
+ const real=helpers.createEmptyDailyRecord('2026-09-01','recorded');real.contribution.score=10;
+ const est=helpers.createEmptyDailyRecord('2026-09-02','estimated');est.contribution.score=99;
+ const daily={'2026-09-01':real,'2026-09-02':est};
+ assert.equal(helpers.generateReviewData(daily,'2026-09-01','2026-09-02','reliable').totalScore,10);
+ assert.equal(helpers.generateReviewData(daily,'2026-09-01','2026-09-02','all').totalScore,109);
+ assert.equal(helpers.generateReviewData(daily,'2026-09-01','2026-09-02').totalScore,109,'不传范围时与以前一样');
+});
+
 test('natural weeks keep fixed boundaries and clip the running week to today', ()=>{
  const {helpers}=setup();const week=(...args)=>({...helpers.reviewWeekRange(...args)});
  assert.deepEqual(week('2026-10-19','monday',-1),{start:'2026-10-12',end:'2026-10-18'});

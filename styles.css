@@ -970,6 +970,8 @@
 .crisp-pulse-legend-note { color: var(--text-faint); }
 .crisp-pulse-view .crisp-pulse-analytics-card.crisp-pulse-fingerprint-card { padding: 0; overflow: hidden; }
 .crisp-pulse-fingerprint-card > svg { display: block; }
+/* The fingerprint draws edge to edge; the shared inset padding (same specificity, later in the file) must not add a second frame. */
+.crisp-pulse-view.pulse-v2 .pulse-v2-inset.crisp-pulse-fingerprint-card { padding: 0; overflow: hidden; }
 .crisp-pulse-fingerprint-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 20px 16px; }
 .crisp-pulse-fp-readout { min-width: 0; font-size: 12px; line-height: 1.6; font-variant-numeric: tabular-nums; }
 .crisp-pulse-fp.is-inspecting .pulse-fp-bar:not(.is-hot) { opacity: .38; }
@@ -1950,6 +1952,8 @@
   width: 16px;
   color: var(--text-faint);
 }
+/* Leaf tags: a plain spacer the width of the twisty, so names stay aligned without an empty button. */
+.crisp-pulse-memo-view span.crisp-pulse-memo-twisty { flex: none; display: inline-block; width: 16px; }
 
 .crisp-pulse-memo-view button.crisp-pulse-memo-tagname {
   color: var(--text-normal);
@@ -2333,11 +2337,6 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 .crisp-pulse-view.pulse-v2 .pulse-v2-detail :is(.crisp-pulse-breakdown-val) { font-family: var(--font-monospace); }
 
 @container (max-width: 520px) {
-  
-  
-  
-  
-  
   .crisp-pulse-view.pulse-v2 .pulse-v2-inset { padding: 16px 14px; }
   .crisp-pulse-view.pulse-v2 .pulse-v2-tray-head { padding: 12px 12px 14px; }
 }

@@ -757,7 +757,21 @@ function filterDatesByRange(allDates, rangeKey = "year", refDate = new Date()) {
 }
 
 // 1.2 Review Data Analyzer
+/** 「活跃的一天」全插件同一口径：有贡献分，或至少一次有效编辑。 */
+function isRecordActive(record) {
+  return (record?.contribution?.score || 0) > 0 || (record?.contribution?.meaningfulEdits || 0) >= 1;
+}
+
+/** 不依赖设置的范围判断（不含「开始记录日期」）：给没有插件实例可用的纯函数做默认筛选。 */
+function recordInBasicScope(record, scope) {
+  if (!record || scope === "all") return !!record;
+  if (record.quality !== "recorded") return false;
+  return scope === "recorded_only" || !record.legacyUnverified;
+}
+
 function generateReviewData(daily = {}, startDateStr, endDateStr, scope = "all", filterFn = null) {
+  // 没传筛选函数时按 scope 默认筛选，scope 不再是摆设
+  if (typeof filterFn !== "function" && scope && scope !== "all") filterFn = (record) => recordInBasicScope(record, scope);
   const sortedDates = Object.keys(daily).sort();
   const matchedDates = sortedDates.filter(d => Number.isFinite(reviewDayNumber(d)) && (!startDateStr || d >= startDateStr) && (!endDateStr || d <= endDateStr));
 
@@ -3204,7 +3218,7 @@ class CrispPulsePlugin extends Plugin {
     const startDate = this.settings.trackingStartDate;
     const activeDateSet = new Set();
     // 记录是否在范围内统一由 recordMatchesScope 决定（含 mixed、旧版未校验），这里只判断有没有产出
-    const isActive = (rec) => (rec.contribution.score || 0) > 0 || (rec.contribution.meaningfulEdits || 0) >= 1;
+    const isActive = isRecordActive;
 
     for (const dStr of filteredDates) {
       const rec = daily[dStr];
@@ -3978,7 +3992,7 @@ function buildOverviewModel(daily, rangeKey, todayKey, includeRecord) {
       const score = included ? (record.contribution?.score || 0) : 0;
       if (included) {
         recorded++; total += score;
-        if (score > 0 || (record.contribution?.meaningfulEdits || 0) >= 1) active++;
+        if (isRecordActive(record)) active++;
         activeMinutes += record.activity?.activeMinutes || 0;
         focusMinutes += record.activity?.focusMinutes || 0;
       }
@@ -4029,12 +4043,12 @@ function buildDayProfile(daily, dates, includeRecord, todayKey = getTodayKey()) 
     const record = daily[date];
     const status = date > todayKey ? 'future' : !record ? 'missing' : !includeRecord(record, date) ? 'excluded' : 'included';
     const value = (group, field) => { const v = status === 'included' ? record[group]?.[field] : 0; return Number.isFinite(v) && v > 0 ? v : 0; };
-    days.push({ date, month: d.getMonth(), status, score: value('contribution', 'score'), words: value('contribution', 'wordsAdded'), notes: value('contribution', 'notesCreated'), tasks: value('contribution', 'tasksCompleted'), active: value('activity', 'activeMinutes'), focus: value('activity', 'focusMinutes') });
+    days.push({ date, month: d.getMonth(), status, score: value('contribution', 'score'), words: value('contribution', 'wordsAdded'), notes: value('contribution', 'notesCreated'), tasks: value('contribution', 'tasksCompleted'), active: value('activity', 'activeMinutes'), focus: value('activity', 'focusMinutes'), isActive: status === 'included' && isRecordActive(record) });
   }
   scoreProfileUnits(days);
   const included = days.filter(day => day.status === 'included');
   const sum = field => Math.round(included.reduce((total, day) => total + day[field], 0) * 10) / 10;
-  return { unit: 'day', days, recordedDays: included.length, activeDays: included.filter(day => day.score > 0).length, totals: { score: sum('score'), words: sum('words'), active: sum('active'), focus: sum('focus'), notes: sum('notes') } };
+  return { unit: 'day', days, recordedDays: included.length, activeDays: included.filter(day => day.isActive).length, totals: { score: sum('score'), words: sum('words'), active: sum('active'), focus: sum('focus'), notes: sum('notes') } };
 }
 
 // Shared by day and week units: dimensions against their own 90th percentile, petal length against the 98th.
@@ -4067,7 +4081,7 @@ function buildWeekProfile(dayProfile) {
     week.statuses.add(day.status);
     if (day.status !== 'included') continue;
     for (const field of ['score', 'words', 'notes', 'tasks', 'active', 'focus']) week[field] += day[field];
-    if (day.score > 0) week.activeDays++;
+    if (day.isActive ?? day.score > 0) week.activeDays++;
     if (day.score > week.bestScore) { week.bestScore = day.score; week.bestDate = day.date; }
   }
   for (const w of weeks) {
@@ -4092,7 +4106,7 @@ function paceSystemWords(record) {
 const PACE_FIELDS = {
   score: record => record.contribution?.score,
   words: record => Math.max(0, (Number(record.contribution?.wordsAdded) || 0) - paceSystemWords(record)),
-  active: record => (record.contribution?.score > 0 ? 1 : 0),
+  active: record => (isRecordActive(record) ? 1 : 0),
   focus: record => record.activity?.focusMinutes
 };
 
@@ -4128,7 +4142,8 @@ function buildMonthPace(daily, todayKey, includeRecord, field) {
     prevCum.push(prevRunning);
   }
   const baselineTotal = Math.round(prevRunning * 10) / 10;
-  const baseline = prevRecorded && baselineTotal > 0 ? Array.from({ length: days }, (_, i) => Math.round(prevCum[Math.min(i, prevDays - 1)] * 10) / 10) : null;
+  // 上月记录开始之前的日子是「未记录」不是 0：留空，不画进基线、不参与同期比较
+  const baseline = prevRecorded && baselineTotal > 0 ? Array.from({ length: days }, (_, i) => (prevFirstDay && i + 1 < prevFirstDay ? null : Math.round(prevCum[Math.min(i, prevDays - 1)] * 10) / 10)) : null;
   const actualToDate = actual[today - 1] || 0;
   const baselineToDate = baseline ? baseline[today - 1] : 0;
   const deltaPct = baselineToDate > 0 ? Math.round((actualToDate - baselineToDate) / baselineToDate * 100) : null;
@@ -4729,9 +4744,14 @@ class CrispPulseView extends ItemView {
     this.registerInterval(container.ownerDocument.defaultView.setInterval(() => this.updateCelestial(), 5 * 60 * 1000));
     this.registerEvent(this.app.workspace.on("css-change", () => {
       const mode = this.currentBannerMode();
+      const flipped = this.themeMode && this.themeMode !== mode;
+      this.themeMode = mode;
+      // 像素天空和年度画像的知识指纹都按主题配色写死在画面里，深浅色一换就重画
       if (this.plugin.settings.showHeaderBanner && this.bannerMode !== "image" && this.bannerMode !== mode) this.render();
+      else if (flipped && this.activeViewTab === "yearly") this.render();
       else if (this.footerEls && this.footerMode !== mode) this.paintFooter();
     }));
+    this.themeMode = this.currentBannerMode();
     this.registerDomEvent(container, 'pointerdown', event => { this.lastPointerType = event.pointerType; }, { capture: true });
     const win = container.ownerDocument.defaultView;
     this.analyticsResizeObserver = new win.ResizeObserver(() => {
@@ -4765,6 +4785,9 @@ class CrispPulseView extends ItemView {
     const chartFocus = container.contains(active) && active?.dataset?.analyticsDate ? { date: active.dataset.analyticsDate, chart: active.closest("svg")?.getAttribute("aria-label") } : null;
     const controlFocus = container.contains(active) && active.matches("button, select, [role=button]")
       ? { tag: active.tagName, label: active.getAttribute("aria-label"), text: active.textContent } : null;
+    // 后台刷新或缩放重绘时保住用户展开/收起的折叠区，以及概览走势图的键盘焦点
+    const detailsState = new Map([...container.querySelectorAll("details[data-keep]")].map(d => [d.dataset.keep, d.open]));
+    const heroFocused = container.contains(active) && !!active?.classList?.contains("pulse-hero-svg");
     container.empty();
     container.classList.add("crisp-pulse-view");
     container.classList.add("pulse-v2");
@@ -4792,6 +4815,15 @@ class CrispPulseView extends ItemView {
     this.footerEls = null;
     if (this.plugin.settings.showFooterLandscape !== false) this.renderFooter(container, { locked });
 
+    // Restore disclosure contents before scroll/focus: closed panels cannot be
+    // focused, and lazy tables must exist before the browser clamps scrollTop.
+    for (const details of container.querySelectorAll("details[data-keep]")) {
+      if (!detailsState.has(details.dataset.keep)) continue;
+      details.open = detailsState.get(details.dataset.keep);
+      if (details.open && details.classList.contains('pulse-data-table')) {
+        details.dispatchEvent(new container.ownerDocument.defaultView.Event('toggle'));
+      }
+    }
     container.scrollTop = previousScroll;
     const heatmap = container.querySelector(".crisp-pulse-heatmap-scroll");
     if (heatmap) {
@@ -4829,7 +4861,7 @@ class CrispPulseView extends ItemView {
       }
     } else if (controlFocus) {
       [...container.querySelectorAll("button, select, [role=button]")].find(el => el.tagName === controlFocus.tag && el.getAttribute("aria-label") === controlFocus.label && (controlFocus.label || el.textContent === controlFocus.text))?.focus({ preventScroll: true });
-    }
+    } else if (heroFocused) container.querySelector(".pulse-hero-svg")?.focus({ preventScroll: true });
   }
 
   renderAnalytics(parent) {
@@ -4927,9 +4959,12 @@ class CrispPulseView extends ItemView {
     ];
     const paces = metrics.map(metric => ({ ...metric, pace: buildMonthPace(daily, todayKey, include, metric.field) }));
     const first = paces[0].pace;
+    const markerNote = paces.some(({ pace }) => pace.baseline && pace.baselineToDate !== null)
+      ? tr('有同期记录的指标用竖线标出上月位置；', 'Where same-day records exist, a vertical line marks last month’s position; ')
+      : '';
     const card = this.trayCard(parent, {
       icon: 'gauge', title: tr('本月节奏', 'This month’s pace'), wrap: true,
-      subtitle: tr(`${first.month} 月 1 日到今天，对照 ${first.prevMonth} 月同一天的累计。竖线是上月这时走到的位置；新增词数不含系统目录。`, `${pulseMonthDay(first.month, 1)} to today, against the running total on the same day of ${pulseMonthLabel(first.prevMonth)}. The vertical line marks where last month was at this point; words added exclude system folders.`),
+      subtitle: tr(`${first.month} 月 1 日到今天，对照 ${first.prevMonth} 月同一天的累计。${markerNote}新增词数不含系统目录。`, `${pulseMonthDay(first.month, 1)} to today, against the running total on the same day of ${pulseMonthLabel(first.prevMonth)}. ${markerNote}Words added exclude system folders.`),
       pill: tr(`第 ${first.today} / ${first.days} 天`, `Day ${first.today} / ${first.days}`), pillMuted: true,
       cls: 'crisp-pulse-analytics-section', insetCls: 'crisp-pulse-analytics-card pulse-pace'
     });
@@ -4949,10 +4984,13 @@ class CrispPulseView extends ItemView {
       track.setAttr('role', 'img');
       if (ratio !== null) {
         track.createDiv({ cls: 'pulse-pace-fill' }).style.width = `${Math.min(100, ratio * 100)}%`;
-        const markAt = pace.baselineToDate / pace.baselineTotal;
-        const mark = track.createDiv({ cls: 'pulse-pace-mark' });
-        mark.style.left = `${Math.min(100, markAt * 100)}%`;
-        track.setAttr('aria-label', tr(`${label}：本月 ${number(pace.actualToDate)} ${unit}，上月同期 ${number(pace.baselineToDate)} ${unit}，上月全月 ${number(pace.baselineTotal)} ${unit}`, `${label}: this month ${number(pace.actualToDate)} ${unit}, same point last month ${number(pace.baselineToDate)} ${unit}, all of last month ${number(pace.baselineTotal)} ${unit}`));
+        // 上月这天还没开始记录时不画「上月同期」竖线
+        if (pace.baselineToDate !== null) {
+          const mark = track.createDiv({ cls: 'pulse-pace-mark' });
+          mark.style.left = `${Math.min(100, pace.baselineToDate / pace.baselineTotal * 100)}%`;
+        }
+        const sameDay = pace.baselineToDate === null ? tr('上月同期未记录', 'not recorded at this point last month') : tr(`上月同期 ${number(pace.baselineToDate)} ${unit}`, `same point last month ${number(pace.baselineToDate)} ${unit}`);
+        track.setAttr('aria-label', tr(`${label}：本月 ${number(pace.actualToDate)} ${unit}，${sameDay}，上月全月 ${number(pace.baselineTotal)} ${unit}`, `${label}: this month ${number(pace.actualToDate)} ${unit}, ${sameDay}, all of last month ${number(pace.baselineTotal)} ${unit}`));
       } else {
         track.addClass('is-empty');
         track.setAttr('aria-label', tr(`${label}：上月没有可对照的记录`, `${label}: no records last month to compare against`));
@@ -5009,7 +5047,8 @@ class CrispPulseView extends ItemView {
       draw('text', { x: left - 10, y: y(tick) + 4, 'text-anchor': 'end', class: 'pulse-chart-axis' }, Number(tick.toPrecision(6)).toLocaleString(PULSE_NUMBER_LOCALE, scale.max >= 100000 ? { notation: 'compact', maximumFractionDigits: 1 } : { maximumFractionDigits: 1 }));
     }
     for (const d of [...new Set([1, Math.ceil(n / 2), n])]) draw('text', { x: x(d), y: height - 8, 'text-anchor': d === 1 ? 'start' : d === n ? 'end' : 'middle', class: 'pulse-chart-axis' }, `${pace.month}/${d}`);
-    const path = values => values.map((v, i) => `${i ? 'L' : 'M'}${x(i + 1).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    // 值为 null（上月还没开始记录）的日子断开不画
+    const path = values => values.map((v, i) => (v === null ? '' : `${i && values[i - 1] !== null ? 'L' : 'M'}${x(i + 1).toFixed(1)},${y(v).toFixed(1)}`)).filter(Boolean).join(' ');
     if (pace.baseline) draw('path', { d: path(pace.baseline), fill: 'none', class: 'pulse-pace-baseline' });
     if (pace.actual.length) {
       const area = `${path(pace.actual)} L${x(pace.today).toFixed(1)},${bottom} L${x(1).toFixed(1)},${bottom} Z`;
@@ -5029,10 +5068,11 @@ class CrispPulseView extends ItemView {
     }
     const describe = day => {
       const base = pace.baseline ? pace.baseline[day - 1] : null;
-      if (day > pace.today) return `${pulseMonthDay(pace.month, day)} · ${tr('上月同日累计', 'last month same day')} ${base === null ? '—' : `${number(base)} ${unit}`}${pace.projection !== null ? ` · ${tr('推算约', 'projected about')} ${number(pace.actualToDate + pace.recentRate * (day - pace.today))} ${unit}` : ''}`;
+      const baseText = base === null ? (pace.baseline ? tr('未记录', 'not recorded') : '—') : `${number(base)} ${unit}`;
+      if (day > pace.today) return `${pulseMonthDay(pace.month, day)} · ${tr('上月同日累计', 'last month same day')} ${baseText}${pace.projection !== null ? ` · ${tr('推算约', 'projected about')} ${number(pace.actualToDate + pace.recentRate * (day - pace.today))} ${unit}` : ''}`;
       const now = pace.actual[day - 1];
       const diff = base === null ? '' : tr(` · ${now >= base ? '多' : '少'} ${number(Math.abs(now - base))} ${unit}`, ` · ${number(Math.abs(now - base))} ${unit} ${now >= base ? 'ahead' : 'behind'}`);
-      return `${pulseMonthDay(pace.month, day)} · ${tr('本月累计', 'this month')} ${number(now)} ${unit} · ${tr('上月同日', 'last month same day')} ${base === null ? '—' : `${number(base)} ${unit}`}${diff}`;
+      return `${pulseMonthDay(pace.month, day)} · ${tr('本月累计', 'this month')} ${number(now)} ${unit} · ${tr('上月同日', 'last month same day')} ${baseText}${diff}`;
     };
     const colW = (right - left) / Math.max(1, n - 1);
     const targets = [];
@@ -5067,7 +5107,8 @@ class CrispPulseView extends ItemView {
     this.selectedDate = date;
     this.activeViewTab = 'dashboard';
     this.render();
-    this.containerEl.querySelector('.crisp-pulse-detail-card')?.scrollIntoView({ block: 'start', behavior: 'auto' });
+    // 滚到整张明细卡（含日期标题栏），未激活时滚到锁定说明那张卡
+    this.containerEl.querySelector('.pulse-v2-detail')?.scrollIntoView({ block: 'start', behavior: 'auto' });
   }
 
   analyticsSection(parent, title, description, icon = 'bar-chart-2') {
@@ -5299,7 +5340,7 @@ class CrispPulseView extends ItemView {
     const portrait = profile.days.length > 120 ? buildWeekProfile(profile) : profile;
     const scopeLabel = REVIEW_SCOPE_LABELS[this.currentScope] || this.currentScope;
     const span = profile.year ? tr(`${profile.year} 年`, String(profile.year)) : `${formatDateDisplay(profile.days[0].date)} — ${tr('今天', 'today')}`;
-    section.createDiv({ cls: 'crisp-pulse-analytics-coverage', text: tr(`${span} · ${scopeLabel} · 已纳入 ${profile.recordedDays} 天，其中 ${profile.activeDays} 天有贡献。未记录或被筛选的日期留空。`, `${span} · ${scopeLabel} · ${plural(profile.recordedDays, 'day')} included, ${profile.activeDays} with contributions. Days not recorded or filtered out are left blank.`) });
+    section.createDiv({ cls: 'crisp-pulse-analytics-coverage', text: tr(`${span} · ${scopeLabel} · 已纳入 ${profile.recordedDays} 天，其中 ${profile.activeDays} 天活跃（有贡献分或有效编辑）。未记录或被筛选的日期留空。`, `${span} · ${scopeLabel} · ${plural(profile.recordedDays, 'day')} included, ${profile.activeDays} active (a score or a meaningful edit). Days not recorded or filtered out are left blank.`) });
     this.renderYearRing(section, portrait);
     this.renderYearFingerprint(section, portrait);
     this.renderYearMoons(section, profile);
@@ -5314,8 +5355,8 @@ class CrispPulseView extends ItemView {
       if (day.status === 'future') return `${range} · ${tr('尚未到来', 'not yet')}`;
       if (day.status !== 'included') return `${range} · ${day.status === 'missing' ? tr('未记录', 'not recorded') : tr('已被当前数据范围排除', 'excluded by the current data scope')}`;
       const lead = YEAR_DIMENSIONS.find(dim => dim.key === day.dominant);
-      return tr(`${range} · 贡献 ${number(day.score)} 分 · ${day.activeDays} 天有贡献 · 新增 ${number(day.words)} 词 · 交互 ${number(day.active)} 分钟 · 新建 ${number(day.notes)} 篇${lead ? ` · 以${lead.label}为主` : ''}`,
-        `${range} · ${number(day.score)} pts · ${plural(day.activeDays, 'day')} with contributions · ${number(day.words)} words added · ${number(day.active)} min active · ${number(day.notes)} new notes${lead ? ` · mostly ${lead.label}` : ''}`);
+      return tr(`${range} · 贡献 ${number(day.score)} 分 · ${day.activeDays} 天活跃 · 新增 ${number(day.words)} 词 · 交互 ${number(day.active)} 分钟 · 新建 ${number(day.notes)} 篇${lead ? ` · 以${lead.label}为主` : ''}`,
+        `${range} · ${number(day.score)} pts · ${plural(day.activeDays, 'active day')} · ${number(day.words)} words added · ${number(day.active)} min active · ${number(day.notes)} new notes${lead ? ` · mostly ${lead.label}` : ''}`);
     }
     if (day.status === 'future') return `${formatDateDisplay(day.date)} · ${tr('尚未到来', 'not yet')}`;
     if (day.status === 'missing') return `${formatDateDisplay(day.date)} · ${tr('未记录', 'not recorded')}`;
@@ -5368,7 +5409,7 @@ class CrispPulseView extends ItemView {
     const centerTop = center.createDiv({ cls: 'crisp-pulse-analytics-label' });
     const centerMain = center.createDiv({ cls: 'crisp-pulse-ring-year' });
     const centerSub = center.createDiv({ cls: 'crisp-pulse-ring-sub' });
-    const resetCenter = () => { centerTop.textContent = profile.year ? tr(`${profile.year} 年`, String(profile.year)) : weekly ? tr(`${n} 周`, plural(n, 'week')) : tr(`${n} 天`, plural(n, 'day')); centerMain.textContent = String(profile.activeDays); centerSub.textContent = tr('天有贡献', 'days with contributions'); };
+    const resetCenter = () => { centerTop.textContent = profile.year ? tr(`${profile.year} 年`, String(profile.year)) : weekly ? tr(`${n} 周`, plural(n, 'week')) : tr(`${n} 天`, plural(n, 'day')); centerMain.textContent = String(profile.activeDays); centerSub.textContent = tr('天活跃', 'active days'); };
     resetCenter();
     const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: weekly ? tr('悬停在花瓣上查看某一周，点击打开当周贡献最高的一天。', 'Hover over a petal to see a week; click to open its highest-contribution day.') : tr('悬停在花瓣上查看某一天，点击打开日明细。', 'Hover over a petal to see a day; click to open its details.') });
     readout.setAttr('aria-live', 'polite');
@@ -6237,6 +6278,7 @@ class CrispPulseView extends ItemView {
     axis.createSpan({ cls: 'pulse-hero-range', text: tr('今天', 'Today') });
     const show = i => {
       const day = model.days[i];
+      this.heroFocusDate = day.date;
       const recorded = day.status === 'included';
       cursor.setAttribute('x1', x(i)); cursor.setAttribute('x2', x(i)); cursor.setAttribute('visibility', 'visible');
       place(dot, i, recorded ? day.score : 0).toggleClass('is-visible', recorded);
@@ -6249,13 +6291,16 @@ class CrispPulseView extends ItemView {
     };
     const hide = () => { cursor.setAttribute('visibility', 'hidden'); dot.removeClass('is-visible'); bubble.removeClass('is-visible'); };
     const indexAt = event => { const r = svg.getBoundingClientRect(); return r.width ? Math.max(0, Math.min(n - 1, Math.round((event.clientX - r.left) / r.width * (n - 1)))) : null; };
-    let focusIndex = n - 1;
+    // 键盘查看到的日期存在视图上，重绘后从同一天继续，而不是跳回今天
+    const remembered = this.heroFocusDate ? model.days.findIndex(day => day.date === this.heroFocusDate) : -1;
+    let focusIndex = remembered >= 0 ? remembered : n - 1;
     svg.setAttribute('tabindex', '0');
     svg.addEventListener('pointermove', event => { const i = indexAt(event); if (i !== null) { focusIndex = i; show(i); } });
     svg.addEventListener('pointerleave', hide);
     svg.addEventListener('blur', hide);
     svg.addEventListener('focus', () => show(focusIndex));
-    svg.addEventListener('click', event => { const i = indexAt(event); if (i !== null && model.days[i].status === 'included') this.openAnalyticsDay(model.days[i].date); });
+    // 触屏先点一下看读数，再点同一天才打开明细，和其他图表一致
+    svg.addEventListener('click', event => { const i = indexAt(event); if (i !== null && model.days[i].status === 'included') this.activateDay(model.days[i].date, () => { focusIndex = i; show(i); }); });
     svg.addEventListener('keydown', event => {
       if (event.key === 'Enter' && model.days[focusIndex].status === 'included') { event.preventDefault(); this.openAnalyticsDay(model.days[focusIndex].date); return; }
       const next = event.key === 'ArrowLeft' ? focusIndex - 1 : event.key === 'ArrowRight' ? focusIndex + 1 : null;
@@ -6325,7 +6370,7 @@ class CrispPulseView extends ItemView {
 
   /** 图表下的「以表格查看」：展开时才生成表格，给要精确数值、复制或用读屏的人。rows 为二维数组，第一列是日期。 */
   renderDataTable(parent, caption, columns, rows) {
-    const details = parent.createEl('details', { cls: 'pulse-data-table' });
+    const details = parent.createEl('details', { cls: 'pulse-data-table', attr: { 'data-keep': `table:${caption}` } });
     details.createEl('summary', { text: tr(`以表格查看 · ${rows.length} 行`, `Show as a table · ${plural(rows.length, 'row')}`) });
     details.addEventListener('toggle', () => {
       if (!details.open || details.querySelector('table')) return;
@@ -6871,7 +6916,8 @@ class CrispPulseView extends ItemView {
   scrollReviewTo(selector, focus = false) {
     const target = this.containerEl.querySelector(selector);
     if (!target) return;
-    target.scrollIntoView({ block: focus ? 'center' : 'start', behavior: 'smooth' });
+    // 滚到外层卡片，标题栏不被顶出视口
+    (focus ? target : target.closest('.pulse-v2-tray') || target).scrollIntoView({ block: focus ? 'center' : 'start', behavior: 'smooth' });
     if (focus) target.focus({ preventScroll: true });
   }
 
@@ -6948,7 +6994,7 @@ class CrispPulseView extends ItemView {
       });
     }
 
-    const custom = card.createEl('details', { cls: 'crisp-pulse-review-custom' });
+    const custom = card.createEl('details', { cls: 'crisp-pulse-review-custom', attr: { 'data-keep': 'review-custom' } });
     custom.createEl('summary', { text: tr('自定义日期', 'Custom dates') });
     const controls = custom.createDiv({ cls: 'crisp-pulse-review-controls' });
     const pending = this.reviewRangeInputs || { start, end };
@@ -6984,7 +7030,7 @@ class CrispPulseView extends ItemView {
           if (kind === 'open') this.openReviewNote(clue.action.path);
           else if (kind === 'memos') this.scrollReviewTo('.crisp-pulse-review-memo-card');
           else if (kind === 'write') this.scrollReviewTo('textarea[data-review-field="learning"]', true);
-          else if (kind === 'materials') { this.reviewMaterialMode = clue.action.mode; this.render(); this.scrollReviewTo('.crisp-pulse-review-materials'); }
+          else if (kind === 'materials') { this.reviewMaterialMode = clue.action.mode; this.reviewFolder = ''; this.reviewShowAllFiles = false; this.render(); this.scrollReviewTo('.crisp-pulse-review-materials'); }
           else if (kind === 'carry') {
             const count = this.plugin.importPreviousActions(start, end, model.scope);
             new Notice(count ? tr(`已带入 ${count} 项行动。`, `Carried over ${plural(count, 'action')}.`) : tr('没有新的未完成行动可带入。', 'No new unfinished actions to carry over.'));
@@ -7026,7 +7072,8 @@ class CrispPulseView extends ItemView {
       figures.createSpan({ cls: `crisp-pulse-review-change-delta${usable && delta > 0 ? ' is-up' : usable && delta < 0 ? ' is-down' : ''}`, text: deltaText });
       figures.createSpan({ cls: 'crisp-pulse-review-change-prev', text: tr(`上期 ${formatPulseMinutes(row.previous)}`, `last ${formatPulseMinutes(row.previous)}`) });
       item.setAttr('aria-label', tr(`${row.label}：本期 ${formatPulseMinutes(row.current)} ${row.unit}，上期 ${formatPulseMinutes(row.previous)} ${row.unit}，${row.changeLabel}`, `${row.label}: ${formatPulseMinutes(row.current)} ${row.unit} now, ${formatPulseMinutes(row.previous)} ${row.unit} last period, ${row.changeLabel}`));
-      if (mode) item.addEventListener('click', () => { this.reviewMaterialMode = mode; this.reviewShowAllFiles = false; this.render(); this.scrollReviewTo('.crisp-pulse-review-materials'); });
+      // 上面的数字是全库的，跳到材料时清掉目录筛选，免得「上面写 N 篇、下面显示 0 篇」
+      if (mode) item.addEventListener('click', () => { this.reviewMaterialMode = mode; this.reviewFolder = ''; this.reviewShowAllFiles = false; this.render(); this.scrollReviewTo('.crisp-pulse-review-materials'); });
     }
     const legend = section.createDiv({ cls: 'crisp-pulse-analytics-legend crisp-pulse-review-legend' });
     const now = legend.createSpan(); now.createSpan({ cls: 'pulse-chart-dot pulse-chart-fill-purple' }); now.createSpan({ text: tr('本期（每项各自的颜色）', 'This period (each in its own colour)') });
@@ -7256,7 +7303,7 @@ class CrispPulseView extends ItemView {
       item.createSpan({ cls: 'crisp-pulse-review-mix-name', text: REVIEW_SOURCE_LABELS[key] });
       item.createSpan({ cls: 'crisp-pulse-review-mix-value', text: tr(`${formatPulseMinutes(words[key])} 词`, `${formatPulseMinutes(words[key])} words`) });
       item.createSpan({ cls: 'crisp-pulse-review-mix-pct', text: total ? `${Math.round(words[key] / total * 1000) / 10}%` : '—' });
-      if (clickable) item.addEventListener('click', () => { this.reviewMaterialMode = 'capture'; this.reviewShowAllFiles = false; this.render(); this.scrollReviewTo('.crisp-pulse-review-materials'); });
+      if (clickable) item.addEventListener('click', () => { this.reviewMaterialMode = 'capture'; this.reviewFolder = ''; this.reviewShowAllFiles = false; this.render(); this.scrollReviewTo('.crisp-pulse-review-materials'); });
     }
     const row = section.createDiv({ cls: 'crisp-pulse-review-controls crisp-pulse-review-system' });
     const toggle = row.createEl('button', { cls: 'crisp-pulse-tab-btn', text: this.plugin.settings.excludeSystemArtifacts ? tr('系统产物已排除', 'System output excluded') : tr('排除后续系统产物', 'Exclude future system output') });
@@ -7313,7 +7360,7 @@ class CrispPulseView extends ItemView {
     // 02 认识
     const learning = step('02', tr('我的认识', 'What I learned'), '');
     textarea(learning, 'learning', REVIEW_DRAFT_FIELDS.learning, 4, tr('这一期哪些认识变了？一两句就够，可以写上依据。', 'What changed in your understanding this period? A sentence or two is enough; mention the evidence.'));
-    const more = learning.createEl('details', { cls: 'crisp-pulse-review-more-fields' });
+    const more = learning.createEl('details', { cls: 'crisp-pulse-review-more-fields', attr: { 'data-keep': 'review-more-fields' } });
     more.open = ['progress', 'blockers', 'next'].some(key => model.draft[key].trim());
     more.createEl('summary', { text: tr('进展、阻塞与备注', 'Progress, blockers and notes') });
     const fields = more.createDiv({ cls: 'crisp-pulse-review-drafts' });
@@ -10458,8 +10505,11 @@ class CrispPulseMemoView extends ItemView {
       const row = box.createDiv({ cls: "crisp-pulse-memo-tagrow", attr: { role: "treeitem" } });
       row.style.paddingLeft = `${depth * 14}px`;
       const collapsed = this.collapsedTags.has(node.path);
-      const twisty = row.createEl("button", { cls: "crisp-pulse-memo-twisty", text: node.children.length ? (collapsed ? "▸" : "▾") : "", attr: { "aria-label": collapsed ? tr("展开", "Expand") : tr("折叠", "Collapse") } });
-      if (node.children.length) twisty.addEventListener("click", () => { if (collapsed) this.collapsedTags.delete(node.path); else this.collapsedTags.add(node.path); this.render(); });
+      // 没有子标签时只留占位，不放一个读屏会念「折叠」、Tab 也会停的空按钮
+      if (node.children.length) {
+        const twisty = row.createEl("button", { cls: "crisp-pulse-memo-twisty", text: collapsed ? "▸" : "▾", attr: { "aria-label": collapsed ? tr("展开", "Expand") : tr("折叠", "Collapse"), "aria-expanded": String(!collapsed) } });
+        twisty.addEventListener("click", () => { if (collapsed) this.collapsedTags.delete(node.path); else this.collapsedTags.add(node.path); this.render(); });
+      } else row.createSpan({ cls: "crisp-pulse-memo-twisty", attr: { "aria-hidden": "true" } });
       const name = row.createEl("button", { cls: "crisp-pulse-memo-tagname", text: `# ${node.name}` });
       name.setAttribute("title", tr(`看 #${node.path}（含子标签）`, `Show #${node.path} (incl. nested tags)`));
       name.addEventListener("click", () => { this.resetFilters(); this.filterTag = node.path; this.tab = "all"; this.render(); });
@@ -10472,7 +10522,7 @@ class CrispPulseMemoView extends ItemView {
     if (untagged) {
       const row = box.createDiv({ cls: "crisp-pulse-memo-tagrow" });
       const name = row.createEl("button", { cls: "crisp-pulse-memo-tagname is-muted", text: tr("无标签", "Untagged") });
-      name.addEventListener("click", () => { this.resetFilters(); this.filters.untagged = true; this.showAdvanced = true; this.tab = "all"; this.render(); });
+      name.addEventListener("click", () => { this.resetFilters(); this.filters.untagged = true; this.tab = "all"; this.render(); });
       row.createSpan({ cls: "crisp-pulse-memo-muted", text: String(untagged) });
     }
   }
