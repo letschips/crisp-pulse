@@ -2450,6 +2450,8 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 
 .crisp-pulse-view.pulse-v2 .pulse-v2-inset.crisp-pulse-review-clue-inset { padding: 0; background: transparent; box-shadow: none !important; }
 .crisp-pulse-review-clues { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; }
+.crisp-pulse-review-clues > .crisp-pulse-review-note { grid-column: 1 / -1; padding: 0 16px 6px 66px; }
+@container (max-width: 520px) { .crisp-pulse-review-clues > .crisp-pulse-review-note { padding: 0 12px 4px; } }
 .crisp-pulse-review-clue { position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 16px 18px 14px 20px; border-radius: 14px; background: var(--pulse-ui-surface, var(--background-primary)); box-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 0 0 1px color-mix(in srgb, var(--text-normal) 5%, transparent); overflow: hidden; }
 .crisp-pulse-review-clue-mark { position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; border-radius: 0 3px 3px 0; }
 .crisp-pulse-review-clue-title { font-size: 14px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }

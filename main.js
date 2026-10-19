@@ -6408,7 +6408,9 @@ class CrispPulseView extends ItemView {
     const carry = this.plugin.previousActionCandidates(start, end, model.scope).length;
     const draw = memos => {
       row.empty?.();
-      for (const clue of getReviewClues(model, { memos, carry })) {
+      const clues = getReviewClues(model, { memos, carry });
+      if (!clues.length) row.createDiv({ cls: 'crisp-pulse-review-note', text: tr('这一期没有特别突出的记录，可以直接看下面的材料，或写下这期的认识。', 'Nothing in particular stands out this period; browse the material below or write down what you learned.') });
+      for (const clue of clues) {
         const item = row.createDiv({ cls: 'crisp-pulse-review-clue' });
         item.createSpan({ cls: `crisp-pulse-review-clue-mark pulse-chart-fill-${clue.color}` });
         item.createDiv({ cls: 'crisp-pulse-review-clue-title', text: clue.title });

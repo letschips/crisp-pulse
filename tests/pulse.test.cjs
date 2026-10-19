@@ -1311,6 +1311,8 @@ test('review clues stay factual: capped at three, no memo clue when memos are un
  assert.doesNotMatch(clues(model({},{coverage:{recorded:0}})).find(c=>c.key==='focus').title,/上期/);
  // 没有可用记录：只给一条中性提示。
  const empty=clues(model({coverage:{recorded:0}}),{memos,carry:2});assert.equal(empty.length,1);assert.equal(empty[0].key,'empty');
+ // 有记录但没有突出事实：返回空，由界面给一句中性提示（不能留一张空卡）。
+ assert.equal(clues(model({wordsAdded:50,notesCreated:0,focusMinutes:0,allFiles:[{...files[1],words:50,rewrittenWords:0}]})).length,0);
 });
 
 test('exported report carries the memo summary, and says so when memos could not be read', async()=>{
