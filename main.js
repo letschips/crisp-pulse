@@ -6730,6 +6730,7 @@ class CrispPulseView extends ItemView {
       const source = flow.createDiv({ cls: 'crisp-pulse-review-flow-source' });
       source.createDiv({ cls: 'crisp-pulse-analytics-label', text: tr('本期速记', 'Memos') });
       source.createDiv({ cls: 'crisp-pulse-review-flow-big', text: String(r.total) });
+      source.createDiv({ cls: 'crisp-pulse-review-flow-converted', text: tr(`已转化 ${r.converted}`, `${r.converted} converted`) });
       if (r.transcribed) source.createDiv({ cls: 'crisp-pulse-review-note', text: tr(`${r.transcribed} 条有录音转写`, `${r.transcribed} with transcripts`) });
       const branches = flow.createDiv({ cls: 'crisp-pulse-review-flow-branches' });
       const taskNote = r.tempoFailed ? tr('Tempo 状态读取失败', 'Tempo status unavailable')
@@ -6744,16 +6745,11 @@ class CrispPulseView extends ItemView {
         branch.createSpan({ cls: 'crisp-pulse-review-flow-count', text: String(count) });
         if (note) branch.createSpan({ cls: 'crisp-pulse-review-flow-note', text: note });
       }
-      const summary = flow.createDiv({ cls: 'crisp-pulse-review-flow-summary' });
-      summary.createDiv({ cls: 'crisp-pulse-analytics-label', text: tr('已转化', 'Converted') });
-      const big = summary.createDiv({ cls: 'crisp-pulse-review-flow-big' });
-      big.createSpan({ text: String(r.converted) }); big.createSpan({ cls: 'crisp-pulse-review-flow-of', text: ` / ${r.total}` });
-      summary.createDiv({ cls: 'crisp-pulse-review-note', text: tr('按速记去重，不是各分支相加', 'Counted per memo, not the sum of branches') });
 
       const lists = body.createDiv({ cls: 'crisp-pulse-review-memo-lists' });
       if (r.pending.length) {
         const pending = lists.createDiv({ cls: 'crisp-pulse-review-memo-results' });
-        pending.createDiv({ cls: 'crisp-pulse-stat-label', text: tr(`还没去处 · ${r.pending.length}`, `Not followed up · ${r.pending.length}`) });
+        pending.createDiv({ cls: 'crisp-pulse-review-list-label', text: tr(`还没去处 · ${r.pending.length}`, `Not followed up · ${r.pending.length}`) });
         for (const memo of r.pending.slice(0, 5)) {
           const row = pending.createEl('button', { cls: 'crisp-pulse-review-memo-result', attr: { type: 'button' } });
           row.createSpan({ cls: 'crisp-pulse-review-memo-kind', text: memo.date.slice(5).replace('-', '.') });
@@ -6768,7 +6764,7 @@ class CrispPulseView extends ItemView {
       }
       if (r.results.length) {
         const list = lists.createDiv({ cls: 'crisp-pulse-review-memo-results' });
-        list.createDiv({ cls: 'crisp-pulse-stat-label', text: `${tr('转化结果', 'Results')} · ${r.results.length}` });
+        list.createDiv({ cls: 'crisp-pulse-review-list-label', text: `${tr('转化结果', 'Results')} · ${r.results.length}` });
         for (const item of r.results.slice(0, 5)) {
           const row = list.createEl('button', { cls: 'crisp-pulse-review-memo-result', attr: { type: 'button' } });
           row.createSpan({ cls: 'crisp-pulse-review-memo-kind', text: item.task ? tr('完成的任务', 'Completed task') : tr('笔记', 'Note') });
