@@ -820,12 +820,15 @@ function getReviewDrilldown(review, folder = '', sort = 'words') {
   files.sort((a, b) => b[sortKey] - a[sortKey] || a.path.localeCompare(b.path));
   return { files, words: files.reduce((n, f) => n + f.words, 0), rewrittenWords: files.reduce((n, f) => n + f.rewrittenWords, 0), tasks: files.reduce((n, f) => n + f.tasks, 0) };
 }
-/** 自然周：weekStartsOn 决定周一或周日开始；offset=-1 是上一个完整周，本周的结束日截到今天。 */
-function reviewWeekRange(todayKey, weekStartsOn = 'sunday', offset = 0) {
-  const today = reviewDayNumber(todayKey);
+/**
+ * 自然周：anchor 所在周再偏移 offset 周；weekStartsOn 决定周一或周日开始。
+ * 只有还没结束的那一周截到 todayKey，已结束的周始终是完整七天。
+ */
+function reviewWeekRange(anchorKey, weekStartsOn = 'sunday', offset = 0, todayKey = anchorKey) {
+  const anchor = reviewDayNumber(anchorKey);
   const first = weekStartsOn === 'monday' ? 1 : 0;
-  const start = today - ((new Date(today * 86400000).getUTCDay() - first + 7) % 7) + offset * 7;
-  return { start: reviewDayKey(start), end: reviewDayKey(Math.min(start + 6, today)) };
+  const start = anchor - ((new Date(anchor * 86400000).getUTCDay() - first + 7) % 7) + offset * 7;
+  return { start: reviewDayKey(start), end: reviewDayKey(Math.min(start + 6, reviewDayNumber(todayKey))) };
 }
 function reviewDraftSize(model) {
   return Object.keys(REVIEW_DRAFT_FIELDS).filter(key => model.draft[key]?.trim()).length + model.actions.length + model.evidence.length;
@@ -1543,14 +1546,12 @@ class CrispPulsePlugin extends Plugin {
 
     this.addCommand({
       id: "copy-pulse-weekly-markdown",
-      name: tr("复制本周工作复盘 Markdown 周报", "Copy this week’s review as Markdown"),
+      name: tr("复制本周（自然周）工作复盘 Markdown", "Copy this week’s review (calendar week) as Markdown"),
       callback: async () => {
         if (!this.requireEntitlement("weeklyReport")) return;
-        const today = new Date();
-        const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
-        const sKey = dateKey(start), eKey = dateKey(today);
-        const model = this.getReviewModel(sKey, eKey, this.settings.dataQualityScope);
-        const md = generateReviewReport(model);
+        // 本周 = 自然周（按「每周起始日」）到今天，和复盘页「本周」同一份草稿
+        const week = reviewWeekRange(getTodayKey(), this.settings.weekStartsOn, 0);
+        const md = generateReviewReport(await this.buildReviewReportModel(week.start, week.end, this.settings.dataQualityScope));
         try {
           await navigator.clipboard.writeText(md);
           new Notice(tr("已成功复制本周工作复盘周报至剪贴板！", "This week’s review was copied to the clipboard."));
@@ -1612,15 +1613,12 @@ class CrispPulsePlugin extends Plugin {
 
     this.addCommand({
       id: "archive-weekly-review",
-      name: tr("归档本周工作复盘至知识库 (ANKS Review)", "Archive this week’s review to the vault (ANKS Review)"),
+      name: tr("归档本周（自然周）工作复盘至知识库 (ANKS Review)", "Archive this week’s review (calendar week) to the vault (ANKS Review)"),
       callback: async () => {
         if (!this.requireEntitlement("weeklyReport")) return;
-        const today = new Date();
-        const startWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
-        const sKey = dateKey(startWeek), eKey = dateKey(today);
-        const model = this.getReviewModel(sKey, eKey, this.settings.dataQualityScope);
+        const week = reviewWeekRange(getTodayKey(), this.settings.weekStartsOn, 0);
         // archiveReviewReport already reports success, existing files and failures.
-        await this.archiveReviewReport(model);
+        await this.archiveReviewReport(await this.buildReviewReportModel(week.start, week.end, this.settings.dataQualityScope));
       }
     });
 
@@ -2942,18 +2940,37 @@ class CrispPulsePlugin extends Plugin {
       const changeLabel = !current.coverage.recorded ? tr('当前无可用记录', 'No usable records now') : !previous.coverage.recorded ? tr('前期无可用记录', 'No usable records before') : before === 0 ? (now === 0 ? tr('均为零', 'Both zero') : tr('前期为零', 'Previously zero')) : `${percent > 0 ? '+' : ''}${percent}%`;
       return { key, label, unit, current: now, previous: before, percent, changeLabel };
     });
-    const saved = this.store.reviewDrafts?.[`${start}:${end}:${scope}`];
+    const saved = this.store.reviewDrafts?.[this.reviewDraftKeyFor(start, end, scope)];
     const draft = Object.fromEntries(Object.keys(REVIEW_DRAFT_FIELDS).map(key => [key, typeof saved?.[key] === 'string' ? saved[key] : '']));
     const actions = Array.isArray(saved?.actions) ? saved.actions.filter(a => a && typeof a.id === 'string' && typeof a.title === 'string').map(a => ({ ...a })) : [];
     const evidence = Array.isArray(saved?.evidence) ? saved.evidence.filter(e => e && typeof e.id === 'string' && typeof e.path === 'string').map(e => ({ ...e })) : [];
     return { period, scope, current, previous, comparison, draft, actions, evidence };
   }
 
+  /** 区间是否是一个自然周：已结束的完整周，或从周首到今天、还在进行的本周。 */
+  isReviewNaturalWeek(start, end) {
+    const week = reviewWeekRange(start, this.settings.weekStartsOn, 0, getTodayKey());
+    return week.start === start && week.end === end && (getReviewPeriod(start, end).days === 7 || end === getTodayKey());
+  }
+
+  /** 草稿身份：进行中的本周用整周作键，周二写的内容到周日、到下周看「上周」都是同一份。 */
+  reviewDraftKeyFor(start, end, scope) {
+    const key = getReviewDraftKey(start, end, scope);
+    return this.isReviewNaturalWeek(start, end) ? `${start}:${reviewDayKey(reviewDayNumber(start) + 6)}:${scope}` : key;
+  }
+
+  /** 页面复制、页面归档和两个命令共用：同一份复盘模型加上速记摘要。 */
+  async buildReviewReportModel(start, end, scope) {
+    const model = this.getReviewModel(start, end, scope);
+    model.memos = await this.getReviewMemoSummary(start, end);
+    return model;
+  }
+
   updateReviewDraft(start, end, scope, field, value) {
     getReviewPeriod(start, end);
     if (!Object.hasOwn(REVIEW_DRAFT_FIELDS, field) || !Object.hasOwn(REVIEW_SCOPE_LABELS, scope) || typeof value !== 'string') return;
     if (!this.store.reviewDrafts || typeof this.store.reviewDrafts !== 'object' || Array.isArray(this.store.reviewDrafts)) this.store.reviewDrafts = {};
-    const key = `${start}:${end}:${scope}`;
+    const key = this.reviewDraftKeyFor(start, end, scope);
     const old = this.store.reviewDrafts[key];
     this.store.reviewDrafts[key] = { ...(old && typeof old === 'object' ? old : {}), [field]: value, updatedAt: new Date().toISOString() };
     this.dirty = true;
@@ -3002,7 +3019,7 @@ class CrispPulsePlugin extends Plugin {
   }
 
   reviewDraftForWrite(start, end, scope) {
-    const key = getReviewDraftKey(start, end, scope);
+    const key = this.reviewDraftKeyFor(start, end, scope);
     if (!this.store.reviewDrafts || typeof this.store.reviewDrafts !== 'object' || Array.isArray(this.store.reviewDrafts)) this.store.reviewDrafts = {};
     if (!this.store.reviewDrafts[key] || typeof this.store.reviewDrafts[key] !== 'object' || Array.isArray(this.store.reviewDrafts[key])) this.store.reviewDrafts[key] = {};
     return this.store.reviewDrafts[key];
@@ -3032,9 +3049,14 @@ class CrispPulsePlugin extends Plugin {
     this.markReviewDraftChanged(draft);
   }
 
-  /** 上一期还能带入本期的行动（已带入过的不再算）。只读，不改任何草稿。 */
+  /**
+   * 上一期还能带入本期的行动（已带入过的不再算）。只读，不改任何草稿。
+   * 自然周（含进行中的本周）从上个完整自然周带入；其他区间从前一个等长区间带入。统计对比口径不受影响。
+   */
   previousActionCandidates(start, end, scope) {
-    const period = getReviewPeriod(start, end), sourceKey = getReviewDraftKey(period.previousStart, period.previousEnd, scope);
+    const period = getReviewPeriod(start, end);
+    const source = this.isReviewNaturalWeek(start, end) ? reviewWeekRange(start, this.settings.weekStartsOn, -1) : { start: period.previousStart, end: period.previousEnd };
+    const sourceKey = this.reviewDraftKeyFor(source.start, source.end, scope);
     const previous = this.store.reviewDrafts?.[sourceKey];if (!previous) return [];
     const structured = Array.isArray(previous.actions) && previous.actions.length > 0;
     let candidates = [];
@@ -3058,7 +3080,7 @@ class CrispPulsePlugin extends Plugin {
       }
       candidates = candidates.filter(a => a.status === 'pending');
     }
-    const existing = this.store.reviewDrafts?.[getReviewDraftKey(start, end, scope)]?.actions;
+    const existing = this.store.reviewDrafts?.[this.reviewDraftKeyFor(start, end, scope)]?.actions;
     const taken = Array.isArray(existing) ? existing : [];
     return candidates.filter(candidate => candidate.title && !taken.some(a => a?.originId === (candidate.originId || candidate.id) || a?.id === (candidate.originId || candidate.id))).map(candidate => ({ ...candidate, sourceKey }));
   }
@@ -3393,6 +3415,12 @@ class CrispPulsePlugin extends Plugin {
       await leaf.setViewState({ type: VIEW_TYPE_MEMO, active: true });
     }
     workspace.revealLeaf(leaf);
+  }
+
+  /** 打开速记面板并带上筛选条件（复盘页「看这 N 条」用）。 */
+  async openMemoQuery(query) {
+    await this.activateMemoView();
+    this.app.workspace.getLeavesOfType(VIEW_TYPE_MEMO)[0]?.view?.showQuery?.(query);
   }
 
   refreshMemoViews() {
@@ -6331,10 +6359,9 @@ class CrispPulseView extends ItemView {
     const bar = card.createDiv({ cls: 'crisp-pulse-review-period-bar' });
 
     // 自然周用整周翻页（本周进行中时，往前翻得到完整的上一周）；其他区间按等长平移。
-    const week = reviewWeekRange(start, weekStartsOn, 0);
-    const isWeek = week.start === start && (days === 7 || end === today);
-    const prevRange = isWeek ? reviewWeekRange(start, weekStartsOn, -1) : { start: model.period.previousStart, end: model.period.previousEnd };
-    const nextRange = isWeek ? (reviewDayNumber(start) + 7 <= reviewDayNumber(today) ? reviewWeekRange(reviewDayKey(reviewDayNumber(start) + 7), weekStartsOn, 0) : null)
+    const isWeek = this.plugin.isReviewNaturalWeek(start, end);
+    const prevRange = isWeek ? reviewWeekRange(start, weekStartsOn, -1, today) : { start: model.period.previousStart, end: model.period.previousEnd };
+    const nextRange = isWeek ? (reviewDayNumber(start) + 7 <= reviewDayNumber(today) ? reviewWeekRange(start, weekStartsOn, 1, today) : null)
       : (reviewDayNumber(end) + days <= reviewDayNumber(today) ? { start: reviewDayKey(reviewDayNumber(end) + 1), end: reviewDayKey(reviewDayNumber(end) + days) } : null);
     const nav = bar.createDiv({ cls: 'crisp-pulse-review-period-nav' });
     const arrow = (icon, label, range) => {
@@ -6370,20 +6397,30 @@ class CrispPulseView extends ItemView {
       button.addEventListener('click', () => this.applyReviewPeriod(range.start, range.end));
     }
 
-    // 写过东西的同范围草稿都列出来，换了日期也能找回。
+    // 写过东西的草稿都列出来（含其他数据范围，标明范围），换了日期或范围也能找回。
     const history = Object.entries(this.plugin.store.reviewDrafts || {}).map(([key, draft]) => {
       const [a, b, scope] = key.split(':');
-      if (scope !== model.scope || !draft || typeof draft !== 'object') return null;
+      if (!Object.hasOwn(REVIEW_SCOPE_LABELS, scope) || !draft || typeof draft !== 'object' || !(reviewDayNumber(a) <= reviewDayNumber(b))) return null;
       const size = Object.keys(REVIEW_DRAFT_FIELDS).filter(field => typeof draft[field] === 'string' && draft[field].trim()).length + (Array.isArray(draft.actions) ? draft.actions.length : 0) + (Array.isArray(draft.evidence) ? draft.evidence.length : 0);
-      return size ? { a, b, size } : null;
-    }).filter(Boolean).sort((x, y) => y.a.localeCompare(x.a) || y.b.localeCompare(x.b));
+      return size ? { a, b, scope, size } : null;
+    }).filter(Boolean).sort((x, y) => y.a.localeCompare(x.a) || y.b.localeCompare(x.b) || x.scope.localeCompare(y.scope));
     if (history.length) {
       const select = tools.createEl('select', { cls: 'crisp-pulse-scope-select crisp-pulse-review-history' });
       select.setAttr('aria-label', tr('历史复盘', 'Past reviews'));
       select.createEl('option', { text: tr(`历史复盘 · ${history.length}`, `Past reviews · ${history.length}`), value: '' });
-      for (const item of history) select.createEl('option', { text: tr(`${item.a} — ${item.b} · ${item.size} 项`, `${item.a} — ${item.b} · ${plural(item.size, 'item')}`), value: `${item.a}:${item.b}` });
-      select.value = history.some(item => item.a === start && item.b === end) ? `${start}:${end}` : '';
-      select.addEventListener('change', () => { if (select.value) { const [a, b] = select.value.split(':'); this.applyReviewPeriod(a, b); } });
+      for (const item of history) {
+        const scopeNote = item.scope === model.scope ? '' : ` · ${REVIEW_SCOPE_LABELS[item.scope]}`;
+        select.createEl('option', { text: tr(`${item.a} — ${item.b} · ${item.size} 项${scopeNote}`, `${item.a} — ${item.b} · ${plural(item.size, 'item')}${scopeNote}`), value: `${item.a}:${item.b}:${item.scope}` });
+      }
+      const current = this.plugin.reviewDraftKeyFor(start, end, model.scope);
+      select.value = history.some(item => `${item.a}:${item.b}:${item.scope}` === current) ? current : '';
+      // 进行中的本周以整周作键，结束日可能在今天之后，打开时截到今天；选了别的范围就一起切过去
+      select.addEventListener('change', () => {
+        if (!select.value) return;
+        const [a, b, scope] = select.value.split(':');
+        this.currentScope = scope;
+        this.applyReviewPeriod(a, b > today ? today : b);
+      });
     }
 
     const custom = card.createEl('details', { cls: 'crisp-pulse-review-custom' });
@@ -6503,10 +6540,13 @@ class CrispPulseView extends ItemView {
       groups.set(name, group);
     }
     const sorted = [...groups.values()].sort((a, b) => b.count - a.count || b.words - a.words || a.name.localeCompare(b.name));
-    const shown = sorted.slice(0, 6);
-    const rest = sorted.slice(6).reduce((sum, group) => sum + group.count, 0) + loose;
-    const peak = Math.max(1, ...shown.map(group => group.count), rest);
-    if (shown.length) {
+    // 默认前六个子目录；其余收进「其他」，点开全部列出。直属当前目录的笔记单独一行，不和子目录混在一起。
+    const expanded = this.reviewShowAllFolders === folder;
+    const shown = expanded ? sorted : sorted.slice(0, 6);
+    const hidden = sorted.slice(shown.length);
+    const hiddenCount = hidden.reduce((sum, group) => sum + group.count, 0);
+    const peak = Math.max(1, ...shown.map(group => group.count), hiddenCount, loose);
+    if (shown.length || loose) {
       const bars = section.createDiv({ cls: 'crisp-pulse-review-folders' });
       const palette = ['blue', 'purple', 'orange', 'green', 'rose', 'teal'];
       shown.forEach((group, i) => {
@@ -6519,12 +6559,21 @@ class CrispPulseView extends ItemView {
         button.setAttr('aria-label', tr(`进入 ${group.name}：${group.notes} 篇笔记，${group.count} 笔记×天，新增 ${group.words} 词`, `Open ${group.name}: ${plural(group.notes, 'note')}, ${group.count} note × day, ${group.words} words added`));
         button.addEventListener('click', () => { this.reviewFolder = folder ? `${folder}/${group.name}` : group.name; this.reviewShowAllFiles = false; this.render(); });
       });
-      if (rest > 0) {
-        const other = bars.createDiv({ cls: 'crisp-pulse-review-folder is-static' });
-        other.createSpan({ cls: 'crisp-pulse-review-folder-name', text: sorted.length > 6 ? tr('其他', 'Other') : tr('此目录下的笔记', 'Notes in this folder') });
+      if (hidden.length) {
+        const other = bars.createEl('button', { cls: 'crisp-pulse-review-folder', attr: { type: 'button' } });
+        other.createSpan({ cls: 'crisp-pulse-review-folder-name', text: tr(`其他 ${hidden.length} 个目录`, `${plural(hidden.length, 'more folder')}`) });
         const track = other.createSpan({ cls: 'crisp-pulse-review-folder-track' });
-        track.createSpan({ cls: 'crisp-pulse-review-folder-fill pulse-chart-fill-gray' }).style.width = `${Math.max(2, rest / peak * 100)}%`;
-        other.createSpan({ cls: 'crisp-pulse-review-folder-meta', text: String(rest) });
+        track.createSpan({ cls: 'crisp-pulse-review-folder-fill pulse-chart-fill-gray' }).style.width = `${Math.max(2, hiddenCount / peak * 100)}%`;
+        other.createSpan({ cls: 'crisp-pulse-review-folder-meta', text: tr(`${hiddenCount} · 展开`, `${hiddenCount} · expand`) });
+        other.setAttr('aria-label', tr(`展开其余 ${hidden.length} 个目录`, `Show ${plural(hidden.length, 'more folder')}`));
+        other.addEventListener('click', () => { this.reviewShowAllFolders = folder; this.render(); });
+      }
+      if (loose > 0) {
+        const own = bars.createDiv({ cls: 'crisp-pulse-review-folder is-static' });
+        own.createSpan({ cls: 'crisp-pulse-review-folder-name', text: folder ? tr('直属此目录的笔记', 'Notes directly in this folder') : tr('库根目录的笔记', 'Notes at the vault root') });
+        const track = own.createSpan({ cls: 'crisp-pulse-review-folder-track' });
+        track.createSpan({ cls: 'crisp-pulse-review-folder-fill pulse-chart-fill-gray' }).style.width = `${Math.max(2, loose / peak * 100)}%`;
+        own.createSpan({ cls: 'crisp-pulse-review-folder-meta', text: String(loose) });
       }
     }
 
@@ -6643,8 +6692,8 @@ class CrispPulseView extends ItemView {
             catch (error) { new Notice(tr(`Crisp Pulse：${error.message || error}`, `Crisp Pulse: ${error.message || error}`)); }
           });
         }
-        const open = pending.createEl('button', { cls: 'crisp-pulse-review-more', attr: { type: 'button' }, text: tr('在速记面板里回看全部', 'Review all in the memo panel') });
-        open.addEventListener('click', () => this.plugin.activateMemoView());
+        const open = pending.createEl('button', { cls: 'crisp-pulse-review-more', attr: { type: 'button' }, text: tr(`在速记面板里看这 ${r.pending.length} 条`, `See these ${r.pending.length} in the memo panel`) });
+        open.addEventListener('click', () => this.plugin.openMemoQuery({ from: model.period.start, to: model.period.end, converted: false }));
       }
       if (r.results.length) {
         const list = lists.createDiv({ cls: 'crisp-pulse-review-memo-results' });
@@ -6703,7 +6752,7 @@ class CrispPulseView extends ItemView {
   renderReviewNotebook(parent, model) {
     const { start, end } = model.period;
     const args = [start, end, model.scope];
-    const savedAt = this.plugin.store.reviewDrafts?.[`${start}:${end}:${model.scope}`]?.updatedAt;
+    const savedAt = this.plugin.store.reviewDrafts?.[this.plugin.reviewDraftKeyFor(start, end, model.scope)]?.updatedAt;
     const section = this.trayCard(parent, { icon: 'scroll-text', title: tr('这次复盘留下什么', 'What this review keeps'), subtitle: savedAt ? tr(`草稿按周期保存 · 最近修改 ${savedAt.slice(5, 16).replace('T', ' ')}`, `Saved per period · last edited ${savedAt.slice(5, 16).replace('T', ' ')}`) : tr('草稿按周期保存，换了日期也能在「历史复盘」里找回。', 'Saved per period; find it again under Past reviews.'), wrap: true, insetCls: 'crisp-pulse-review-section crisp-pulse-review-notebook' });
     const step = (number, title, hint) => {
       const box = section.createDiv({ cls: 'crisp-pulse-review-step' });
@@ -6825,11 +6874,7 @@ class CrispPulseView extends ItemView {
     const buttons = footer.createDiv({ cls: 'crisp-pulse-review-controls' });
     const status = footer.createDiv({ cls: 'crisp-pulse-review-note' });
     status.setAttr('role', 'status');
-    const fresh = async () => {
-      const report = this.plugin.getReviewModel(start, end, model.scope);
-      report.memos = await this.plugin.getReviewMemoSummary(start, end);
-      return report;
-    };
+    const fresh = () => this.plugin.buildReviewReportModel(start, end, model.scope);
     const archive = buttons.createEl('button', { cls: 'crisp-pulse-tab-btn is-active', text: tr('归档至知识库', 'Archive to vault') });
     archive.addEventListener('click', async () => {
       archive.disabled = true;
@@ -9677,6 +9722,15 @@ class CrispPulseMemoView extends ItemView {
     this.filterDate = null;
     this.filterTag = null;
     this.filterMemoId = null;
+  }
+
+  /** 从复盘跳过来：只按给定的日期和转化状态筛选，先清掉面板上原有的条件；条件以筛选标签显示，可逐个清除。 */
+  showQuery({ from = "", to = "", converted = null } = {}) {
+    this.resetFilters();
+    Object.assign(this.filters, { from, to, converted });
+    this.tab = "all";
+    this.showAdvanced = false;
+    void this.reload();
   }
 
   /** 只看某一条速记（从其他插件跳过来时用）。 */

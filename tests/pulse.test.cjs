@@ -1275,9 +1275,88 @@ test('period navigation and draft input are wired to the live review model', asy
  root=element();view.renderRetrospectivePanel(root);assert.equal(all(root).find(e=>e.dataset.reviewField==='progress').value,'');
  // 写过的草稿出现在「历史复盘」里，选中即回到那一期。
  const history=all(root).find(e=>e.attrs['aria-label']==='历史复盘');
- assert.ok(history.children.some(o=>o.options.value==='2026-09-02:2026-09-08'));
- history.value='2026-09-02:2026-09-08';history.handlers.change();assert.deepEqual([view.reviewStart,view.reviewEnd],['2026-09-02','2026-09-08']);
+ assert.ok(history.children.some(o=>o.options.value==='2026-09-02:2026-09-08:reliable'));
+ history.value='2026-09-02:2026-09-08:reliable';history.handlers.change();assert.deepEqual([view.reviewStart,view.reviewEnd],['2026-09-02','2026-09-08']);
+ // 其他数据范围的草稿也列出来并标明范围，选中时一起切换范围。
+ p.updateReviewDraft('2026-08-20','2026-08-26','all','learning','另一范围');
+ root=element();view.renderRetrospectivePanel(root);
+ const other=all(root).find(e=>e.attrs['aria-label']==='历史复盘');
+ const option=other.children.find(o=>o.options.value==='2026-08-20:2026-08-26:all');assert.match(option.options.text,/全部历史/);
+ other.value=option.options.value;other.handlers.change();assert.equal(view.currentScope,'all');assert.deepEqual([view.reviewStart,view.reviewEnd],['2026-08-20','2026-08-26']);
+ view.currentScope='reliable';
  const input=all(root).find(e=>e.dataset.reviewField==='period-start');input.value='2026-08-20';input.handlers.input();all(root).find(e=>e.options.text==='应用日期').handlers.click();assert.equal(view.reviewStart,'2026-08-20');
+});
+
+test('week navigation is reversible and only the running week is clipped', async()=>{
+ const {p,helpers}=setup();await p.loadPluginData();
+ const week=(...args)=>({...helpers.reviewWeekRange(...args)});
+ // 目标周与“今天”分开：往后翻到已结束的周保持完整七天。
+ assert.deepEqual(week('2026-08-23','sunday',1,'2026-09-08'),{start:'2026-08-30',end:'2026-09-05'});
+ assert.deepEqual(week('2026-08-30','sunday',1,'2026-09-08'),{start:'2026-09-06',end:'2026-09-08'});
+ assert.deepEqual(week('2026-12-28','monday',1,'2027-01-20'),{start:'2027-01-04',end:'2027-01-10'});
+ function element(tag='div',options={}){
+  const el={tag,options,children:[],dataset:{},attrs:{...(options.attr||{})},handlers:{},style:{},value:'',setAttr(k,v){this.attrs[k]=v;},addEventListener(k,v){this.handlers[k]=v;},setText(v){this.text=v;},empty(){this.children=[];}};
+  el.createEl=(t,o={})=>{const child=element(t,o);el.children.push(child);return child;};
+  el.createDiv=o=>el.createEl('div',o);el.createSpan=o=>el.createEl('span',o);return el;
+ }
+ const all=e=>[e,...e.children.flatMap(all)];const view=new helpers.CrispPulseView({},p);view.app=p.app;view.render=()=>{};
+ const click=label=>{const root=element();view.renderRetrospectivePanel(root);all(root).find(e=>e.attrs['aria-label']===label).handlers.click();return [view.reviewStart,view.reviewEnd];};
+ view.reviewStart='2026-08-30';view.reviewEnd='2026-09-05';
+ assert.deepEqual(click('前一个周期'),['2026-08-23','2026-08-29']);
+ assert.deepEqual(click('后一个周期'),['2026-08-30','2026-09-05']);
+ assert.deepEqual(click('后一个周期'),['2026-09-06','2026-09-08']);
+ assert.deepEqual(click('前一个周期'),['2026-08-30','2026-09-05']);
+});
+
+test('the running week keeps one draft and carries over last full week’s actions', async()=>{
+ const {p}=setup();await p.loadPluginData();
+ // 今天 2026-09-08（周二，周日开始）：本周 09-06—09-08，上周 08-30—09-05。
+ p.addReviewAction('2026-08-30','2026-09-05','all','上周的承诺');
+ assert.equal(p.previousActionCandidates('2026-09-06','2026-09-08','all').length,1,'本周进行中也能带入上个完整周');
+ assert.equal(p.importPreviousActions('2026-09-06','2026-09-08','all'),1);
+ assert.equal(p.importPreviousActions('2026-09-06','2026-09-08','all'),0,'重复带入去重');
+ // 本周草稿用整周身份：周二写下的内容，周日看完整一周时仍是同一份。
+ p.updateReviewDraft('2026-09-06','2026-09-08','all','learning','周二写的');
+ assert.ok(p.store.reviewDrafts['2026-09-06:2026-09-12:all']);
+ assert.equal(p.getReviewModel('2026-09-06','2026-09-08','all').draft.learning,'周二写的');
+ assert.equal(p.getReviewModel('2026-09-06','2026-09-08','all').actions[0].title,'上周的承诺');
+ // 统计对比口径不变：仍与前一个等长区间比较。
+ const model=p.getReviewModel('2026-09-06','2026-09-08','all');
+ assert.deepEqual([model.period.previousStart,model.period.previousEnd],['2026-09-03','2026-09-05']);
+ // 不是自然周的自定义区间：仍按前一个等长区间带入，草稿键不变。
+ p.addReviewAction('2026-08-27','2026-09-01','all','等长前期');
+ assert.equal(p.previousActionCandidates('2026-09-02','2026-09-07','all')[0].title,'等长前期');
+ p.updateReviewDraft('2026-09-02','2026-09-07','all','learning','自定义');
+ assert.ok(p.store.reviewDrafts['2026-09-02:2026-09-07:all']);
+});
+
+test('materials reach every folder and the memo link carries the review filters', async()=>{
+ const {p,helpers,context}=setup();await p.loadPluginData();
+ function element(tag='div',options={}){
+  const el={tag,options,children:[],dataset:{},attrs:{...(options.attr||{})},handlers:{},style:{},value:'',setAttr(k,v){this.attrs[k]=v;},addEventListener(k,v){this.handlers[k]=v;},setText(v){this.text=v;},empty(){this.children=[];}};
+  el.createEl=(t,o={})=>{const child=element(t,o);el.children.push(child);return child;};
+  el.createDiv=o=>el.createEl('div',o);el.createSpan=o=>el.createEl('span',o);return el;
+ }
+ const all=e=>[e,...e.children.flatMap(all)];const view=new helpers.CrispPulseView({},p);view.app=p.app;view.render=()=>{};
+ const files=['A','B','C','D','E','F','G'].map((d,i)=>({path:`${d}/n.md`,words:10+i,rewrittenWords:0,captureWords:0,days:7-i,created:false,tasks:0})).concat([{path:'root.md',words:1,rewrittenWords:0,captureWords:0,days:1,created:false,tasks:0}]);
+ const model={period:{start:'2026-09-02',end:'2026-09-08'},scope:'all',current:{allFiles:files},evidence:[]};
+ const folders=()=>{const root=element();view.renderReviewMaterials(root,model);return all(root).filter(e=>e.tag==='button'&&e.options.cls==='crisp-pulse-review-folder');};
+ let buttons=folders();
+ assert.equal(buttons.length,7,'六个目录加一个「其他」');
+ const more=buttons.find(b=>/展开/.test(b.attrs['aria-label']||''));assert.ok(more,'「其他」可以点开');
+ more.handlers.click();
+ buttons=folders();
+ assert.equal(buttons.length,7,'展开后七个目录都能进入');
+ assert.ok(buttons.some(b=>b.attrs.title==='G'));
+ buttons.find(b=>b.attrs.title==='G').handlers.click();assert.equal(view.reviewFolder,'G');
+ // 直属笔记单独一行，不混进目录
+ view.reviewFolder='';const root=element();view.renderReviewMaterials(root,model);
+ assert.ok(all(root).some(e=>e.options.text==='库根目录的笔记'));
+ // 速记面板：先清掉原有条件，再按复盘区间和未转化筛选
+ const memoView={filters:{query:'旧条件',from:'',to:'',includeTags:['x'],excludeTags:[],untagged:true,converted:true,hasLink:false,hasImage:false,hasAudio:false,onThisDay:''},filterTag:'tag',reloaded:0,reload(){this.reloaded++;}};
+ memoView.resetFilters=helpers.CrispPulseView&&context.module.exports.CrispPulseMemoView.prototype.resetFilters;
+ context.module.exports.CrispPulseMemoView.prototype.showQuery.call(memoView,{from:'2026-10-12',to:'2026-10-18',converted:false});
+ assert.deepEqual([memoView.filters.from,memoView.filters.to,memoView.filters.converted,memoView.filters.query,memoView.filters.includeTags.length,memoView.filters.untagged,memoView.filterTag,memoView.tab,memoView.reloaded],['2026-10-12','2026-10-18',false,'',0,false,null,'all',1]);
 });
 
 test('natural weeks keep fixed boundaries and clip the running week to today', ()=>{
@@ -1494,8 +1573,9 @@ test('copy and archive commands generate modern review report with reflections a
  p.addSettingTab=()=>{};p.registerView=()=>{};p.addRibbonIcon=()=>{};
  await p.onload();
 
+ // 命令导出本周（自然周，设置默认周日开始），和复盘页「本周」同一份草稿。
  const today = '2026-09-08';
- const start = '2026-09-02';
+ const start = '2026-09-06';
  p.updateReviewDraft(start,today,'reliable','learning','本周新认识');
  p.addReviewAction(start,today,'reliable','关键改动任务');
 
@@ -1513,6 +1593,7 @@ test('copy and archive commands generate modern review report with reflections a
  assert.ok(copiedText.includes('本周新认识'));
  assert.ok(copiedText.includes('## 行动追踪'));
  assert.ok(copiedText.includes('关键改动任务'));
+ assert.ok(copiedText.includes('## 速记与转化'),'命令导出和页面一样带速记摘要');
 
  let archivedFile=null;
  p.app.vault.create=async(path,content)=>{archivedFile={path,content};return{path};};
@@ -1529,6 +1610,7 @@ test('copy and archive commands generate modern review report with reflections a
  assert.ok(archivedFile.path.includes(`${start}_${today}-reliable-知识工作复盘.md`));
  assert.ok(archivedFile.content.includes('本周新认识'));
  assert.ok(archivedFile.content.includes('关键改动任务'));
+ assert.ok(archivedFile.content.includes('## 速记与转化'));
 });
 
 test('rebuilding estimated history does not retroactively exclude historical system artifacts when excludeSystemArtifacts is enabled',async()=>{
