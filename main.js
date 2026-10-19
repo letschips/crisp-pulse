@@ -4656,15 +4656,25 @@ function createBannerImageSuggest(app, inputEl, onPick) {
 // One painted canvas per mode; each render copies it instead of repainting.
 const PULSE_SKY_WIDTH = 900, PULSE_SKY_HEIGHT = 112;
 
-/* 天空里的太阳和月亮：独立的小画布叠在天空上，按百分比定位，窄屏时天空右侧被裁也不会切掉它。
-   太阳 6:00—18:00、月亮 18:00—6:00 从左到右走一道弧；时间不在自己的时段（如浅色主题的深夜），就停在右上角。 */
+/* 天体和天空分层绘制。轨迹按横幅实际尺寸避开左侧灯塔，并给完整光晕留边。
+   手动主题的非活动时段停在右上角；时段两端渐隐，重置轨迹时不横穿画面。 */
 const PULSE_CELESTIAL_SIZE = 25;
-function celestialPlacement(date, mode) {
-  const h = date.getHours() + date.getMinutes() / 60;
+function celestialPlacement(date, mode, width = PULSE_SKY_WIDTH, height = PULSE_SKY_HEIGHT) {
+  const h = date.getHours() + date.getMinutes() / 60 + date.getSeconds() / 3600;
   const hours = mode === 'night' ? (h >= 18 ? h - 18 : h < 6 ? h + 6 : -1) : (h >= 6 && h < 18 ? h - 6 : -1);
-  if (hours < 0) return { t: null, x: 86, y: 20 };
-  const t = hours / 12;
-  return { t, x: 40 + 54 * t, y: 36 - 23 * Math.sin(Math.PI * t) };
+  const elapsed = hours < 0 ? (h - (mode === 'night' ? 6 : 18) + 24) % 24 : hours;
+  const opacity = Math.max(0, Math.min(1, elapsed * 12, (12 - elapsed) * 12));
+  const half = height * 0.2232 / 2, gap = Math.min(8, width / 20);
+  const end = Math.min(width * 0.94, width - half - gap);
+  // 天空背景 cover 后固定从左侧取景；灯塔及小屋最右端约在背景高度的 1.02 倍处。
+  const landmarkRight = PULSE_SKY_HEIGHT * 1.02 * Math.max(width / PULSE_SKY_WIDTH, height / PULSE_SKY_HEIGHT);
+  const safeStart = Math.max(width * 0.4, landmarkRight + half + gap);
+  const cramped = safeStart > end;
+  const start = cramped ? Math.min(end, Math.max(half + gap, width * 0.4)) : safeStart;
+  const t = hours < 0 ? null : hours / 12;
+  const x = t === null ? Math.min(width * 0.86, end) : start + (end - start) * t;
+  const y = cramped ? Math.max(half + 2, height * 0.13) : height * (t === null ? 0.20 : 0.36 - 0.23 * Math.sin(Math.PI * t));
+  return { t, x: x / width * 100, y: y / height * 100, opacity };
 }
 
 /** 月相 0—1：0 新月、0.25 上弦、0.5 满月、0.75 下弦。以 2000-01-06 18:14 UTC 的新月为基准，按朔望月推算。 */
@@ -4741,19 +4751,25 @@ class CrispPulseView extends ItemView {
   async onOpen() {
     this.render();
     const container = this.containerEl.children[1];
-    this.registerInterval(container.ownerDocument.defaultView.setInterval(() => this.updateCelestial(), 5 * 60 * 1000));
+    const win = container.ownerDocument.defaultView;
+    this.registerInterval(win.setInterval(() => this.updateCelestial(), 60 * 1000));
+    this.registerDomEvent(win, 'focus', () => this.updateCelestial(true));
+    this.registerDomEvent(container.ownerDocument, 'visibilitychange', () => {
+      if (!container.ownerDocument.hidden) this.updateCelestial(true);
+    });
     this.registerEvent(this.app.workspace.on("css-change", () => {
       const mode = this.currentBannerMode();
       const flipped = this.themeMode && this.themeMode !== mode;
       this.themeMode = mode;
       // 像素天空和年度画像的知识指纹都按主题配色写死在画面里，深浅色一换就重画
-      if (this.plugin.settings.showHeaderBanner && this.bannerMode !== "image" && this.bannerMode !== mode) this.render();
-      else if (flipped && this.activeViewTab === "yearly") this.render();
-      else if (this.footerEls && this.footerMode !== mode) this.paintFooter();
+      if (flipped && this.activeViewTab === "yearly") this.render();
+      else {
+        this.updateCelestial(true);
+        if (this.footerEls && this.footerMode !== mode) this.paintFooter();
+      }
     }));
     this.themeMode = this.currentBannerMode();
     this.registerDomEvent(container, 'pointerdown', event => { this.lastPointerType = event.pointerType; }, { capture: true });
-    const win = container.ownerDocument.defaultView;
     this.analyticsResizeObserver = new win.ResizeObserver(() => {
       if (!["analytics", "yearly"].includes(this.activeViewTab) || Math.abs(container.clientWidth - (this.analyticsLastWidth || 0)) < 2) return;
       if (this.analyticsResizeFrame) win.cancelAnimationFrame(this.analyticsResizeFrame);
@@ -4769,6 +4785,8 @@ class CrispPulseView extends ItemView {
     if (this.pomodoroTicker) window.clearInterval(this.pomodoroTicker);
     this.analyticsResizeObserver?.disconnect();
     this.footerResizeObserver?.disconnect();
+    this.bannerResizeObserver?.disconnect();
+    for (const animation of this.celestialEl?.getAnimations?.() || []) animation.cancel();
     if (this.analyticsResizeFrame) this.containerEl.ownerDocument.defaultView.cancelAnimationFrame(this.analyticsResizeFrame);
   }
 
@@ -5875,6 +5893,16 @@ class CrispPulseView extends ItemView {
     return this.containerEl.ownerDocument.body.classList.contains("theme-dark") ? "night" : "day";
   }
 
+  // Obsidian 的基础主题值：moonstone 浅色、obsidian 深色、system 跟随系统。
+  // system 的天空按本地昼夜走；页脚和其他统计图仍按实际界面主题配色。
+  currentSkyMode(date = new Date()) {
+    const theme = this.app?.vault?.getConfig?.('theme');
+    if (theme === 'moonstone') return 'day';
+    if (theme === 'obsidian') return 'night';
+    if (theme === 'system') return date.getHours() >= 6 && date.getHours() < 18 ? 'day' : 'night';
+    return this.currentBannerMode();
+  }
+
   /* 页脚：和顶部天空呼应的像素地平线。山脊是最近一段时间每天的贡献分，最右边的小灯杆是今天；
      白天灯杆上挂小旗。未激活时只画地形，不读统计。 */
   renderFooter(container, { locked = false } = {}) {
@@ -5981,11 +6009,14 @@ class CrispPulseView extends ItemView {
     els.caption.setText(caption);
   }
 
-  // Banner above the header: the user's image, else a pixel sky (night in dark themes, daytime in light ones).
+  // Banner above the header: the user's image, else a sky matching the selected base-theme rule.
   // The bottom fades into the view background.
   renderBanner(parent) {
+    this.bannerResizeObserver?.disconnect();
+    this.celestialEl = null;
+    this.celestialPosition = null;
     const file = this.plugin.getBannerImageFile();
-    this.bannerMode = file ? "image" : this.currentBannerMode();
+    this.bannerMode = file ? "image" : this.currentSkyMode();
     const banner = parent.createDiv({ cls: "crisp-pulse-banner", attr: { "aria-hidden": "true" } });
     if (file) {
       banner.createEl("img", { attr: { src: this.app.vault.getResourcePath(file), alt: "" } });
@@ -5994,18 +6025,46 @@ class CrispPulseView extends ItemView {
     const canvas = banner.createEl("canvas", { attr: { width: PULSE_SKY_WIDTH, height: PULSE_SKY_HEIGHT } });
     canvas.getContext("2d").drawImage(getPulseSky(parent.ownerDocument, this.bannerMode), 0, 0);
     this.celestialEl = banner.createEl("canvas", { cls: "crisp-pulse-celestial", attr: { width: PULSE_CELESTIAL_SIZE, height: PULSE_CELESTIAL_SIZE } });
-    this.updateCelestial();
+    this.updateCelestial(true);
+    const win = parent.ownerDocument.defaultView;
+    if (win?.ResizeObserver) {
+      this.bannerResizeObserver = new win.ResizeObserver(() => this.updateCelestial(true));
+      this.bannerResizeObserver.observe(banner);
+    }
   }
 
-  /** 按当前时间摆放太阳或月亮，并按今天的月相重画；看板打开时每 5 分钟走一次。 */
-  updateCelestial() {
+  /** 每分钟更新；唤醒、显示和尺寸变化时立即校正，不重绘统计面板。 */
+  updateCelestial(immediate = false) {
     const el = this.celestialEl;
     if (!el?.isConnected || this.bannerMode === "image") return;
+    const doc = el.ownerDocument, win = doc.defaultView;
+    if (doc.hidden) return;
+    const banner = el.parentElement, rect = banner.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
     const now = new Date();
-    paintCelestial(el, this.bannerMode, lunarPhase(now));
-    const { x, y } = celestialPlacement(now, this.bannerMode);
-    el.style.left = `${x}%`;
-    el.style.top = `${y}%`;
+    const mode = this.currentSkyMode(now);
+    if (mode !== this.bannerMode) {
+      this.bannerMode = mode;
+      const sky = banner.querySelector('canvas:not(.crisp-pulse-celestial)');
+      sky?.getContext('2d').drawImage(getPulseSky(doc, mode), 0, 0);
+    }
+    paintCelestial(el, mode, lunarPhase(now));
+    const { x, y, t, opacity } = celestialPlacement(now, mode, rect.width, rect.height);
+    const transform = `translate(${rect.width * x / 100}px, ${rect.height * y / 100}px) translate(-50%, -50%)`;
+    const previous = this.celestialPosition;
+    const reset = previous && (previous.mode !== mode || (previous.t === null) !== (t === null) || (t !== null && previous.t !== null && Math.abs(t - previous.t) > 0.05));
+    const visible = rect.bottom > 0 && rect.top < win.innerHeight && rect.right > 0 && rect.left < win.innerWidth;
+    const animate = !immediate && previous && visible && !win.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const from = animate && !reset ? win.getComputedStyle(el).transform : null;
+    const fromOpacity = animate && !reset ? win.getComputedStyle(el).opacity : 0;
+    for (const animation of el.getAnimations?.() || []) animation.cancel();
+    el.style.transform = transform;
+    el.style.opacity = String(opacity);
+    el.dataset.mode = mode;
+    if (animate && el.animate && (reset || previous.transform !== transform)) {
+      el.animate(reset ? [{ opacity: 0 }, { opacity }] : [{ transform: from, opacity: fromOpacity }, { transform, opacity }], { duration: 1000, easing: 'linear' });
+    }
+    this.celestialPosition = { mode, t, transform };
   }
 
   renderHeader(parent) {
