@@ -4295,7 +4295,7 @@ const PIXEL_TOMATO = [
   "..dddddd..",
 ];
 
-/** 画一个像素番茄。state：done 完成、missed 中断、todo 还没做（只剩轮廓）、current 正在做（按 progress 从下往上填满）。 */
+/** 画一个像素番茄。state：done 完成、missed 中断、todo 还没做（浅色剪影）、current 正在做（按 progress 由青转红地成熟）。 */
 function pixelTomato(parent, state = "done", progress = 0) {
   const doc = parent.ownerDocument || document;
   const NS = "http://www.w3.org/2000/svg";
@@ -4304,19 +4304,21 @@ function pixelTomato(parent, state = "done", progress = 0) {
   svg.setAttribute("shape-rendering", "crispEdges");
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("class", `pulse-tomato ${PIXEL_TOMATO_STATES[state] || PIXEL_TOMATO_STATES.done}`);
-  // 还没做的番茄只画轮廓：四邻有空白的像素才画
-  const filled = (x, y) => (PIXEL_TOMATO[y]?.[x] || ".") !== ".";
-  const fillFrom = state === "current" ? 10 - Math.round(Math.max(0, Math.min(1, progress)) * 10) : 0;
+  // 成熟度按十档取整，和计时器每填一档重画一次对齐
+  if (state === "current") {
+    // 青 → 橙黄 → 红分两段混色，中途不发灰；按十档取整，和计时器每填一档重画一次对齐
+    const step = Math.round(Math.max(0, Math.min(1, progress)) * 10) / 10;
+    svg.classList.add(step < 0.5 ? "is-early" : "is-late");
+    svg.style.setProperty("--ripe", `${Math.round((step < 0.5 ? step : step - 0.5) * 200)}%`);
+  }
   PIXEL_TOMATO.forEach((row, y) => [...row].forEach((ch, x) => {
     if (ch === ".") return;
-    const outline = state === "todo" || (state === "current" && y < fillFrom);
-    if (outline && filled(x - 1, y) && filled(x + 1, y) && filled(x, y - 1) && filled(x, y + 1)) return;
     const rect = doc.createElementNS(NS, "rect");
     rect.setAttribute("x", String(x));
     rect.setAttribute("y", String(y));
     rect.setAttribute("width", "1");
     rect.setAttribute("height", "1");
-    rect.setAttribute("class", outline && state === "current" ? `${PIXEL_TOMATO_CLASSES[ch]} t-outline` : PIXEL_TOMATO_CLASSES[ch]);
+    rect.setAttribute("class", PIXEL_TOMATO_CLASSES[ch]);
     svg.appendChild(rect);
   }));
   parent.appendChild(svg);

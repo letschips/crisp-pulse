@@ -2785,9 +2785,17 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 .crisp-pulse-view .pulse-tomato .t-leaf { fill: var(--pulse-tomato-leaf); }
 .crisp-pulse-view .pulse-tomato .t-leaf-dark { fill: color-mix(in srgb, var(--pulse-tomato-leaf) 70%, #000); }
 .crisp-pulse-view .pulse-tomato.is-missed { filter: grayscale(1); opacity: 0.5; }
-.crisp-pulse-view .pulse-tomato.is-current .t-outline { fill: color-mix(in srgb, var(--pulse-tomato) 45%, transparent); }
-.crisp-pulse-view .pulse-tomato.is-todo rect { fill: color-mix(in srgb, var(--text-normal) 22%, transparent); }
-.crisp-pulse-view .pulse-tomato.is-todo :is(.t-leaf, .t-leaf-dark) { fill: color-mix(in srgb, var(--pulse-tomato-leaf) 45%, transparent); }
+/* 正在做的番茄：从青番茄慢慢熟成红番茄，前半段青转橙黄，后半段橙黄转红。 */
+.crisp-pulse-view .pulse-tomato.is-current { --pulse-tomato-unripe: #9fc45a; --pulse-tomato-turning: #f0a23c; }
+.crisp-pulse-view .pulse-tomato.is-current.is-early { --pulse-tomato-ripening: color-mix(in srgb, var(--pulse-tomato-turning) var(--ripe, 0%), var(--pulse-tomato-unripe)); }
+.crisp-pulse-view .pulse-tomato.is-current.is-late { --pulse-tomato-ripening: color-mix(in srgb, var(--pulse-tomato) var(--ripe, 0%), var(--pulse-tomato-turning)); }
+.crisp-pulse-view .pulse-tomato.is-current .t-body { fill: var(--pulse-tomato-ripening); }
+.crisp-pulse-view .pulse-tomato.is-current .t-light { fill: color-mix(in srgb, var(--pulse-tomato-ripening) 55%, #fff); }
+.crisp-pulse-view .pulse-tomato.is-current .t-shade { fill: color-mix(in srgb, var(--pulse-tomato-ripening) 72%, #000); }
+/* 还没做的番茄：完整的浅色剪影，底部略深，叶子淡绿，不画锯齿轮廓。 */
+.crisp-pulse-view .pulse-tomato.is-todo :is(.t-body, .t-light) { fill: color-mix(in srgb, var(--text-normal) 10%, transparent); }
+.crisp-pulse-view .pulse-tomato.is-todo .t-shade { fill: color-mix(in srgb, var(--text-normal) 16%, transparent); }
+.crisp-pulse-view .pulse-tomato.is-todo :is(.t-leaf, .t-leaf-dark) { fill: color-mix(in srgb, var(--pulse-tomato-leaf) 34%, transparent); }
 
 .crisp-pulse-view .pulse-pomo-live {
   --pomo-tone: var(--pulse-tomato);
