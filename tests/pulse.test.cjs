@@ -69,7 +69,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8').replace(PUBLIC_PEM_RE, '`' + LOCAL_PUBLIC_PEM + '`') +
-    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined,splitActiveInterval:typeof splitActiveInterval === "function" ? splitActiveInterval : undefined,buildHourlyProfile:typeof buildHourlyProfile === "function" ? buildHourlyProfile : undefined,getReviewClues,reviewWeekRange};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined,splitActiveInterval:typeof splitActiveInterval === "function" ? splitActiveInterval : undefined,buildHourlyProfile:typeof buildHourlyProfile === "function" ? buildHourlyProfile : undefined,getReviewClues,reviewWeekRange,buildOverviewModel:typeof buildOverviewModel === "function" ? buildOverviewModel : undefined,dayComposition:typeof dayComposition === "function" ? dayComposition : undefined,dayRhythm:typeof dayRhythm === "function" ? dayRhythm : undefined};',
     context
   );
   const Pulse = context.module.exports;
@@ -1375,6 +1375,40 @@ test('the footer Tempo entry only appears for an enabled Tempo that can open its
  p.app.plugins.plugins['crisp-tempo']={unloaded:true,activateView(){}};assert.equal(p.tempoEntry(),null,'已卸载不显示');
  p.app.plugins.plugins['crisp-tempo']={};assert.equal(p.tempoEntry(),null,'旧版没有打开视图的方法不显示');
  const tempo={activateView(){}};p.app.plugins.plugins['crisp-tempo']=tempo;assert.equal(p.tempoEntry(),tempo);
+});
+
+test('dashboard hero numbers match the stats and never compare against an empty period', async()=>{
+ const {p,helpers}=setup();await p.loadPluginData();
+ const day=(date,score,extra={})=>{const r=helpers.createEmptyDailyRecord(date,'recorded');r.contribution.score=score;r.contribution.meaningfulEdits=score>0?1:0;Object.assign(r.activity,extra);return r;};
+ p.store.daily={'2026-09-02':day('2026-09-02',10),'2026-09-05':day('2026-09-05',30),'2026-09-08':day('2026-09-08',20),'2026-08-28':day('2026-08-28',25)};
+ const include=(r,k)=>p.recordMatchesScope(r,k,'all');
+ const m=helpers.buildOverviewModel(p.store.daily,'7d','2026-09-08',include);
+ const stats=p.calcStats('all','7d');
+ assert.equal(m.days.length,7);assert.equal(m.days.at(-1).date,'2026-09-08');
+ assert.equal(m.total,stats.totalScore,'和概览统计同一口径');
+ assert.equal(m.activeDays,stats.activeDays);
+ assert.deepEqual([m.best.date,m.best.score],['2026-09-05',30]);
+ assert.equal(m.previousTotal,25);assert.equal(m.delta,Math.round((60-25)/25*100));
+ // 上一期没有记录：不给涨跌
+ delete p.store.daily['2026-08-28'];
+ const lone=helpers.buildOverviewModel(p.store.daily,'7d','2026-09-08',include);
+ assert.equal(lone.delta,null);
+ // 全是零：没有「最高的一天」
+ const empty=helpers.buildOverviewModel({},'30d','2026-09-08',include);
+ assert.equal(empty.best,null);assert.equal(empty.days.length,30);assert.equal(empty.total,0);
+ assert.equal(helpers.buildOverviewModel({},'ytd','2026-09-08',include).days[0].date,'2026-01-01');
+});
+
+test('day composition adds up to the score and the rhythm needs hourly data', ()=>{
+ const {helpers}=setup();
+ const b={notesCreatedScore:5,meaningfulEditsScore:2,tasksCompletedScore:0,linksCreatedScore:1,wordsTotalScore:3.5,focusScore:0.5,totalScore:12};
+ const parts=helpers.dayComposition(b);
+ assert.ok(parts.every(x=>x.value>0),'零分项不画');
+ assert.equal(Math.round(parts.reduce((n,x)=>n+x.value,0)*10)/10,12);
+ assert.equal(helpers.dayRhythm({activity:{}}),null,'没有逐小时记录就不画');
+ const hourly=Array(24).fill(0);hourly[9]=20;hourly[14]=45;hourly[22]=5;
+ const r=helpers.dayRhythm({activity:{hourly}});
+ assert.equal(r.peak,14);assert.equal(r.max,45);assert.equal(r.activeHours,3);
 });
 
 test('natural weeks keep fixed boundaries and clip the running week to today', ()=>{

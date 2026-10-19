@@ -3866,6 +3866,58 @@ function portraitDates(daily, includeRecord, todayKey = getTodayKey(), minDays =
   return dates;
 }
 
+/* ---------- 看板首屏：概览大图与当日明细用的数据 ---------- */
+const PULSE_RANGE_DAYS = { "7d": 7, "30d": 30, "90d": 90, year: 371 };
+
+/** 概览：区间内每天的贡献分（含没记录的日子，记为 0），总分、活跃天数、最高的一天，以及和前一个等长区间的涨跌。口径与 calcStats 一致。 */
+function buildOverviewModel(daily, rangeKey, todayKey, includeRecord) {
+  const today = reviewDayNumber(todayKey);
+  const length = rangeKey === "ytd" ? today - reviewDayNumber(`${todayKey.slice(0, 4)}-01-01`) + 1 : (PULSE_RANGE_DAYS[rangeKey] || 371);
+  const summarize = (first, last) => {
+    const days = [];
+    let total = 0, active = 0, recorded = 0;
+    for (let n = first; n <= last; n++) {
+      const date = reviewDayKey(n), record = daily[date];
+      const included = !!record && includeRecord(record, date);
+      const score = included ? (record.contribution?.score || 0) : 0;
+      if (included) { recorded++; total += score; if (score > 0 || (record.contribution?.meaningfulEdits || 0) >= 1) active++; }
+      days.push({ date, score, status: !record ? "missing" : included ? "included" : "excluded" });
+    }
+    return { days, total: Math.round(total * 10) / 10, active, recorded };
+  };
+  const current = summarize(today - length + 1, today);
+  const previous = summarize(today - 2 * length + 1, today - length);
+  const best = current.days.reduce((top, day) => (day.score > 0 && (!top || day.score >= top.score) ? day : top), null);
+  return {
+    days: current.days, rangeDays: length, total: current.total, activeDays: current.active, recordedDays: current.recorded,
+    average: Math.round(current.total / length * 10) / 10,
+    best: best ? { date: best.date, score: best.score } : null,
+    previousTotal: previous.total,
+    delta: previous.recorded && previous.total > 0 ? Math.round((current.total - previous.total) / previous.total * 100) : null
+  };
+}
+
+/** 当日贡献分由哪些部分组成；零分项不画，各项相加等于总分。 */
+function dayComposition(breakdown) {
+  return [
+    { key: "words", label: tr("字数", "Words"), value: breakdown.wordsTotalScore, color: "purple" },
+    { key: "notes", label: tr("新建笔记", "New notes"), value: breakdown.notesCreatedScore, color: "rose" },
+    { key: "edits", label: tr("有效编辑", "Edits"), value: breakdown.meaningfulEditsScore, color: "blue" },
+    { key: "tasks", label: tr("任务", "Tasks"), value: breakdown.tasksCompletedScore, color: "teal" },
+    { key: "links", label: tr("内链", "Links"), value: breakdown.linksCreatedScore, color: "green" },
+    { key: "focus", label: tr("专注", "Focus"), value: breakdown.focusScore, color: "orange" }
+  ].filter(part => part.value > 0);
+}
+
+/** 当天 24 小时的活跃分钟；旧记录没有逐小时数据时返回 null。 */
+function dayRhythm(record) {
+  const hourly = record?.activity?.hourly;
+  if (!Array.isArray(hourly) || hourly.length !== 24) return null;
+  const hours = hourly.map(v => (Number.isFinite(v) && v > 0 ? v : 0));
+  const max = Math.max(0, ...hours);
+  return { hours, max, peak: max > 0 ? hours.indexOf(max) : null, activeHours: hours.filter(v => v > 0).length };
+}
+
 function buildDayProfile(daily, dates, includeRecord, todayKey = getTodayKey()) {
   const days = [];
   for (const date of dates) {
@@ -5915,23 +5967,7 @@ class CrispPulseView extends ItemView {
     const scopeLabel = REVIEW_SCOPE_LABELS[this.currentScope] || this.currentScope;
     const rangeLabel = PULSE_RANGE_LABELS[this.currentDateRange] || PULSE_RANGE_LABELS.year;
     const overview = this.trayCard(wrapper, { icon: 'activity', title: tr('知识脉冲概览', 'Pulse overview'), subtitle: `${rangeLabel} · ${scopeLabel}`, pill: stats.currentStreak > 0 ? tr(`连续 ${stats.currentStreak} 天`, `Streak: ${plural(stats.currentStreak, 'day')}`) : tr('今天还没开始', 'Not started today'), pillMuted: !(stats.currentStreak > 0) });
-    const strip = overview.createDiv({ cls: 'pulse-v2-strip' });
-    const cells = [
-      { label: tr('累计贡献分', 'Total score'), val: Number(stats.totalScore || 0).toLocaleString(PULSE_NUMBER_LOCALE, { maximumFractionDigits: 1 }), unit: tr('分', 'pts') },
-      { label: tr('活跃天数', 'Active days'), val: stats.activeDays, unit: tr('天', 'days') },
-      { label: tr('当前连续', 'Current streak'), val: stats.currentStreak, unit: tr('天', 'days'), accent: stats.currentStreak > 0 },
-      { label: tr('最长连续', 'Longest streak'), val: stats.longestStreak, unit: tr('天', 'days') },
-      { label: tr('交互活跃', 'Active time'), val: stats.totalActiveHours || '0.0', unit: tr('小时', 'h') }
-    ];
-    if (Number(stats.totalFocusHours) > 0) cells.push({ label: tr('深度专注', 'Focus time'), val: stats.totalFocusHours, unit: tr('小时', 'h') });
-    strip.style.setProperty('--pulse-v2-cols', String(cells.length));
-    for (const cell of cells) {
-      const el = strip.createDiv({ cls: `pulse-v2-stat${cell.accent ? ' is-accent' : ''}` });
-      el.createDiv({ cls: 'pulse-v2-stat-label', text: cell.label });
-      const value = el.createDiv({ cls: 'pulse-v2-stat-value' });
-      value.createSpan({ text: String(cell.val) });
-      value.createSpan({ cls: 'pulse-v2-stat-unit', text: cell.unit });
-    }
+    this.renderOverviewHero(overview, stats);
 
     const metricLabel = this.getMetricLabel(this.selectedMetric);
     const heat = this.trayCard(wrapper, { icon: 'calendar-days', title: tr('年度知识活跃脉冲', 'Yearly activity'), subtitle: tr(`${metricLabel} · 强度按个人近期分位数`, `${metricLabel} · intensity by your recent percentiles`), pill: tr(`${stats.activeDays} 天活跃`, `${plural(stats.activeDays, 'active day')}`), pillMuted: true, cls: 'pulse-v2-heat' });
@@ -5955,6 +5991,117 @@ class CrispPulseView extends ItemView {
     const info = map.get(this.selectedDate) || { level: 0, percentile: 0 };
     const detail = this.trayCard(wrapper, { icon: 'file-text', title: tr(`${formatDateDisplay(this.selectedDate)} 明细`, `${formatDateDisplay(this.selectedDate)} details`), subtitle: `${quality}${info.level > 0 ? tr(` · 强度第 ${info.percentile}% 分位`, ` · ${info.percentile}th percentile`) : ''}`, pill: `${(rec.contribution?.score || 0).toFixed(1)} ${tr('分', 'pts')}`, pillMuted: !(rec.contribution?.score > 0), cls: 'pulse-v2-detail' });
     this.renderDayDetailCard(detail);
+  }
+
+  /* 概览首屏：左边是累计贡献分和整段区间的每日走势，右边四张小卡各配一个小图形。 */
+  renderOverviewHero(parent, stats) {
+    const scope = this.currentScope;
+    const model = buildOverviewModel(this.plugin.store.daily || {}, this.currentDateRange, getTodayKey(), (record, key) => this.plugin.recordMatchesScope(record, key, scope));
+    const number = (value, digits = 1) => Number(value || 0).toLocaleString(PULSE_NUMBER_LOCALE, { maximumFractionDigits: digits });
+    const shortDate = key => tr(`${Number(key.slice(5, 7))}月${Number(key.slice(8))}日`, `${key.slice(5).replace('-', '/')}`);
+    const hero = parent.createDiv({ cls: 'pulse-hero' });
+
+    const main = hero.createDiv({ cls: 'pulse-hero-main' });
+    main.createDiv({ cls: 'pulse-hero-label', text: tr('累计贡献分', 'Total score') });
+    const big = main.createDiv({ cls: 'pulse-hero-total' });
+    big.createSpan({ text: number(stats.totalScore) });
+    big.createSpan({ cls: 'pulse-hero-unit', text: tr('分', 'pts') });
+    const meta = main.createDiv({ cls: 'pulse-hero-meta' });
+    if (model.delta !== null) {
+      const up = model.delta >= 0;
+      meta.createSpan({ cls: `pulse-hero-chip ${up ? 'is-up' : 'is-down'}`, text: tr(`${up ? '↑' : '↓'} ${Math.abs(model.delta)}% 比前 ${model.rangeDays} 天`, `${up ? '↑' : '↓'} ${Math.abs(model.delta)}% vs previous ${model.rangeDays} days`) });
+    }
+    meta.createSpan({ cls: 'pulse-hero-note', text: tr(`日均 ${number(model.average)} 分`, `${number(model.average)} pts a day`) });
+
+    // 每日走势：面积图铺满宽度，悬停或方向键看某一天
+    const chart = main.createDiv({ cls: 'pulse-hero-chart' });
+    const W = 600, H = 84, n = model.days.length;
+    const max = Math.max(1, ...model.days.map(day => day.score));
+    const x = i => (n > 1 ? i / (n - 1) * W : W / 2), y = v => H - 2 - v / max * (H - 8);
+    const { svg, draw } = this.analyticsSvg(chart, W, H, tr(`每日贡献分走势，共 ${n} 天，最高 ${number(max)} 分。左右方向键逐日查看。`, `Daily score over ${n} days, peak ${number(max)}. Use the left and right arrow keys to step through days.`));
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('class', 'pulse-hero-svg');
+    const doc = parent.ownerDocument;
+    const gradientId = `pulse-hero-fill-${Math.random().toString(36).slice(2, 8)}`;
+    const defs = draw('defs', {});
+    const gradient = draw('linearGradient', { id: gradientId, x1: 0, y1: 0, x2: 0, y2: 1 }, undefined, defs);
+    draw('stop', { offset: '0%', class: 'pulse-hero-stop-top' }, undefined, gradient);
+    draw('stop', { offset: '100%', class: 'pulse-hero-stop-bottom' }, undefined, gradient);
+    const line = model.days.map((day, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(day.score).toFixed(1)}`).join(' ');
+    draw('path', { d: `${line} L${W},${H} L0,${H} Z`, fill: `url(#${gradientId})`, class: 'pulse-hero-area' });
+    draw('path', { d: line, fill: 'none', class: 'pulse-hero-line', 'vector-effect': 'non-scaling-stroke' });
+    const cursor = draw('line', { x1: 0, x2: 0, y1: 0, y2: H, class: 'pulse-hero-cursor', 'vector-effect': 'non-scaling-stroke', visibility: 'hidden' });
+    const dot = chart.createDiv({ cls: 'pulse-hero-dot' });
+    const axis = main.createDiv({ cls: 'pulse-hero-axis' });
+    const readout = axis.createSpan({ cls: 'pulse-hero-readout' });
+    const idle = () => { readout.setText(model.best ? tr(`最高 ${shortDate(model.best.date)} · ${number(model.best.score)} 分`, `Peak ${shortDate(model.best.date)} · ${number(model.best.score)} pts`) : tr('这段时间还没有贡献分', 'No score in this range yet')); };
+    axis.createSpan({ cls: 'pulse-hero-range', text: `${shortDate(model.days[0].date)} — ${tr('今天', 'today')}` });
+    const show = i => {
+      const day = model.days[i];
+      cursor.setAttribute('x1', x(i)); cursor.setAttribute('x2', x(i)); cursor.setAttribute('visibility', 'visible');
+      dot.style.left = `${x(i) / W * 100}%`; dot.style.top = `${y(day.score) / H * 100}%`; dot.addClass('is-visible');
+      readout.setText(`${shortDate(day.date)} · ${day.status === 'included' ? tr(`${number(day.score)} 分`, `${number(day.score)} pts`) : day.status === 'missing' ? tr('未记录', 'not recorded') : tr('不在当前数据范围', 'outside the data scope')}`);
+    };
+    const hide = () => { cursor.setAttribute('visibility', 'hidden'); dot.removeClass('is-visible'); idle(); };
+    const indexAt = event => { const r = svg.getBoundingClientRect(); return r.width ? Math.max(0, Math.min(n - 1, Math.round((event.clientX - r.left) / r.width * (n - 1)))) : null; };
+    let focusIndex = n - 1;
+    svg.setAttribute('tabindex', '0');
+    svg.addEventListener('pointermove', event => { const i = indexAt(event); if (i !== null) { focusIndex = i; show(i); } });
+    svg.addEventListener('pointerleave', hide);
+    svg.addEventListener('blur', hide);
+    svg.addEventListener('focus', () => show(focusIndex));
+    svg.addEventListener('click', event => { const i = indexAt(event); if (i !== null && model.days[i].status === 'included') this.openAnalyticsDay(model.days[i].date); });
+    svg.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && model.days[focusIndex].status === 'included') { event.preventDefault(); this.openAnalyticsDay(model.days[focusIndex].date); return; }
+      const next = event.key === 'ArrowLeft' ? focusIndex - 1 : event.key === 'ArrowRight' ? focusIndex + 1 : null;
+      if (next === null || next < 0 || next >= n) return;
+      event.preventDefault(); focusIndex = next; show(next);
+    });
+    idle();
+
+    const side = hero.createDiv({ cls: 'pulse-hero-side' });
+    const tile = (cls, label) => { const el = side.createDiv({ cls: `pulse-hero-tile ${cls}` }); el.createDiv({ cls: 'pulse-hero-tile-label', text: label }); return el; };
+    // 活跃天数：圆环
+    const active = tile('is-active-days', tr('活跃天数', 'Active days'));
+    const ringRow = active.createDiv({ cls: 'pulse-hero-ring-row' });
+    const share = model.rangeDays ? Math.min(1, stats.activeDays / model.rangeDays) : 0;
+    const ring = this.analyticsSvg(ringRow, 44, 44);
+    ring.draw('circle', { cx: 22, cy: 22, r: 18, class: 'pulse-hero-ring-track' });
+    if (share > 0) ring.draw('circle', { cx: 22, cy: 22, r: 18, class: 'pulse-hero-ring-fill', 'stroke-dasharray': `${(share * 2 * Math.PI * 18).toFixed(2)} ${(2 * Math.PI * 18).toFixed(2)}`, transform: 'rotate(-90 22 22)' });
+    const ringText = ringRow.createDiv();
+    const ringValue = ringText.createDiv({ cls: 'pulse-hero-tile-value' });
+    ringValue.createSpan({ text: String(stats.activeDays) }); ringValue.createSpan({ cls: 'pulse-hero-tile-of', text: ` / ${model.rangeDays}` });
+    ringText.createDiv({ cls: 'pulse-hero-tile-sub', text: tr(`${Math.round(share * 100)}% 的日子有产出`, `${Math.round(share * 100)}% of days`) });
+    // 连续：当前对比最长
+    const streak = tile('is-streak', tr('当前连续', 'Current streak'));
+    const streakValue = streak.createDiv({ cls: `pulse-hero-tile-value${stats.currentStreak > 0 ? ' is-accent' : ''}` });
+    streakValue.createSpan({ text: String(stats.currentStreak) }); streakValue.createSpan({ cls: 'pulse-hero-tile-unit', text: tr('天', stats.currentStreak === 1 ? 'day' : 'days') });
+    const streakBar = streak.createDiv({ cls: 'pulse-hero-bar' });
+    streakBar.createDiv({ cls: 'pulse-hero-bar-fill is-accent' }).style.width = `${stats.longestStreak ? Math.max(stats.currentStreak ? 4 : 0, stats.currentStreak / stats.longestStreak * 100) : 0}%`;
+    streak.createDiv({ cls: 'pulse-hero-tile-sub', text: tr(`最长 ${stats.longestStreak} 天`, `Longest ${plural(stats.longestStreak, 'day')}`) });
+    // 时间：交互活跃与深度专注
+    const time = tile('is-time', tr('投入时间', 'Time'));
+    const activeHours = Number(stats.totalActiveHours) || 0, focusHours = Number(stats.totalFocusHours) || 0;
+    const scaleHours = Math.max(activeHours, focusHours, 0.1);
+    for (const [label, hours, color] of [[tr('交互', 'Active'), activeHours, 'blue'], [tr('专注', 'Focus'), focusHours, 'orange']]) {
+      const row = time.createDiv({ cls: 'pulse-hero-time-row' });
+      row.createSpan({ cls: 'pulse-hero-time-name', text: label });
+      const bar = row.createSpan({ cls: 'pulse-hero-bar' });
+      bar.createSpan({ cls: `pulse-hero-bar-fill pulse-chart-fill-${color}` }).style.width = `${hours > 0 ? Math.max(4, hours / scaleHours * 100) : 0}%`;
+      row.createSpan({ cls: 'pulse-hero-time-value', text: tr(`${number(hours)} 小时`, `${number(hours)} h`) });
+    }
+    // 最高的一天：点开看明细
+    const best = tile('is-best', tr('最高的一天', 'Best day'));
+    if (model.best) {
+      const button = best.createEl('button', { cls: 'pulse-hero-best', attr: { type: 'button', 'aria-label': tr(`打开 ${model.best.date} 明细`, `Open details for ${model.best.date}`) } });
+      const value = button.createDiv({ cls: 'pulse-hero-tile-value' });
+      value.createSpan({ text: number(model.best.score) }); value.createSpan({ cls: 'pulse-hero-tile-unit', text: tr('分', 'pts') });
+      button.createDiv({ cls: 'pulse-hero-tile-sub', text: tr(`${shortDate(model.best.date)} · 看明细 →`, `${shortDate(model.best.date)} · details →`) });
+      button.addEventListener('click', () => this.openAnalyticsDay(model.best.date));
+    } else {
+      best.createDiv({ cls: 'pulse-hero-tile-value is-empty', text: '—' });
+      best.createDiv({ cls: 'pulse-hero-tile-sub', text: tr('还没有贡献分', 'No score yet') });
+    }
   }
 
   /** 装了带番茄钟的 Crisp Focus（1.5.0 起）才有的接口。 */
@@ -6257,19 +6404,22 @@ class CrispPulseView extends ItemView {
       });
     }
 
-    const statsGrid = card.createDiv({ cls: "crisp-pulse-stats-grid" });
-
     const breakdown = getScoreBreakdown(rec, this.plugin.settings);
+    const number = (value, digits = 1) => Number(value || 0).toLocaleString(PULSE_NUMBER_LOCALE, { maximumFractionDigits: digits });
+    const top = card.createDiv({ cls: "pulse-day-top" });
 
-    const scoreBox = statsGrid.createDiv({ cls: "crisp-pulse-stat-box crisp-pulse-score-clickable" });
+    // 贡献分由什么组成：一条堆叠条，点开看每项的计分公式
+    const comp = top.createDiv({ cls: "pulse-day-comp" });
+    const scoreBox = comp.createDiv({ cls: "pulse-day-score crisp-pulse-score-clickable" });
     scoreBox.setAttr("role", "button");
     scoreBox.tabIndex = 0;
     scoreBox.setAttr("aria-label", tr("贡献得分，展开或收起计分明细", "Contribution score; expand or collapse the breakdown"));
     scoreBox.setAttr("aria-expanded", String(this.showBreakdown));
-    scoreBox.createDiv({ cls: "crisp-pulse-stat-label", text: tr("贡献得分", "Contribution score") });
-    const scoreValue = scoreBox.createDiv({ cls: "crisp-pulse-stat-value" });
+    scoreBox.createDiv({ cls: "pulse-day-label", text: tr("贡献得分", "Contribution score") });
+    const scoreValue = scoreBox.createDiv({ cls: "pulse-day-score-value" });
     scoreValue.createSpan({ text: (rec.contribution.score || 0).toFixed(1) });
-    scoreValue.createSpan({ cls: "crisp-pulse-stat-unit", text: tr("分", "pts") });
+    scoreValue.createSpan({ cls: "pulse-day-unit", text: tr("分", "pts") });
+    scoreValue.createSpan({ cls: "pulse-day-toggle", text: this.showBreakdown ? tr("收起明细", "Hide details") : tr("计分明细", "How it adds up") });
     const toggleBreakdown = () => {
       this.showBreakdown = !this.showBreakdown;
       this.render();
@@ -6279,33 +6429,65 @@ class CrispPulseView extends ItemView {
     scoreBox.addEventListener("keydown", event => {
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleBreakdown(); }
     });
+    const parts = dayComposition(breakdown);
+    const bar = comp.createDiv({ cls: "crisp-pulse-mix-bar pulse-day-bar" });
+    bar.setAttr("role", "img");
+    bar.setAttr("aria-label", parts.length ? parts.map(part => `${part.label} ${number(part.value)}`).join(tr("，", ", ")) : tr("这一天没有贡献分", "No score this day"));
+    if (!parts.length) bar.addClass("is-empty");
+    for (const part of parts) bar.createDiv({ cls: `crisp-pulse-mix-segment pulse-chart-fill-${part.color}` }).style.flexGrow = String(part.value);
+    const legend = comp.createDiv({ cls: "pulse-day-legend" });
+    for (const part of parts) {
+      const item = legend.createSpan();
+      item.createSpan({ cls: `pulse-chart-dot pulse-chart-fill-${part.color}` });
+      item.createSpan({ text: part.label });
+      item.createSpan({ cls: "pulse-day-legend-value", text: number(part.value) });
+    }
+    if (!parts.length) legend.createSpan({ cls: "pulse-day-empty", text: tr("这一天没有贡献分", "No score this day") });
 
+    // 当天节奏：24 小时的活跃分钟；旧记录没有逐小时数据时，构成条占满整行，节奏只留一句说明
+    const profile = dayRhythm(rec);
+    if (!profile) top.addClass("is-single");
+    const rhythm = top.createDiv({ cls: "pulse-day-rhythm" });
+    const rhythmHead = rhythm.createDiv({ cls: "pulse-day-rhythm-head" });
+    rhythmHead.createDiv({ cls: "pulse-day-label", text: tr("当天节奏", "Rhythm") });
+    rhythmHead.createDiv({ cls: "pulse-day-note", text: profile?.max > 0 ? tr(`高峰 ${profile.peak} 点 · ${profile.activeHours} 个小时有活动`, `Peak at ${profile.peak}:00 · active in ${plural(profile.activeHours, "hour")}`) : profile ? tr("这一天没有交互活跃", "No activity this day") : tr("这一天没有逐小时记录", "No hourly record for this day") });
+    if (profile) {
+      const W = 240, H = 64, gap = 2, colW = W / 24;
+      const { draw } = this.analyticsSvg(rhythm, W, H, tr(`当天 24 小时的活跃分钟，高峰在 ${profile.peak ?? "-"} 点`, `Active minutes across 24 hours, peak at ${profile.peak ?? "-"}:00`));
+      profile.hours.forEach((minutes, hour) => {
+        const h = profile.max > 0 && minutes > 0 ? Math.max(3, minutes / profile.max * (H - 4)) : 2;
+        draw("rect", { x: hour * colW + gap / 2, y: H - h, width: colW - gap, height: h, rx: 1.5, class: minutes > 0 ? (hour === profile.peak ? "pulse-day-hour is-peak" : "pulse-day-hour") : "pulse-day-hour is-empty" });
+      });
+      const axis = rhythm.createDiv({ cls: "pulse-day-hours" });
+      for (const hour of [0, 6, 12, 18, 24]) axis.createSpan({ text: String(hour) });
+    }
+
+    // 各项指标：带图标的小格子，零值淡出，当天做了什么一眼可见
     const count = value => Number(value || 0).toLocaleString(PULSE_NUMBER_LOCALE);
     const statItems = [
-      { label: tr("新增词数", "Words added"), val: `+${count(rec.contribution.wordsAdded)}`, unit: tr("词", "words") },
-      { label: tr("深度改写/润色", "Rewrites/polishing"), val: `+${count(rec.contribution.rewrittenWords)}`, unit: tr("词", "words") },
-      { label: tr("新建笔记", "Notes created"), val: count(rec.contribution.notesCreated), unit: tr("篇", "notes") },
-      { label: tr("有效编辑会话", "Meaningful edit sessions"), val: count(rec.contribution.meaningfulEdits), unit: tr("次", "sessions") },
-      { label: tr("完成任务", "Tasks completed"), val: count(rec.contribution.tasksCompleted), unit: tr("项", "tasks") },
-      { label: tr("新建内链", "Links created"), val: count(rec.contribution.linksCreated), unit: tr("条", "links") },
-      { label: tr("交互活跃时长", "Active time"), val: formatPulseMinutes(rec.activity.activeMinutes), unit: tr("分钟", "min") }
+      { icon: "pen-line", label: tr("新增词数", "Words added"), raw: rec.contribution.wordsAdded, val: `+${count(rec.contribution.wordsAdded)}`, unit: tr("词", "words"), color: "purple" },
+      { icon: "refresh-cw", label: tr("深度改写/润色", "Rewrites/polishing"), raw: rec.contribution.rewrittenWords, val: `+${count(rec.contribution.rewrittenWords)}`, unit: tr("词", "words"), color: "green" },
+      { icon: "file-plus", label: tr("新建笔记", "Notes created"), raw: rec.contribution.notesCreated, val: count(rec.contribution.notesCreated), unit: tr("篇", "notes"), color: "rose" },
+      { icon: "pencil", label: tr("有效编辑会话", "Meaningful edit sessions"), raw: rec.contribution.meaningfulEdits, val: count(rec.contribution.meaningfulEdits), unit: tr("次", "sessions"), color: "blue" },
+      { icon: "check-square", label: tr("完成任务", "Tasks completed"), raw: rec.contribution.tasksCompleted, val: count(rec.contribution.tasksCompleted), unit: tr("项", "tasks"), color: "teal" },
+      { icon: "link", label: tr("新建内链", "Links created"), raw: rec.contribution.linksCreated, val: count(rec.contribution.linksCreated), unit: tr("条", "links"), color: "green" },
+      { icon: "mouse-pointer-click", label: tr("交互活跃时长", "Active time"), raw: rec.activity.activeMinutes, val: formatPulseMinutes(rec.activity.activeMinutes), unit: tr("分钟", "min"), color: "blue" }
     ];
-
     if (this.plugin.settings.includeFocusInContribution || (rec.activity?.focusMinutes > 0)) {
-      statItems.push({ label: tr("深度专注时长", "Focus time"), val: formatPulseMinutes(rec.activity?.focusMinutes), unit: tr("分钟", "min") });
+      statItems.push({ icon: "timer", label: tr("深度专注时长", "Focus time"), raw: rec.activity?.focusMinutes, val: formatPulseMinutes(rec.activity?.focusMinutes), unit: tr("分钟", "min"), color: "orange" });
     }
-
+    const tiles = card.createDiv({ cls: "pulse-day-tiles" });
     for (const item of statItems) {
-      const box = statsGrid.createDiv({ cls: "crisp-pulse-stat-box" });
-      box.createDiv({ cls: "crisp-pulse-stat-label", text: item.label });
-      const value = box.createDiv({ cls: "crisp-pulse-stat-value" });
+      const tileEl = tiles.createDiv({ cls: `pulse-day-tile${item.raw > 0 ? "" : " is-zero"}` });
+      const icon = tileEl.createSpan({ cls: "pulse-day-icon" });
+      icon.style.setProperty("--tone", `var(--pulse-chart-${item.color})`);
+      setIcon(icon, item.icon);
+      const text = tileEl.createDiv({ cls: "pulse-day-tile-text" });
+      text.createDiv({ cls: "pulse-day-tile-label", text: item.label });
+      const value = text.createDiv({ cls: "pulse-day-tile-value" });
       value.createSpan({ text: item.val });
-      value.createSpan({ cls: "crisp-pulse-stat-unit", text: item.unit });
+      value.createSpan({ cls: "pulse-day-unit", text: item.unit });
     }
-    // Two even rows (4+4 or 5+4) instead of leaving one box alone on a third row.
-    const columns = Math.ceil(statsGrid.children.length / 2);
-    statsGrid.style.setProperty("--pulse-detail-cols", String(columns));
-    [...statsGrid.children].forEach((box, index) => box.toggleClass("is-row-start", index % columns === 0));
 
     // Score Breakdown Drawer
     if (this.showBreakdown) {
@@ -6355,7 +6537,10 @@ class CrispPulseView extends ItemView {
     fileWrap.createDiv({ cls: "crisp-pulse-file-list-title", text: tr("当日有贡献的笔记文件", "Notes that contributed this day") });
 
     const fileList = fileWrap.createDiv({ cls: "crisp-pulse-file-list" });
-    const fileKeys = Object.keys(rec.files || {});
+    // 新增多的排前面，每行一根条，和当天新增最多的那篇比
+    const fileWords = fp => (rec.files[fp]?.wordsAdded || 0) + (rec.files[fp]?.rewrittenWords || 0);
+    const fileKeys = Object.keys(rec.files || {}).sort((a, b) => fileWords(b) - fileWords(a) || a.localeCompare(b));
+    const topWords = Math.max(1, ...fileKeys.map(fileWords));
 
     if (fileKeys.length === 0) {
       fileList.createDiv({ cls: "crisp-pulse-empty-files", text: tr("该日期无文件变更记录。", "No file changes recorded on this date.") });
@@ -6381,6 +6566,10 @@ class CrispPulseView extends ItemView {
         if (fInfo.tasks > 0) parts.push(tr(`${fInfo.tasks}任务`, plural(fInfo.tasks, "task")));
         if (fInfo.links > 0) parts.push(tr(`${fInfo.links}内链`, plural(fInfo.links, "link")));
         metaSpan.textContent = parts.join(" · ") || tr("已编辑", "edited");
+        if (fileKeys.length > 1) {
+          const track = item.createSpan({ cls: "pulse-day-file-track" });
+          track.createSpan({ cls: "pulse-day-file-fill" }).style.width = `${fileWords(fp) > 0 ? Math.max(2, fileWords(fp) / topWords * 100) : 0}%`;
+        }
 
         item.addEventListener("click", () => {
           if (deleted) return;
