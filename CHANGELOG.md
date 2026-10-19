@@ -1,5 +1,10 @@
 # Changelog - Crisp Pulse
 
+## [1.22.3] - 2026-10-19
+
+### Added
+- 看板页脚加入 Tempo 入口，点一下打开 Crisp Tempo 任务面板。只在 Tempo 已安装并启用时显示。
+
 ## [1.22.2] - 2026-10-19
 
 ### Fixed

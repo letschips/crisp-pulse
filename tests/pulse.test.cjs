@@ -1359,6 +1359,14 @@ test('materials reach every folder and the memo link carries the review filters'
  assert.deepEqual([memoView.filters.from,memoView.filters.to,memoView.filters.converted,memoView.filters.query,memoView.filters.includeTags.length,memoView.filters.untagged,memoView.filterTag,memoView.tab,memoView.reloaded],['2026-10-12','2026-10-18',false,'',0,false,null,'all',1]);
 });
 
+test('the footer Tempo entry only appears for an enabled Tempo that can open its view', async()=>{
+ const {p}=setup();
+ p.app.plugins={plugins:{}};assert.equal(p.tempoEntry(),null,'没装 Tempo 不显示');
+ p.app.plugins.plugins['crisp-tempo']={unloaded:true,activateView(){}};assert.equal(p.tempoEntry(),null,'已卸载不显示');
+ p.app.plugins.plugins['crisp-tempo']={};assert.equal(p.tempoEntry(),null,'旧版没有打开视图的方法不显示');
+ const tempo={activateView(){}};p.app.plugins.plugins['crisp-tempo']=tempo;assert.equal(p.tempoEntry(),tempo);
+});
+
 test('natural weeks keep fixed boundaries and clip the running week to today', ()=>{
  const {helpers}=setup();const week=(...args)=>({...helpers.reviewWeekRange(...args)});
  assert.deepEqual(week('2026-10-19','monday',-1),{start:'2026-10-12',end:'2026-10-18'});

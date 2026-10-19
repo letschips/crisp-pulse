@@ -3318,6 +3318,12 @@ class CrispPulsePlugin extends Plugin {
     if (view?.toggleDictation) await view.toggleDictation();
   }
 
+  /** 页脚入口用：已启用、能打开自己视图的 Crisp Tempo。 */
+  tempoEntry() {
+    const tempo = this.app.plugins?.plugins?.["crisp-tempo"];
+    return tempo && !tempo.unloaded && typeof tempo.activateView === "function" ? tempo : null;
+  }
+
   memoTempo() {
     const tempo = this.app.plugins?.plugins?.["crisp-tempo"];
     if (!tempo || tempo.unloaded || typeof tempo.createTaskFromSource !== "function" || typeof tempo.getTasksBySource !== "function") return null;
@@ -5618,6 +5624,9 @@ class CrispPulseView extends ItemView {
       a.addEventListener("click", fn);
     };
     link(tr("速记", "Memos"), () => this.plugin.activateMemoView());
+    // 只放和 Pulse 有数据往来的插件：速记转出的任务在 Tempo 里推进。没装或没启用就不显示。
+    const tempo = this.plugin.tempoEntry();
+    if (tempo) link("Tempo", () => { void tempo.activateView(); });
     link(tr("设置", "Settings"), () => { const setting = this.app.setting; if (setting?.open) { setting.open(); setting.openTabById?.(this.plugin.manifest.id); } });
     const ground = footer.createDiv({ cls: "crisp-pulse-footer-ground" });
     const canvas = ground.createEl("canvas", { attr: { "aria-hidden": "true" } });
