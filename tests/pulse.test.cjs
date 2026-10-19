@@ -69,7 +69,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8').replace(PUBLIC_PEM_RE, '`' + LOCAL_PUBLIC_PEM + '`') +
-    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined,splitActiveInterval:typeof splitActiveInterval === "function" ? splitActiveInterval : undefined,buildHourlyProfile:typeof buildHourlyProfile === "function" ? buildHourlyProfile : undefined,getReviewClues,reviewWeekRange,buildOverviewModel:typeof buildOverviewModel === "function" ? buildOverviewModel : undefined,dayComposition:typeof dayComposition === "function" ? dayComposition : undefined,dayRhythm:typeof dayRhythm === "function" ? dayRhythm : undefined,entitle:(plugin,on)=>PULSE_LICENSE_STATE.set(pulseLicenseManagerFor(plugin),!!on)};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined,splitActiveInterval:typeof splitActiveInterval === "function" ? splitActiveInterval : undefined,buildHourlyProfile:typeof buildHourlyProfile === "function" ? buildHourlyProfile : undefined,getReviewClues,reviewWeekRange,buildOverviewModel:typeof buildOverviewModel === "function" ? buildOverviewModel : undefined,dayComposition:typeof dayComposition === "function" ? dayComposition : undefined,dayRhythm:typeof dayRhythm === "function" ? dayRhythm : undefined,entitle:(plugin,on)=>PULSE_LICENSE_STATE.set(pulseLicenseManagerFor(plugin),!!on),smoothLinePath:typeof smoothLinePath === "function" ? smoothLinePath : undefined};',
     context
   );
   const Pulse = context.module.exports;
@@ -1421,6 +1421,29 @@ test('unactivated: reminders and advanced memo features stay locked, exports sta
  assert.equal(notified,0,'未激活不提醒回顾');assert.notEqual(p.settings.memoReviewNotifiedOn,'2026-09-08');
  helpers.entitle(p,true);
  for(const key of ['dayDetail','memoReview','memoConvert'])assert.equal(p.requireEntitlement(key),true,key);
+});
+
+test('every local SVG draw helper accepts a parent, so gradients get their stops', ()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../main.js'),'utf8');
+ const defs=[...source.matchAll(/const draw = \(([^)]*)\) =>/g)].map(m=>m[1]);
+ assert.ok(defs.length>=2,'找到局部 draw 定义');
+ for(const params of defs)assert.match(params,/into\s*=/,`draw(${params}) 缺少 into 参数：渐变的 stop 会挂到 svg 根上，柱子变成透明`);
+});
+
+test('smooth line passes through every point and never overshoots the data', ()=>{
+ const {helpers}=setup();const smooth=helpers.smoothLinePath;
+ assert.equal(smooth([]),'');
+ assert.equal(smooth([[0,10]]),'M0,10');
+ assert.equal(smooth([[0,10],[5,20]]),'M0,10 L5,20');
+ const pts=[[0,100],[10,100],[20,0],[30,100],[40,100],[50,60],[60,100]];
+ const d=smooth(pts);
+ assert.doesNotMatch(d,/NaN|Infinity/);
+ const nums=d.replace(/[MC]/g,' ').trim().split(/[ ,]+/).map(Number);
+ const ys=nums.filter((_,i)=>i%2===1);
+ assert.ok(Math.min(...ys)>=0&&Math.max(...ys)<=100,'控制点不越出数据范围（不会画出负值或虚高）');
+ for(const [x,y] of pts)assert.ok(d.includes(`${x},${y}`),`经过 ${x},${y}`);
+ // 平台段保持水平
+ assert.ok(d.includes('C3.33,100 6.67,100 10,100'),d);
 });
 
 test('natural weeks keep fixed boundaries and clip the running week to today', ()=>{

@@ -3793,16 +3793,36 @@ function analyticsScale(maximum) {
   return { max: step * 4, ticks: [0, 1, 2, 3, 4].map(n => n * step) };
 }
 
+/** 单调三次插值的平滑路径：曲线经过每个点，不会冲出数据范围（不出现负值或虚高的波峰）。pts 为 [[x, y], ...]。 */
+function smoothLinePath(pts) {
+  const n = pts.length;
+  if (!n) return '';
+  const f = v => Math.round(v * 100) / 100;
+  if (n < 3) return pts.map((p, i) => `${i ? 'L' : 'M'}${f(p[0])},${f(p[1])}`).join(' ');
+  const dx = [], slope = [];
+  for (let i = 0; i < n - 1; i++) { dx[i] = pts[i + 1][0] - pts[i][0]; slope[i] = dx[i] ? (pts[i + 1][1] - pts[i][1]) / dx[i] : 0; }
+  const m = [slope[0]];
+  for (let i = 1; i < n - 1; i++) m[i] = slope[i - 1] * slope[i] <= 0 ? 0 : 3 * (dx[i - 1] + dx[i]) / ((2 * dx[i] + dx[i - 1]) / slope[i - 1] + (dx[i] + 2 * dx[i - 1]) / slope[i]);
+  m[n - 1] = slope[n - 2];
+  let d = `M${f(pts[0][0])},${f(pts[0][1])}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = dx[i] / 3;
+    d += ` C${f(pts[i][0] + h)},${f(pts[i][1] + m[i] * h)} ${f(pts[i + 1][0] - h)},${f(pts[i + 1][1] - m[i + 1] * h)} ${f(pts[i + 1][0])},${f(pts[i + 1][1])}`;
+  }
+  return d;
+}
+
 function analyticsLinePath(points, field, x, y) {
-  let connected = false;
-  const commands = [];
+  // 没有记录的日子断开，其余每段画成平滑曲线
+  const runs = [];
+  let run = null;
   points.forEach((point, index) => {
     const value = point[field];
-    if (value === null || value === undefined || !Number.isFinite(value)) { connected = false; return; }
-    commands.push(`${connected ? 'L' : 'M'}${x(index)},${y(value)}`);
-    connected = true;
+    if (value === null || value === undefined || !Number.isFinite(value)) { run = null; return; }
+    if (!run) runs.push(run = []);
+    run.push([x(index), y(value)]);
   });
-  return commands.join(' ');
+  return runs.map(smoothLinePath).join(' ');
 }
 
 // Split each day's added words by recorded source. Sources are clamped to the day's total in a fixed
@@ -5670,11 +5690,11 @@ class CrispPulseView extends ItemView {
     svg.setAttribute('role', 'group');
     svg.setAttribute('aria-label', tr(`${config.title}，单位${config.unit}。左右方向键查看日期，Enter 打开日明细。`, `${config.title}, in ${config.unit}. Use the left and right arrow keys to move between days; press Enter to open day details.`));
     scroll.appendChild(svg);
-    const draw = (tag, attributes, text) => {
+    const draw = (tag, attributes, text, into = svg) => {
       const node = doc.createElementNS('http://www.w3.org/2000/svg', tag);
       for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, String(value));
       if (text !== undefined) node.textContent = text;
-      svg.appendChild(node);
+      into.appendChild(node);
       return node;
     };
     const { points } = data;
@@ -5692,12 +5712,29 @@ class CrispPulseView extends ItemView {
     for (const i of labelIndices) draw('text', { x: x(i), y: 252, 'text-anchor': i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle', class: 'pulse-chart-axis' }, points[i].date.slice(5).replace('-', '/'));
     for (const series of config.series) {
       if (config.type === 'bar') {
+        // 柱子：上圆下方、自上而下渐淡；虚线是有记录日均，最高一天标数值
+        const gradientId = `pulse-bar-${series.key}-${Math.random().toString(36).slice(2, 8)}`;
+        const gradient = draw('linearGradient', { id: gradientId, x1: 0, y1: 0, x2: 0, y2: 1 }, undefined, draw('defs', {}));
+        draw('stop', { offset: '0%', class: `pulse-bar-stop-top pulse-chart-stop-${series.color}` }, undefined, gradient);
+        draw('stop', { offset: '100%', class: `pulse-bar-stop-bottom pulse-chart-stop-${series.color}` }, undefined, gradient);
+        const recorded = points.filter(p => p[series.key] !== null);
+        const peak = recorded.reduce((top, p) => (p[series.key] > 0 && (!top || p[series.key] > top[series.key]) ? p : top), null);
+        const barW = Math.min(36, width * 0.62);
         points.forEach((p, i) => {
           const value = p[series.key];
           if (value === null) return;
-          if (value === 0) draw('circle', { cx: x(i), cy: bottom, r: 2, class: `pulse-chart-fill-${series.color}` });
-          else draw('rect', { x: x(i) - width * 0.34, y: y(value), width: width * 0.68, height: bottom - y(value), rx: Math.min(5, width * 0.15), class: `pulse-chart-fill-${series.color}` });
+          if (value === 0) { draw('circle', { cx: x(i), cy: bottom, r: 2, class: `pulse-chart-fill-${series.color}` }); return; }
+          const x0 = x(i) - barW / 2, top = y(value), r = Math.min(6, barW / 2, (bottom - top) / 2);
+          draw('path', { d: `M${x0},${bottom} L${x0},${top + r} Q${x0},${top} ${x0 + r},${top} L${x0 + barW - r},${top} Q${x0 + barW},${top} ${x0 + barW},${top + r} L${x0 + barW},${bottom} Z`, fill: `url(#${gradientId})`, class: 'pulse-chart-bar' });
+          if (p === peak && points.length <= 45) draw('text', { x: x(i), y: top - 6, 'text-anchor': 'middle', class: 'pulse-chart-peak' }, number(value));
         });
+        if (recorded.length > 1) {
+          const average = recorded.reduce((sum, p) => sum + p[series.key], 0) / recorded.length;
+          if (average > 0) {
+            draw('line', { x1: left, x2: right, y1: y(average), y2: y(average), class: 'pulse-chart-avg' });
+            draw('text', { x: right, y: y(average) - 5, 'text-anchor': 'end', class: 'pulse-chart-avg-label' }, tr(`日均 ${number(average)}`, `avg ${number(average)}`));
+          }
+        }
       } else {
         draw('path', { d: analyticsLinePath(points, series.key, x, y), fill: 'none', class: `pulse-chart-line pulse-chart-stroke-${series.color}` });
         points.forEach((p, i) => {
@@ -6070,38 +6107,82 @@ class CrispPulseView extends ItemView {
       const up = model.delta >= 0;
       meta.createSpan({ cls: `pulse-hero-chip ${up ? 'is-up' : 'is-down'}`, text: tr(`${up ? '↑' : '↓'} ${Math.abs(model.delta)}% 比前 ${model.rangeDays} 天`, `${up ? '↑' : '↓'} ${Math.abs(model.delta)}% vs previous ${model.rangeDays} days`) });
     }
-    meta.createSpan({ cls: 'pulse-hero-note', text: tr(`日均 ${number(model.average)} 分`, `${number(model.average)} pts a day`) });
+    const recordedAverage = model.recordedDays ? model.total / model.recordedDays : 0;
+    meta.createSpan({ cls: 'pulse-hero-note', text: model.recordedDays < model.rangeDays ? tr(`有记录的 ${model.recordedDays} 天日均 ${number(recordedAverage)} 分`, `${number(recordedAverage)} pts a day over ${plural(model.recordedDays, 'recorded day')}`) : tr(`日均 ${number(recordedAverage)} 分`, `${number(recordedAverage)} pts a day`) });
 
-    // 每日走势：面积图铺满宽度，悬停或方向键看某一天
+    // 每日走势：平滑曲线 + 渐变面积；没有记录的日子画成点线，不当成 0；虚线是有记录日均，标出最高和今天
     const chart = main.createDiv({ cls: 'pulse-hero-chart' });
-    const W = 600, H = 84, n = model.days.length;
+    const W = 600, H = 112, n = model.days.length, padTop = 18;
     const max = Math.max(1, ...model.days.map(day => day.score));
-    const x = i => (n > 1 ? i / (n - 1) * W : W / 2), y = v => H - 2 - v / max * (H - 8);
+    const x = i => (n > 1 ? i / (n - 1) * W : W / 2), y = v => H - 3 - v / max * (H - padTop - 3);
     const { svg, draw } = this.analyticsSvg(chart, W, H, tr(`每日贡献分走势，共 ${n} 天，最高 ${number(max)} 分。左右方向键逐日查看。`, `Daily score over ${n} days, peak ${number(max)}. Use the left and right arrow keys to step through days.`));
     svg.setAttribute('preserveAspectRatio', 'none');
     svg.setAttribute('class', 'pulse-hero-svg');
-    const doc = parent.ownerDocument;
     const gradientId = `pulse-hero-fill-${Math.random().toString(36).slice(2, 8)}`;
-    const defs = draw('defs', {});
-    const gradient = draw('linearGradient', { id: gradientId, x1: 0, y1: 0, x2: 0, y2: 1 }, undefined, defs);
+    const gradient = draw('linearGradient', { id: gradientId, x1: 0, y1: 0, x2: 0, y2: 1 }, undefined, draw('defs', {}));
     draw('stop', { offset: '0%', class: 'pulse-hero-stop-top' }, undefined, gradient);
     draw('stop', { offset: '100%', class: 'pulse-hero-stop-bottom' }, undefined, gradient);
-    const line = model.days.map((day, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(day.score).toFixed(1)}`).join(' ');
-    draw('path', { d: `${line} L${W},${H} L0,${H} Z`, fill: `url(#${gradientId})`, class: 'pulse-hero-area' });
-    draw('path', { d: line, fill: 'none', class: 'pulse-hero-line', 'vector-effect': 'non-scaling-stroke' });
-    const cursor = draw('line', { x1: 0, x2: 0, y1: 0, y2: H, class: 'pulse-hero-cursor', 'vector-effect': 'non-scaling-stroke', visibility: 'hidden' });
+    const runs = [];
+    model.days.forEach((day, i) => {
+      const recorded = day.status === 'included';
+      const last = runs[runs.length - 1];
+      if (last && last.recorded === recorded) last.end = i; else runs.push({ recorded, start: i, end: i });
+    });
+    for (const run of runs) {
+      if (!run.recorded) {
+        // 缺失段：底部点线，够宽时中间标「未记录」；左右各让半天
+        const x0 = run.start ? (x(run.start - 1) + x(run.start)) / 2 : 0, x1 = run.end < n - 1 ? (x(run.end) + x(run.end + 1)) / 2 : W;
+        draw('line', { x1: x0, x2: x1, y1: H - 3, y2: H - 3, class: 'pulse-hero-gap-line', 'vector-effect': 'non-scaling-stroke' });
+        if (x1 - x0 > W * 0.15) {
+          const note = chart.createDiv({ cls: 'pulse-hero-gap-label', text: tr('未记录', 'Not recorded') });
+          note.style.left = `${(x0 + x1) / 2 / W * 100}%`;
+        }
+        continue;
+      }
+      const pts = [];
+      for (let i = run.start; i <= run.end; i++) pts.push([x(i), y(model.days[i].score)]);
+      const curve = smoothLinePath(pts);
+      draw('path', { d: `${curve} L${pts[pts.length - 1][0]},${H} L${pts[0][0]},${H} Z`, fill: `url(#${gradientId})`, class: 'pulse-hero-area' });
+      draw('path', { d: curve, fill: 'none', class: 'pulse-hero-line', 'vector-effect': 'non-scaling-stroke' });
+    }
+    if (recordedAverage > 0) draw('line', { x1: 0, x2: W, y1: y(recordedAverage), y2: y(recordedAverage), class: 'pulse-hero-avg', 'vector-effect': 'non-scaling-stroke' });
+    const cursor = draw('line', { x1: 0, x2: 0, y1: padTop - 6, y2: H, class: 'pulse-hero-cursor', 'vector-effect': 'non-scaling-stroke', visibility: 'hidden' });
+    // 圆点和文字用 HTML 叠在上面，拉伸 SVG 时不变形
+    const at = (i, value) => ({ left: `${x(i) / W * 100}%`, top: `${y(value) / H * 100}%` });
+    const place = (el, i, value) => { const p = at(i, value); el.style.left = p.left; el.style.top = p.top; return el; };
+    if (recordedAverage > 0) {
+      const avg = chart.createDiv({ cls: 'pulse-hero-avg-label', text: tr(`均 ${number(recordedAverage)}`, `avg ${number(recordedAverage)}`) });
+      avg.style.top = `${y(recordedAverage) / H * 100}%`;
+    }
+    const bestIndex = model.best ? model.days.findIndex(day => day.date === model.best.date) : -1;
+    if (bestIndex >= 0) {
+      place(chart.createDiv({ cls: 'pulse-hero-mark is-peak' }), bestIndex, model.best.score);
+      const label = place(chart.createDiv({ cls: 'pulse-hero-peak-label', text: number(model.best.score) }), bestIndex, model.best.score);
+      if (bestIndex / Math.max(1, n - 1) > 0.85) label.addClass('is-left');
+    }
+    const lastDay = model.days[n - 1];
+    if (lastDay.status === 'included') place(chart.createDiv({ cls: 'pulse-hero-mark is-today' }), n - 1, lastDay.score);
     const dot = chart.createDiv({ cls: 'pulse-hero-dot' });
+    const bubble = chart.createDiv({ cls: 'pulse-hero-bubble' });
     const axis = main.createDiv({ cls: 'pulse-hero-axis' });
-    const readout = axis.createSpan({ cls: 'pulse-hero-readout' });
-    const idle = () => { readout.setText(model.best ? tr(`最高 ${shortDate(model.best.date)} · ${number(model.best.score)} 分`, `Peak ${shortDate(model.best.date)} · ${number(model.best.score)} pts`) : tr('这段时间还没有贡献分', 'No score in this range yet')); };
-    axis.createSpan({ cls: 'pulse-hero-range', text: `${shortDate(model.days[0].date)} — ${tr('今天', 'today')}` });
+    axis.createSpan({ cls: 'pulse-hero-range', text: shortDate(model.days[0].date) });
+    const legend = axis.createSpan({ cls: 'pulse-hero-legend' });
+    if (runs.some(run => !run.recorded)) { const key = legend.createSpan(); key.createSpan({ cls: 'pulse-hero-key is-gap' }); key.createSpan({ text: tr('未记录', 'Not recorded') }); }
+    if (recordedAverage > 0) { const key = legend.createSpan(); key.createSpan({ cls: 'pulse-hero-key is-avg' }); key.createSpan({ text: tr('有记录日均', 'Recorded average') }); }
+    axis.createSpan({ cls: 'pulse-hero-range', text: tr('今天', 'Today') });
     const show = i => {
       const day = model.days[i];
+      const recorded = day.status === 'included';
       cursor.setAttribute('x1', x(i)); cursor.setAttribute('x2', x(i)); cursor.setAttribute('visibility', 'visible');
-      dot.style.left = `${x(i) / W * 100}%`; dot.style.top = `${y(day.score) / H * 100}%`; dot.addClass('is-visible');
-      readout.setText(`${shortDate(day.date)} · ${day.status === 'included' ? tr(`${number(day.score)} 分`, `${number(day.score)} pts`) : day.status === 'missing' ? tr('未记录', 'not recorded') : tr('不在当前数据范围', 'outside the data scope')}`);
+      place(dot, i, recorded ? day.score : 0).toggleClass('is-visible', recorded);
+      bubble.empty();
+      bubble.createDiv({ cls: 'pulse-hero-bubble-date', text: shortDate(day.date) });
+      bubble.createDiv({ cls: 'pulse-hero-bubble-value', text: recorded ? tr(`${number(day.score)} 分`, `${number(day.score)} pts`) : day.status === 'missing' ? tr('未记录', 'Not recorded') : tr('不在当前数据范围', 'Outside the data scope') });
+      place(bubble, i, recorded ? day.score : 0);
+      bubble.toggleClass('is-left', i / Math.max(1, n - 1) > 0.7);
+      bubble.addClass('is-visible');
     };
-    const hide = () => { cursor.setAttribute('visibility', 'hidden'); dot.removeClass('is-visible'); idle(); };
+    const hide = () => { cursor.setAttribute('visibility', 'hidden'); dot.removeClass('is-visible'); bubble.removeClass('is-visible'); };
     const indexAt = event => { const r = svg.getBoundingClientRect(); return r.width ? Math.max(0, Math.min(n - 1, Math.round((event.clientX - r.left) / r.width * (n - 1)))) : null; };
     let focusIndex = n - 1;
     svg.setAttribute('tabindex', '0');
@@ -6116,7 +6197,6 @@ class CrispPulseView extends ItemView {
       if (next === null || next < 0 || next >= n) return;
       event.preventDefault(); focusIndex = next; show(next);
     });
-    idle();
 
     const side = hero.createDiv({ cls: 'pulse-hero-side' });
     const tile = (cls, label) => { const el = side.createDiv({ cls: `pulse-hero-tile ${cls}` }); el.createDiv({ cls: 'pulse-hero-tile-label', text: label }); return el; };
