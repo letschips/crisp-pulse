@@ -25,7 +25,7 @@ function load() {
   const original = fs.readFileSync(mainPath, "utf8");
   const PEM_RE = /`-----BEGIN PUBLIC KEY-----[\s\S]*?-----END PUBLIC KEY-----`/;
   assert.ok(PEM_RE.test(original), "main.js 应内置一把公钥");
-  const source = `${original.replace(PEM_RE, "`" + pem + "`")}\nglobalThis.__t = { discoverVaultCrispLicense, verifyLicenseCode, CrispPulseLicenseManager, CrispPulseView, PULSE_GATED_FEATURES: typeof PULSE_GATED_FEATURES === "undefined" ? undefined : PULSE_GATED_FEATURES };`;
+  const source = `${original.replace(PEM_RE, "`" + pem + "`")}\nglobalThis.__t = { discoverVaultCrispLicense, verifyLicenseCode, CrispPulseLicenseManager, CrispPulseView, PULSE_GATED_FEATURES: typeof PULSE_GATED_FEATURES === "undefined" ? undefined : PULSE_GATED_FEATURES, entitle: (plugin, on) => PULSE_LICENSE_STATE.set(pulseLicenseManagerFor(plugin), !!on) };`;
   const module = { exports: {} };
   const quiet = { log() {}, warn() {}, error() {}, debug() {} };
   const obsidian = new Proxy({
@@ -178,16 +178,41 @@ function makeView(entitled, extra = {}) {
   const opened = [];
   const plugin = {
     settings: { licenseCode: extra.licenseCode || "" }, store: { daily: {} },
-    isEntitled: () => entitled, licenseManager: { getStatus: () => extra.status || { valid: false, reason: "尚未验证" } },
     openLicenseSettings: () => opened.push("settings"),
   };
+  lib.entitle(plugin, entitled);
+  if (extra.status) plugin.licenseManager.status = extra.status;
   const view = new lib.CrispPulseView({}, plugin);
   return { view, opened, plugin };
 }
 
-test("门控表只包含复盘、数据分析、年度画像和周报，采集、备份、导出不在其中", () => {
+test("门控表覆盖进阶功能，采集、备份、导出不在其中", () => {
   const keys = Object.keys(lib.PULSE_GATED_FEATURES || {}).sort();
-  assert.deepEqual(keys, ["analytics", "review", "weeklyReport", "yearly"]);
+  assert.deepEqual(keys, ["analytics", "dayDetail", "heatmapMetrics", "memoConvert", "memoFilter", "memoReview", "memoTags", "memoWalk", "review", "weeklyReport", "yearly"]);
+  for (const free of ["export", "backup", "csv", "json", "capture", "dashboard"]) assert.ok(!keys.some((k) => k.toLowerCase().includes(free)), free);
+});
+
+test("改实例属性、换方法、换掉全局验签都不能放行", async (t) => {
+  const plugin = { settings: { licenseCode: "" }, store: { daily: {} }, app: makeVault(t, []) };
+  lib.entitle(plugin, false);
+  const view = new lib.CrispPulseView({}, plugin);
+  plugin.licenseManager.status = { valid: true };
+  plugin.isEntitled = () => true;
+  plugin.licenseManager.isEntitled = () => true;
+  plugin.licenseManager = { isEntitled: () => true, getStatus: () => ({ valid: true }) };
+  assert.equal(view.renderGatedTab(el(), "analytics"), true, "实例上的状态和方法都不算数");
+  assert.equal(lib.PluginClass.prototype.isEntitled.call(plugin), false);
+  // 另起一个带假验证器的管理器，也接不到插件上
+  const fake = new lib.CrispPulseLicenseManager(plugin.app, plugin.settings, { verifier: async () => ({ valid: true, payload: {} }) });
+  await fake.verify("x.y");
+  assert.equal(fake.isEntitled(), true);
+  assert.equal(view.renderGatedTab(el(), "analytics"), true, "没登记的管理器不放行");
+  // 全局验签被换成「总是通过」：自检发现，伪造的码不通过
+  const realVerify = webcrypto.subtle.verify;
+  webcrypto.subtle.verify = async () => true;
+  try { assert.equal((await lib.verifyLicenseCode(forged(["all"]), "crisp-pulse", null, { crypto: webcrypto }, { skipOnline: true })).valid, false); }
+  finally { webcrypto.subtle.verify = realVerify; }
+  assert.equal(typeof lib.CrispPulseLicenseManager.prototype.apply, "undefined", "没有公开的写入口");
 });
 
 test("未授权时三个进阶标签页显示锁定面板，不渲染任何统计内容", () => {
@@ -225,7 +250,8 @@ test("周报命令未授权时不输出内容，已授权时放行", async () =>
   const Pulse = lib.PluginClass;
   const run = (entitled) => {
     const plugin = Object.create(Pulse.prototype);
-    plugin.licenseManager = { isEntitled: () => entitled };
+    plugin.settings = {};
+    lib.entitle(plugin, entitled);
     return plugin;
   };
   const locked = run(false);

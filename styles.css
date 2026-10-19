@@ -164,6 +164,13 @@
   color: var(--text-error);
 }
 
+/* 卡片里、分段按钮和速记页签上的小锁：仍可点，点了提示去激活。 */
+.crisp-pulse-view.pulse-v2 .pulse-v2-seg button.is-locked, .crisp-pulse-memo-tab.is-locked { opacity: .55; }
+.crisp-pulse-locked-inline { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 6px 2px; }
+.crisp-pulse-locked-inline-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.crisp-pulse-locked-inline-icon { display: inline-flex; color: var(--text-muted); }
+.crisp-pulse-locked-inline-icon svg { width: 16px; height: 16px; }
+
 .crisp-pulse-tab-btn:hover {
   color: var(--text-normal);
   background: var(--background-modifier-hover);

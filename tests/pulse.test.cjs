@@ -69,7 +69,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8').replace(PUBLIC_PEM_RE, '`' + LOCAL_PUBLIC_PEM + '`') +
-    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined,splitActiveInterval:typeof splitActiveInterval === "function" ? splitActiveInterval : undefined,buildHourlyProfile:typeof buildHourlyProfile === "function" ? buildHourlyProfile : undefined,getReviewClues,reviewWeekRange,buildOverviewModel:typeof buildOverviewModel === "function" ? buildOverviewModel : undefined,dayComposition:typeof dayComposition === "function" ? dayComposition : undefined,dayRhythm:typeof dayRhythm === "function" ? dayRhythm : undefined};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined,splitActiveInterval:typeof splitActiveInterval === "function" ? splitActiveInterval : undefined,buildHourlyProfile:typeof buildHourlyProfile === "function" ? buildHourlyProfile : undefined,getReviewClues,reviewWeekRange,buildOverviewModel:typeof buildOverviewModel === "function" ? buildOverviewModel : undefined,dayComposition:typeof dayComposition === "function" ? dayComposition : undefined,dayRhythm:typeof dayRhythm === "function" ? dayRhythm : undefined,entitle:(plugin,on)=>PULSE_LICENSE_STATE.set(pulseLicenseManagerFor(plugin),!!on)};',
     context
   );
   const Pulse = context.module.exports;
@@ -1265,7 +1265,7 @@ test('range reports keep quality scopes separate in filenames and reject escapin
 });
 
 test('period navigation and draft input are wired to the live review model', async()=>{
- const {p,helpers}=setup();await p.loadPluginData();
+ const {p,helpers}=setup();await p.loadPluginData();helpers.entitle(p,true);
  function element(tag='div',options={}){
   const el={tag,options,children:[],dataset:{},attrs:{...(options.attr||{})},handlers:{},style:{},value:'',setAttr(k,v){this.attrs[k]=v;},addEventListener(k,v){this.handlers[k]=v;},setText(v){this.text=v;},empty(){this.children=[];}};
   el.createEl=(t,o={})=>{const child=element(t,o);el.children.push(child);return child;};
@@ -1298,7 +1298,7 @@ test('period navigation and draft input are wired to the live review model', asy
 });
 
 test('week navigation is reversible and only the running week is clipped', async()=>{
- const {p,helpers}=setup();await p.loadPluginData();
+ const {p,helpers}=setup();await p.loadPluginData();helpers.entitle(p,true);
  const week=(...args)=>({...helpers.reviewWeekRange(...args)});
  // 目标周与“今天”分开：往后翻到已结束的周保持完整七天。
  assert.deepEqual(week('2026-08-23','sunday',1,'2026-09-08'),{start:'2026-08-30',end:'2026-09-05'});
@@ -1409,6 +1409,18 @@ test('day composition adds up to the score and the rhythm needs hourly data', ()
  const hourly=Array(24).fill(0);hourly[9]=20;hourly[14]=45;hourly[22]=5;
  const r=helpers.dayRhythm({activity:{hourly}});
  assert.equal(r.peak,14);assert.equal(r.max,45);assert.equal(r.activeHours,3);
+});
+
+test('unactivated: reminders and advanced memo features stay locked, exports stay open', async()=>{
+ const {p,helpers}=setup();await p.loadPluginData();
+ helpers.entitle(p,false);
+ for(const key of ['dayDetail','heatmapMetrics','memoReview','memoWalk','memoTags','memoFilter','memoConvert'])assert.equal(p.requireEntitlement(key),false,key);
+ let notified=0;p.memoStore={list:async()=>[{date:'2026-09-01',time:'09:00',text:'旧',tags:[],links:[],path:'a.md',startLine:0}]};p.settings.memoReviewTime='09:00';
+ const origNotice=p.notifyMemoReview;p.notifyMemoReview=()=>{notified++;};
+ await p.checkMemoReviewReminder(new Date(2026,8,8,10,0));
+ assert.equal(notified,0,'未激活不提醒回顾');assert.notEqual(p.settings.memoReviewNotifiedOn,'2026-09-08');
+ helpers.entitle(p,true);
+ for(const key of ['dayDetail','memoReview','memoConvert'])assert.equal(p.requireEntitlement(key),true,key);
 });
 
 test('natural weeks keep fixed boundaries and clip the running week to today', ()=>{
@@ -1621,7 +1633,7 @@ test('moving file across exclusion boundaries establishes baseline and does not 
 });
 
 test('copy and archive commands generate modern review report with reflections and actions',async()=>{
- const {p,context}=setup();
+ const {p,context,helpers}=setup();
  p.addSettingTab=()=>{};p.registerView=()=>{};p.addRibbonIcon=()=>{};
  await p.onload();
 
@@ -1636,10 +1648,10 @@ test('copy and archive commands generate modern review report with reflections a
 
  const copyCmd=p.commands.find(c=>c.id==='copy-pulse-weekly-markdown');
  assert.ok(copyCmd);
- p.licenseManager={isEntitled:()=>false};
+ helpers.entitle(p,false);
  await copyCmd.callback();
  assert.equal(copiedText,'','未激活时周报命令不得输出内容');
- p.licenseManager={isEntitled:()=>true};
+ helpers.entitle(p,true);
  await copyCmd.callback();
  assert.ok(copiedText.includes('## 复盘反思'));
  assert.ok(copiedText.includes('本周新认识'));
@@ -1653,10 +1665,10 @@ test('copy and archive commands generate modern review report with reflections a
 
  const archiveCmd=p.commands.find(c=>c.id==='archive-weekly-review');
  assert.ok(archiveCmd);
- p.licenseManager={isEntitled:()=>false};
+ helpers.entitle(p,false);
  await archiveCmd.callback();
  assert.equal(archivedFile,null,'未激活时归档命令不得写入文件');
- p.licenseManager={isEntitled:()=>true};
+ helpers.entitle(p,true);
  await archiveCmd.callback();
  assert.ok(archivedFile);
  assert.ok(archivedFile.path.includes(`${start}_${today}-reliable-知识工作复盘.md`));
@@ -2326,10 +2338,11 @@ test('hourly: repair drops malformed hourly arrays and zeroes invalid buckets wi
 /* ---------- 速记：每日回顾提醒与 URL 入口（插件层） ---------- */
 
 test('memo review reminder fires once per day after the configured time and never without old memos', async () => {
-  const { p } = setup();
+  const { p, helpers } = setup();
   await p.loadPluginData();
   const memos = [{ date: '2026-09-01', time: '09:00', text: '旧想法', tags: [], links: [], path: 'Daily/2026-09-01.md', startLine: 0 }];
   p.memoStore = { list: async () => memos };
+  helpers.entitle(p, true);
   p.settings.memoReviewTime = '09:00';
   await p.checkMemoReviewReminder(new Date(2026, 8, 8, 8, 59));
   assert.equal(p.settings.memoReviewNotifiedOn, '');

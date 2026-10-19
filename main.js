@@ -88,8 +88,21 @@ function getCryptoSubtle(windowObj = (typeof window !== "undefined" ? window : n
   return null;
 }
 
-async function importEd25519PublicKey(pem, windowObj = null) {
+// 加载时取下 WebCrypto 的验签函数：之后再改全局 crypto 不影响这里。
+const PULSE_SUBTLE = (() => {
+  try {
+    const subtle = getCryptoSubtle();
+    return subtle ? { importKey: subtle.importKey.bind(subtle), verify: subtle.verify.bind(subtle) } : null;
+  } catch (e) { return null; }
+})();
+function pulseSubtle(windowObj) {
+  if (!windowObj) return PULSE_SUBTLE;
   const subtle = getCryptoSubtle(windowObj);
+  return subtle ? { importKey: subtle.importKey.bind(subtle), verify: subtle.verify.bind(subtle) } : null;
+}
+
+async function importEd25519PublicKey(pem, windowObj = null) {
+  const subtle = pulseSubtle(windowObj);
   if (!subtle) {
     throw new Error(tr("当前环境不支持 WebCrypto Ed25519", "This environment does not support WebCrypto Ed25519"));
   }
@@ -187,15 +200,18 @@ async function verifyLicenseCode(licenseCode, targetPluginId = "crisp-pulse", ap
       }
     }
     const publicKey = await importEd25519PublicKey(CRISP_PUBLIC_KEY_PEM, windowObj);
-    const subtle = getCryptoSubtle(windowObj);
+    const subtle = pulseSubtle(windowObj);
     const Encoder = typeof TextEncoder !== "undefined" ? TextEncoder : require("util").TextEncoder;
+    // 先拿一个必然无效的签名自检：验签函数被替换成「总是通过」时直接判无效
+    const probe = await subtle.verify("Ed25519", publicKey, new Uint8Array(64), new Encoder().encode(`crisp-probe.${payloadBase64}`)).catch(() => false);
+    if (probe !== false) return { valid: false, reason: tr("授权校验环境异常", "License check environment is not trusted") };
     const isValid = await subtle.verify(
       "Ed25519",
       publicKey,
       base64UrlToUint8Array(signatureBase64),
       new Encoder().encode(payloadBase64)
     );
-    if (!isValid) return { valid: false, reason: tr("授权签名无效", "Invalid license signature") };
+    if (isValid !== true) return { valid: false, reason: tr("授权签名无效", "Invalid license signature") };
     if (options.skipOnline) return { valid: true, payload, message: tr("本地验签通过", "Local signature check passed"), source: "offline" };
 
     let reqUrl = null;
@@ -260,23 +276,63 @@ async function verifyLicenseCode(licenseCode, targetPluginId = "crisp-pulse", ap
   }
 }
 
-// 功能分级。要调整哪些功能需要激活，只改这一张表（以及对应的 requireEntitlement / renderGatedTab 调用点）。
-// 固定原则：数据采集、存储、备份、导出与看板视图永不上锁——用户自己的数据始终可读、可带走，
-// 未激活期间采集照常进行，激活后能看到完整历史。
+// 功能分级。未激活只保留：看板概览与贡献分热力图、速记的记录与浏览（含搜索）。
+// 固定原则：数据采集、存储、备份与 CSV/JSON 导出永不上锁——用户自己的数据始终可带走，
+// 未激活期间采集照常进行，激活后能看到完整历史；其他 Crisp 插件写入速记的接口也不上锁。
 const PULSE_GATED_FEATURES = Object.freeze({
   review: tr("知识复盘", "Review"),
   analytics: tr("数据分析", "Analytics"),
   yearly: tr("年度画像", "Year Portrait"),
   weeklyReport: tr("周报复制与归档", "Weekly report copy & archive"),
+  dayDetail: tr("每日明细", "Day details"),
+  heatmapMetrics: tr("热力图切换指标", "Heatmap metrics"),
+  memoReview: tr("速记回顾", "Memo review"),
+  memoWalk: tr("速记漫步", "Memo walk"),
+  memoTags: tr("速记标签", "Memo tags"),
+  memoFilter: tr("速记高级筛选", "Advanced memo filters"),
+  memoConvert: tr("速记转化与关联", "Memo conversion and related memos"),
 });
+
+// 授权状态、验证器和插件与管理器的对应关系都放在模块内部，实例属性改了也不影响放行。
+const PULSE_LICENSE_STATE = new WeakMap();
+const PULSE_LICENSE_VERIFIER = new WeakMap();
+const PULSE_LICENSE_OWNER = new WeakMap();
+
+/** 插件内部所有门控都走这里：只认插件自己创建并登记的管理器、且真正验签通过。 */
+function pulseEntitled(plugin) {
+  const manager = plugin ? PULSE_LICENSE_OWNER.get(plugin) : null;
+  return !!manager && PULSE_LICENSE_STATE.get(manager) === true;
+}
+
+function pulseLicenseManagerFor(plugin, options = {}) {
+  let manager = PULSE_LICENSE_OWNER.get(plugin);
+  if (!manager) {
+    manager = new CrispPulseLicenseManager(plugin.app, plugin.settings, options);
+    PULSE_LICENSE_OWNER.set(plugin, manager);
+  }
+  plugin.licenseManager = manager;
+  return manager;
+}
+
+function applyLicenseResult(manager, result, code) {
+  const wasEntitled = PULSE_LICENSE_STATE.get(manager) === true;
+  manager.status = result;
+  PULSE_LICENSE_STATE.set(manager, result?.valid === true);
+  if (result?.valid && manager.settings) {
+    manager.settings.licenseCode = code;
+    if (result.source === "online") manager.settings.licenseLastOnlineAt = manager.now();
+  }
+  const entitled = PULSE_LICENSE_STATE.get(manager) === true;
+  if (wasEntitled !== entitled) manager.onEntitlementChange(entitled);
+}
 
 class CrispPulseLicenseManager {
   constructor(app, settings, options = {}) {
     this.app = app;
     this.settings = settings;
-    this.verifier = options.verifier || verifyLicenseCode;
+    PULSE_LICENSE_VERIFIER.set(this, options.verifier || verifyLicenseCode);
+    PULSE_LICENSE_STATE.set(this, false);
     this.now = options.now || (() => Date.now());
-    this.windowObj = options.windowObj || (typeof window !== "undefined" ? window : null);
     this.onEntitlementChange = options.onEntitlementChange || (() => {});
     // 一律从「未验证」起步：只有本地验签通过才放行，不凭库内某个文件的 product 字段先授予权限。
     this.status = { valid: false, reason: tr("尚未验证", "Not verified yet") };
@@ -285,7 +341,7 @@ class CrispPulseLicenseManager {
   }
 
   isEntitled() {
-    return this.status.valid === true;
+    return PULSE_LICENSE_STATE.get(this) === true;
   }
 
   getStatus() {
@@ -294,20 +350,10 @@ class CrispPulseLicenseManager {
 
   async runVerifier(code, options) {
     try {
-      return await this.verifier(code, "crisp-pulse", this.app, this.windowObj, options);
+      return await PULSE_LICENSE_VERIFIER.get(this)(code, "crisp-pulse", this.app, null, options);
     } catch (error) {
       return { valid: false, reason: tr(`授权验证失败: ${error.message || error}`, `License verification failed: ${error.message || error}`) };
     }
-  }
-
-  apply(result, code) {
-    const wasEntitled = this.isEntitled();
-    this.status = result;
-    if (result.valid && this.settings) {
-      this.settings.licenseCode = code;
-      if (result.source === "online") this.settings.licenseLastOnlineAt = this.now();
-    }
-    if (wasEntitled !== this.isEntitled()) this.onEntitlementChange(this.isEntitled());
   }
 
   // 启动时调用：只做不联网的本地验签（毫秒级），通过后在线设备校验转入后台。
@@ -317,7 +363,7 @@ class CrispPulseLicenseManager {
     if (!code) code = (await discoverVaultCrispLicense(this.app)) || "";
     const result = await this.runVerifier(code, { skipOnline: true });
     if (id !== this.verificationId) return result;
-    this.apply(result, code);
+    applyLicenseResult(this, result, code);
     if (result.valid) this.backgroundVerification = this.verify(code);
     return result;
   }
@@ -329,7 +375,7 @@ class CrispPulseLicenseManager {
     const result = await this.runVerifier(targetCode, {});
     // 更新的校验已经开始：本次结果不再落地，避免旧结果覆盖新状态。
     if (id !== this.verificationId) return result;
-    this.apply(result, targetCode);
+    applyLicenseResult(this, result, targetCode);
     return result;
   }
 }
@@ -1489,7 +1535,7 @@ class CrispPulsePlugin extends Plugin {
 
     await this.loadPluginData();
 
-    this.licenseManager = new CrispPulseLicenseManager(this.app, this.settings, {
+    pulseLicenseManagerFor(this, {
       onEntitlementChange: () => { if (this.app?.workspace) this.refreshViews(); },
     });
     // 本地验签只需毫秒：先等它完成再创建视图和命令，已激活用户不会先看到一帧锁定界面。
@@ -1817,12 +1863,12 @@ class CrispPulsePlugin extends Plugin {
   }
 
   isEntitled() {
-    return this.licenseManager?.isEntitled() === true;
+    return pulseEntitled(this);
   }
 
   // 命令层门控：未激活时提示并返回 false，调用方直接 return。
   requireEntitlement(featureKey) {
-    if (this.isEntitled()) return true;
+    if (pulseEntitled(this)) return true;
     new Notice(tr(`Crisp Pulse：${PULSE_GATED_FEATURES[featureKey] || "该功能"}需要激活。请在 设置 → Crisp Pulse 输入 Crisp 授权码；数据仍在照常记录。`, `Crisp Pulse: ${PULSE_GATED_FEATURES[featureKey] || "This feature"} requires activation. Enter your Crisp license code in Settings → Crisp Pulse; data is still being recorded as usual.`));
     return false;
   }
@@ -1838,19 +1884,13 @@ class CrispPulsePlugin extends Plugin {
   }
 
   async activateLicense(code) {
-    if (!this.licenseManager) {
-      this.licenseManager = new CrispPulseLicenseManager(this.app, this.settings);
-    }
-    const result = await this.licenseManager.verify(code);
+    const result = await pulseLicenseManagerFor(this).verify(code);
     await this.saveSettings();
     return result;
   }
 
   async refreshLicense() {
-    if (!this.licenseManager) {
-      this.licenseManager = new CrispPulseLicenseManager(this.app, this.settings);
-    }
-    return await this.licenseManager.verify();
+    return await pulseLicenseManagerFor(this).verify();
   }
 
   createBackup(reason = "manual") {
@@ -3594,6 +3634,7 @@ class CrispPulsePlugin extends Plugin {
 
   /** 每日回顾提醒：Obsidian 开着时，到点提醒一次；关掉 Obsidian 不会提醒。 */
   async checkMemoReviewReminder(now = new Date()) {
+    if (!pulseEntitled(this)) return;
     const time = String(this.settings.memoReviewTime || "").trim();
     if (!/^\d{1,2}:\d{2}$/.test(time)) return;
     const today = dateKey(now);
@@ -4728,6 +4769,7 @@ class CrispPulseView extends ItemView {
   }
 
   renderAnalytics(parent) {
+    if (!pulseEntitled(this.plugin)) return;
     this.analyticsLastWidth = this.containerEl.children[1].clientWidth;
     const section = parent.createDiv({ cls: 'crisp-pulse-analytics' });
     const heading = section.createDiv({ cls: 'crisp-pulse-analytics-heading' });
@@ -5176,6 +5218,7 @@ class CrispPulseView extends ItemView {
   }
 
   renderYearly(parent) {
+    if (!pulseEntitled(this.plugin)) return;
     this.analyticsLastWidth = this.containerEl.children[1].clientWidth;
     const daily = this.plugin.store.daily || {};
     const include = (record, key) => this.plugin.recordMatchesScope(record, key, this.currentScope);
@@ -5701,7 +5744,7 @@ class CrispPulseView extends ItemView {
 
   // 需要激活的标签页在未激活时显示锁定说明。返回 true 表示已渲染锁定面板。
   renderGatedTab(parent, tab) {
-    if (!["review", "analytics", "yearly"].includes(tab) || this.plugin?.isEntitled?.()) return false;
+    if (!["review", "analytics", "yearly"].includes(tab) || pulseEntitled(this.plugin)) return false;
     const status = this.plugin?.licenseManager?.getStatus?.();
     const hasCode = !!this.plugin?.settings?.licenseCode;
     const panel = parent.createDiv({ cls: "crisp-pulse-locked" });
@@ -5889,7 +5932,7 @@ class CrispPulseView extends ItemView {
       text: tr("年度画像", "Year Portrait")
     });
     yearlyButton.addEventListener("click", () => { this.activeViewTab = "yearly"; this.containerEl.children[1].scrollTop = 0; this.render(); });
-    if (!this.plugin?.isEntitled?.()) {
+    if (!pulseEntitled(this.plugin)) {
       for (const button of [reviewBtn, analyticsButton, yearlyButton]) {
         button.classList.add("is-locked");
         button.setAttr("title", tr("需要激活", "Requires activation"));
@@ -5969,6 +6012,8 @@ class CrispPulseView extends ItemView {
     const overview = this.trayCard(wrapper, { icon: 'activity', title: tr('知识脉冲概览', 'Pulse overview'), subtitle: `${rangeLabel} · ${scopeLabel}`, pill: stats.currentStreak > 0 ? tr(`连续 ${stats.currentStreak} 天`, `Streak: ${plural(stats.currentStreak, 'day')}`) : tr('今天还没开始', 'Not started today'), pillMuted: !(stats.currentStreak > 0) });
     this.renderOverviewHero(overview, stats);
 
+    const entitled = pulseEntitled(this.plugin);
+    if (!entitled) this.selectedMetric = 'contribution';
     const metricLabel = this.getMetricLabel(this.selectedMetric);
     const heat = this.trayCard(wrapper, { icon: 'calendar-days', title: tr('年度知识活跃脉冲', 'Yearly activity'), subtitle: tr(`${metricLabel} · 强度按个人近期分位数`, `${metricLabel} · intensity by your recent percentiles`), pill: tr(`${stats.activeDays} 天活跃`, `${plural(stats.activeDays, 'active day')}`), pillMuted: true, cls: 'pulse-v2-heat' });
     const seg = heat.createDiv({ cls: 'pulse-v2-seg' });
@@ -5979,7 +6024,9 @@ class CrispPulseView extends ItemView {
       const b = seg.createEl('button', { text: m[1] });
       b.setAttr('role', 'tab');
       b.setAttr('aria-selected', String(this.selectedMetric === m[0]));
-      b.addEventListener('click', () => { this.selectedMetric = m[0]; this.render(); });
+      const open = m[0] === 'contribution' || entitled;
+      if (!open) { b.addClass('is-locked'); b.setAttr('title', tr('需要激活', 'Requires activation')); }
+      b.addEventListener('click', () => { if (!open && !this.plugin.requireEntitlement('heatmapMetrics')) return; this.selectedMetric = m[0]; this.render(); });
     }
     this.renderHeatmapCard(heat);
     // 热力图是看板的主角放在上面；番茄是今天的行动入口，紧跟其后
@@ -5990,7 +6037,19 @@ class CrispPulseView extends ItemView {
     const { map } = this.plugin.calculateIntensities(this.selectedMetric, this.currentScope);
     const info = map.get(this.selectedDate) || { level: 0, percentile: 0 };
     const detail = this.trayCard(wrapper, { icon: 'file-text', title: tr(`${formatDateDisplay(this.selectedDate)} 明细`, `${formatDateDisplay(this.selectedDate)} details`), subtitle: `${quality}${info.level > 0 ? tr(` · 强度第 ${info.percentile}% 分位`, ` · ${info.percentile}th percentile`) : ''}`, pill: `${(rec.contribution?.score || 0).toFixed(1)} ${tr('分', 'pts')}`, pillMuted: !(rec.contribution?.score > 0), cls: 'pulse-v2-detail' });
-    this.renderDayDetailCard(detail);
+    if (entitled) this.renderDayDetailCard(detail);
+    else this.renderLockedNote(detail, 'dayDetail', tr('激活后查看这一天的贡献分构成、24 小时节奏、各项指标和当天写过的笔记。', 'Activate to see how the day’s score breaks down, its 24-hour rhythm, each metric and the notes you worked on.'));
+  }
+
+  /** 卡片内的小锁：一句说明和「前往激活」。 */
+  renderLockedNote(parent, featureKey, text) {
+    const box = parent.createDiv({ cls: 'crisp-pulse-locked-inline' });
+    const head = box.createDiv({ cls: 'crisp-pulse-locked-inline-title' });
+    setIcon(head.createSpan({ cls: 'crisp-pulse-locked-inline-icon' }), 'lock');
+    head.createSpan({ text: tr(`${PULSE_GATED_FEATURES[featureKey]}需要激活`, `${PULSE_GATED_FEATURES[featureKey]} requires activation`) });
+    box.createDiv({ cls: 'crisp-pulse-review-note', text });
+    const button = box.createEl('button', { cls: 'mod-cta', text: tr('前往激活', 'Activate') });
+    button.addEventListener('click', () => this.plugin.openLicenseSettings());
   }
 
   /* 概览首屏：左边是累计贡献分和整段区间的每日走势，右边四张小卡各配一个小图形。 */
@@ -6130,7 +6189,7 @@ class CrispPulseView extends ItemView {
       const b = box.createEl("button", { cls: "mod-cta", text: action });
       b.addEventListener("click", run);
     };
-    if (!this.plugin.isEntitled()) return locked(tr("番茄记录需要激活 Crisp Pulse", "Pomodoro records require activating Crisp Pulse"), tr("激活后在看板上查看每天的番茄、中断和专注时长。番茄照常记录。", "Activate to see daily pomodoros, interruptions and focus time on the dashboard. Pomodoros are still recorded."), tr("前往激活", "Activate"), () => this.plugin.openLicenseSettings());
+    if (!pulseEntitled(this.plugin)) return locked(tr("番茄记录需要激活 Crisp Pulse", "Pomodoro records require activating Crisp Pulse"), tr("激活后在看板上查看每天的番茄、中断和专注时长。番茄照常记录。", "Activate to see daily pomodoros, interruptions and focus time on the dashboard. Pomodoros are still recorded."), tr("前往激活", "Activate"), () => this.plugin.openLicenseSettings());
     if (!snap.entitled) return locked(tr("番茄钟需要激活 Crisp Focus", "The pomodoro timer requires activating Crisp Focus"), tr("激活 Crisp Focus 后，在这里开始番茄、查看进度。", "Activate Crisp Focus to start pomodoros and track progress here."), tr("打开 Crisp Focus 设置", "Open Crisp Focus settings"), () => focus.openSettings?.());
 
     const body = card.createDiv({ cls: "pulse-pomo" });
@@ -6581,6 +6640,7 @@ class CrispPulseView extends ItemView {
 
   // --- Knowledge review: period → clues → materials and charts on one side, the review itself on the other ---
   renderRetrospectivePanel(parent) {
+    if (!pulseEntitled(this.plugin)) return;
     if (!this.reviewStart || !this.reviewEnd) {
       // 默认最近一个完整自然周：边界固定，同一周里哪天打开都是同一份草稿。
       const week = reviewWeekRange(getTodayKey(), this.plugin.settings.weekStartsOn, -1);
@@ -9195,8 +9255,8 @@ class CrispPulseMemoView extends ItemView {
       return b;
     };
     navButton("refresh-cw", tr("刷新速记", "Refresh memos"), () => this.reload());
-    navButton("filter", MEMO_FILTER_LABEL, () => { this.showAdvanced = !this.showAdvanced; this.tab = "all"; this.render(); }, this.showAdvanced || this.isFiltered());
-    navButton("shuffle", tr("随机漫步", "Random walk"), () => { this.startWalk(); this.tab = "walk"; this.render(); }, this.tab === "walk");
+    navButton("filter", MEMO_FILTER_LABEL, () => { if (!this.plugin.requireEntitlement("memoFilter")) return; this.showAdvanced = !this.showAdvanced; this.tab = "all"; this.render(); }, this.showAdvanced || this.isFiltered());
+    navButton("shuffle", tr("随机漫步", "Random walk"), () => { if (!this.plugin.requireEntitlement("memoWalk")) return; this.startWalk(); this.tab = "walk"; this.render(); }, this.tab === "walk");
     navButton("trash-2", tr("速记回收站", "Memo trash"), () => { this.tab = this.tab === "trash" ? "all" : "trash"; this.render(); }, this.tab === "trash");
     navButton("settings", tr("速记设置", "Memo settings"), () => {
       const setting = this.app.setting;
@@ -9821,9 +9881,14 @@ class CrispPulseMemoView extends ItemView {
   renderTabs(root, searchFocus) {
     const row = root.createDiv({ cls: "crisp-pulse-memo-tabs" });
     const tabs = row.createDiv({ cls: "crisp-pulse-memo-tablist", attr: { role: "tablist", "aria-label": tr("速记视图", "Memo views") } });
+    const entitled = pulseEntitled(this.plugin);
+    const gates = { review: "memoReview", walk: "memoWalk", tags: "memoTags" };
     for (const [id, label] of [["all", tr("全部", "All")], ["review", tr("回顾", "Review")], ["walk", tr("漫步", "Walk")], ["tags", tr("标签", "Tags")]]) {
-      const tab = tabs.createEl("button", { cls: `crisp-pulse-memo-tab${this.tab === id ? " is-active" : ""}`, text: label, attr: { role: "tab", "aria-selected": String(this.tab === id) } });
+      const locked = !entitled && !!gates[id];
+      const tab = tabs.createEl("button", { cls: `crisp-pulse-memo-tab${this.tab === id ? " is-active" : ""}${locked ? " is-locked" : ""}`, text: label, attr: { role: "tab", "aria-selected": String(this.tab === id) } });
+      if (locked) tab.setAttr("title", tr("需要激活", "Requires activation"));
       tab.addEventListener("click", () => {
+        if (locked && !this.plugin.requireEntitlement(gates[id])) return;
         if (id === "walk" && !this.walk.trail.length) this.startWalk();
         this.tab = id;
         this.render();
@@ -9843,6 +9908,8 @@ class CrispPulseMemoView extends ItemView {
     toggle.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); } });
     if (searchShown) this.renderSearch(root, searchFocus);
     if (this.tab === "trash") return this.renderTrash(root);
+    if (!pulseEntitled(this.plugin) && ["review", "walk", "tags"].includes(this.tab)) this.tab = "all";
+    if (!pulseEntitled(this.plugin)) { this.showAdvanced = false; this.expanded = null; }
     if (this.tab === "review") return this.renderReview(root);
     if (this.tab === "walk") return this.renderWalk(root);
     if (this.tab === "tags") return this.renderTags(root);
@@ -10229,16 +10296,19 @@ class CrispPulseMemoView extends ItemView {
       try { await fn(); done(); } catch (error) { new Notice(tr(`Crisp Pulse 速记：${error.message || error}`, `Crisp Pulse memos: ${error.message || error}`), 8000); }
     };
     const key = this.memoKey(m);
-    menu.addItem((i) => i.setTitle(this.expanded === key ? tr("收起相关笔记", "Hide related memos") : tr("相关笔记", "Related memos")).setIcon("sparkles").onClick(() => { this.expanded = this.expanded === key ? null : key; this.render(); }));
-    menu.addItem((i) => i.setTitle(tr("从这里漫步", "Walk from here")).setIcon("shuffle").onClick(() => { this.startWalk(m); this.tab = "walk"; this.render(); }));
+    // 相关笔记、漫步和各种转化需要激活；未激活时菜单项仍在，点了提示去激活
+    const gated = (featureKey, fn) => () => { if (this.plugin.requireEntitlement(featureKey)) fn(); };
+    menu.addItem((i) => i.setTitle(this.expanded === key ? tr("收起相关笔记", "Hide related memos") : tr("相关笔记", "Related memos")).setIcon("sparkles").onClick(gated("memoConvert", () => { this.expanded = this.expanded === key ? null : key; this.render(); })));
+    menu.addItem((i) => i.setTitle(tr("从这里漫步", "Walk from here")).setIcon("shuffle").onClick(gated("memoWalk", () => { this.startWalk(m); this.tab = "walk"; this.render(); })));
     menu.addSeparator();
-    menu.addItem((i) => i.setTitle(tr("转为笔记", "Convert to note")).setIcon("file-plus").onClick(run(() => this.plugin.convertMemoToNote(m))));
+    menu.addItem((i) => i.setTitle(tr("转为笔记", "Convert to note")).setIcon("file-plus").onClick(gated("memoConvert", run(() => this.plugin.convertMemoToNote(m)))));
     // 装了 Tempo 才出现；已经转过的速记点它是打开那条任务
     const tempo = this.plugin.memoTempo();
     if (tempo) {
       const live = m.id ? this.tempoSnapshots?.[`crisp-pulse:${m.id}`] : null;
       const taskId = live?.id;
       menu.addItem((i) => i.setTitle(taskId ? tr("在 Tempo 中打开任务", "Open task in Tempo") : m.tempoTasks?.length ? tr("重新转为 Tempo 任务", "Convert to a Tempo task again") : tr("转为 Tempo 任务", "Convert to a Tempo task")).setIcon("list-checks").onClick(async () => {
+        if (!taskId && !this.plugin.requireEntitlement("memoConvert")) return;
         try {
           if (taskId) await tempo.revealTask(taskId);
           else { await this.plugin.convertMemoToTempo(m); new Notice(tr("已转为 Tempo 任务", "Converted to a Tempo task")); done(); }
@@ -10246,9 +10316,9 @@ class CrispPulseMemoView extends ItemView {
       }));
     }
     if (this.mode === "anks") {
-      menu.addItem((i) => i.setTitle(tr("转为 ANKS 问题", "Convert to an ANKS question")).setIcon("help-circle").onClick(run(() => this.plugin.convertMemoToQuestion(m))));
+      menu.addItem((i) => i.setTitle(tr("转为 ANKS 问题", "Convert to an ANKS question")).setIcon("help-circle").onClick(gated("memoConvert", run(() => this.plugin.convertMemoToQuestion(m)))));
       const inNow = m.links.some((link) => link.startsWith(`${ANKS_NOW_FILE.replace(/\.md$/, "")}#^pulse-memo-`));
-      menu.addItem((i) => i.setTitle(inNow ? tr("已加入 Now 行动", "Added to Now actions") : tr("加入 Now 行动", "Add to Now actions")).setIcon("check-square").onClick(run(() => this.plugin.convertMemoToNow(m))));
+      menu.addItem((i) => i.setTitle(inNow ? tr("已加入 Now 行动", "Added to Now actions") : tr("加入 Now 行动", "Add to Now actions")).setIcon("check-square").onClick(gated("memoConvert", run(() => this.plugin.convertMemoToNow(m)))));
     }
     menu.addSeparator();
     menu.addItem((i) => i.setTitle(tr("复制", "Copy")).setIcon("copy").onClick(async () => { await navigator.clipboard.writeText(m.text); new Notice(tr("已复制速记", "Memo copied")); }));
