@@ -848,12 +848,7 @@
 .crisp-pulse-analytics-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
 .crisp-pulse-analytics-heading h2 { margin: 0 0 8px; font-size: 28px; font-weight: 550; letter-spacing: -.03em; }
 .crisp-pulse-analytics-heading p { margin: 0; color: var(--text-muted); font-size: 14px; }
-.crisp-pulse-analytics-segments { display: flex; padding: 3px; gap: 2px; background: var(--background-secondary); border-radius: 11px; }
-.crisp-pulse-analytics .crisp-pulse-analytics-segments button {
-  appearance: none; box-shadow: none; border: 1px solid transparent; border-radius: 8px;
-  background: transparent; color: var(--text-muted); padding: 6px 14px; height: auto; font-size: 13px;
-}
-.crisp-pulse-analytics .crisp-pulse-analytics-segments button[aria-pressed="true"] { background: var(--background-primary); color: var(--text-normal); border-color: var(--background-modifier-border); box-shadow: 0 1px 3px #00000008; }
+
 .crisp-pulse-analytics-coverage { margin-top: -14px; color: var(--text-muted); font-size: 12px; line-height: 1.6; }
 .crisp-pulse-analytics-card { border: 1px solid var(--background-modifier-border); background: var(--background-primary); border-radius: 18px; padding: 24px 24px 18px; box-shadow: none; min-width: 0; }
 .crisp-pulse-analytics-summary { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
@@ -1047,7 +1042,7 @@
   column-gap: 3.5px;
 }
 .crisp-pulse-month-label { position: static; transform: none; }
-.crisp-pulse-month-label:last-child { justify-self: end; }
+.crisp-pulse-month-label.is-edge { justify-self: end; }
 .crisp-pulse-heatmap-body { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 6px; }
 .crisp-pulse-weeks-grid { display: grid; grid-template-columns: repeat(53, minmax(0, 1fr)); gap: 3.5px; min-width: 0; }
 .crisp-pulse-week-col { display: grid; grid-template-rows: repeat(7, minmax(0, 1fr)); gap: 3.5px; min-width: 0; }
@@ -2186,9 +2181,7 @@
 .crisp-pulse-view :is(.crisp-pulse-analytics-coverage,.crisp-pulse-analytics-heading p,.crisp-pulse-analytics-readout) { font-weight: 400; }
 .crisp-pulse-view .crisp-pulse-analytics-section h3 { font-size: 17px; font-weight: 550; }
 .crisp-pulse-view .crisp-pulse-analytics-total { font-size: 32px; font-weight: 500; }
-.crisp-pulse-view .crisp-pulse-analytics-segments { border: 1px solid var(--pulse-ui-border); }
-.crisp-pulse-view .crisp-pulse-analytics-segments button { background: transparent !important; color: var(--text-muted) !important; border-color: transparent !important; box-shadow: none !important; font-weight: 500; }
-.crisp-pulse-view .crisp-pulse-analytics-segments button[aria-pressed="true"] { background: var(--pulse-ui-surface) !important; color: var(--text-normal) !important; border-color: var(--pulse-ui-border) !important; }
+
 .crisp-pulse-view :is(button,select):focus-visible { outline: 2px solid var(--pulse-ui-accent) !important; outline-offset: 3px; }
 @container (max-width: 550px) {
   .crisp-pulse-view :is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-analytics-card) { padding: 16px 12px; border-radius: 12px; }
@@ -2263,9 +2256,6 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view button.crisp-pulse-tab-btn:not(.is-active):not(:disabled):hover {
   background: color-mix(in srgb, var(--text-normal) 10%, transparent) !important;
 }
-body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view .crisp-pulse-analytics-segments button[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--text-normal) 12%, transparent) !important;
-}
 
 /* Hide the page scrollbar while preserving wheel, touch and keyboard scrolling. */
 .crisp-pulse-view {
@@ -2279,9 +2269,10 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 .crisp-pulse-view { --pulse-ui-surface: var(--background-primary); --pulse-ui-soft: var(--background-secondary); --pulse-ui-border: var(--background-modifier-border); --pulse-ui-accent: var(--interactive-accent, #6b84bf); --pulse-glass-rim: rgba(255, 255, 255, 0.55); --text-muted: color-mix(in srgb, var(--text-normal) 78%, transparent); --text-faint: color-mix(in srgb, var(--text-normal) 55%, transparent); color: var(--text-normal); font-family: var(--font-interface); font-weight: 400; scrollbar-width: none; background: var(--pulse-ui-soft) !important; padding: 20px 28px 56px !important; }
 .crisp-pulse-view::-webkit-scrollbar { display: none; }
 body.theme-dark.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 36%, transparent); --pulse-ui-soft: color-mix(in srgb, var(--background-primary) 22%, transparent); --pulse-ui-border: color-mix(in srgb, var(--text-normal) 14%, transparent); --pulse-glass-rim: rgba(255, 255, 255, 0.18); --text-normal: #f1f2f6; --text-muted: rgba(235, 240, 250, 0.80); --text-faint: rgba(220, 225, 235, 0.54); background: transparent !important; }
-body.theme-light.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view { --pulse-ui-surface: rgba(255, 255, 255, 0.82); --pulse-ui-soft: rgba(248, 249, 250, 0.72); --pulse-ui-border: rgba(0, 0, 0, 0.08); --pulse-glass-rim: rgba(255, 255, 255, 0.95); --text-normal: #1f2937; --text-muted: #4b5563; --text-faint: #6b7280; background: transparent !important; }
+body.theme-light.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 82%, transparent); --pulse-ui-soft: color-mix(in srgb, var(--background-secondary) 72%, transparent); --pulse-ui-border: rgba(0, 0, 0, 0.08); --pulse-glass-rim: rgba(255, 255, 255, 0.95); background: transparent !important; }
 body.theme-dark .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 92%, #ffffff); --pulse-ui-soft: var(--background-primary); --pulse-ui-border: color-mix(in srgb, var(--text-normal) 16%, transparent); --pulse-glass-rim: rgba(255, 255, 255, 0.10); --text-normal: #ecedf1; --text-muted: rgba(236, 237, 241, 0.78); --text-faint: rgba(236, 237, 241, 0.52); }
-body.theme-light .crisp-pulse-view { --pulse-ui-surface: #ffffff; --pulse-ui-soft: var(--background-secondary, #f8f9fa); --pulse-ui-border: rgba(0, 0, 0, 0.08); --pulse-glass-rim: rgba(255, 255, 255, 0.9); --text-normal: #1f2937; --text-muted: #4b5563; --text-faint: #6b7280; background: var(--background-secondary, #f8f9fa) !important; }
+/* Light themes follow the host theme's colours (warm themes such as Still stay warm). */
+body.theme-light .crisp-pulse-view { --pulse-ui-surface: var(--background-primary); --pulse-ui-soft: var(--background-secondary, #f8f9fa); --pulse-ui-border: rgba(0, 0, 0, 0.08); --pulse-glass-rim: rgba(255, 255, 255, 0.9); background: var(--background-secondary, #f8f9fa) !important; }
 
 /* ==========================================================================
    Dashboard tray layout (pulse-v2): tray header on a soft surface, content on an
@@ -2375,21 +2366,25 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 .crisp-pulse-view .pulse-hero-chip.is-down { color: var(--pulse-chart-rose); background: color-mix(in srgb, var(--pulse-chart-rose) 12%, transparent); }
 .crisp-pulse-view .pulse-hero-note { color: var(--text-muted); }
 .crisp-pulse-view .pulse-hero-chart { position: relative; margin-top: auto; padding-top: 16px; }
+.crisp-pulse-view .pulse-hero-layer { position: absolute; left: 0; right: 0; top: 16px; height: 112px; pointer-events: none; }
 .crisp-pulse-view .pulse-hero-svg { display: block; width: 100%; height: 112px; overflow: visible; cursor: crosshair; outline: none; border-radius: 6px; }
 .crisp-pulse-view .pulse-hero-svg:focus-visible { box-shadow: 0 0 0 2px var(--interactive-accent); }
 .crisp-pulse-view .pulse-hero-stop-top { stop-color: var(--pulse-ui-accent, var(--interactive-accent)); stop-opacity: .38; }
 .crisp-pulse-view .pulse-hero-stop-bottom { stop-color: var(--pulse-ui-accent, var(--interactive-accent)); stop-opacity: 0; }
 .crisp-pulse-view .pulse-hero-line { stroke: var(--pulse-ui-accent, var(--interactive-accent)); stroke-width: 2.25; stroke-linejoin: round; stroke-linecap: round; }
-.crisp-pulse-view .pulse-hero-gap-label { position: absolute; bottom: 10px; transform: translateX(-50%); color: var(--text-faint); font-size: 11.5px; pointer-events: none; }
+.crisp-pulse-view .pulse-hero-gap-label { position: absolute; bottom: 8px; transform: translateX(-50%); color: var(--text-faint); font-size: 11.5px; pointer-events: none; }
 .crisp-pulse-view .pulse-hero-gap-line { stroke: color-mix(in srgb, var(--text-normal) 22%, transparent); stroke-width: 1.5; stroke-dasharray: 2 4; }
 .crisp-pulse-view .pulse-hero-avg { stroke: color-mix(in srgb, var(--text-normal) 32%, transparent); stroke-width: 1; stroke-dasharray: 4 4; }
-.crisp-pulse-view .pulse-hero-avg-label { position: absolute; right: 0; margin-top: -9px; transform: translateY(-50%); padding: 1px 6px; border-radius: 6px; background: var(--pulse-ui-surface, var(--background-primary)); color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none; }
-.crisp-pulse-view .pulse-hero-mark { position: absolute; width: 8px; height: 8px; margin: 8px 0 0 -4px; transform: translateY(-50%); border-radius: 50%; pointer-events: none; }
+.crisp-pulse-view .pulse-hero-avg-label { position: absolute; right: 0; transform: translateY(calc(-50% - 9px)); padding: 1px 6px; border-radius: 6px; background: var(--pulse-ui-surface, var(--background-primary)); color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none; }
+.crisp-pulse-view .pulse-hero-mark { position: absolute; width: 8px; height: 8px; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
 .crisp-pulse-view .pulse-hero-mark.is-peak { background: var(--pulse-ui-accent, var(--interactive-accent)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--pulse-ui-accent, var(--interactive-accent)) 22%, transparent); }
+.crisp-pulse-view .pulse-hero-mark.is-solo { width: 5px; height: 5px; background: var(--pulse-ui-accent, var(--interactive-accent)); }
 .crisp-pulse-view .pulse-hero-mark.is-today { background: var(--pulse-ui-surface, var(--background-primary)); border: 2px solid var(--pulse-ui-accent, var(--interactive-accent)); }
-.crisp-pulse-view .pulse-hero-peak-label { position: absolute; margin-top: -8px; transform: translate(-50%, -100%); color: var(--pulse-ui-accent, var(--interactive-accent)); font-family: var(--font-monospace); font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
-.crisp-pulse-view .pulse-hero-peak-label.is-left { transform: translate(calc(-100% - 8px), -50%); margin-top: 8px; }
-.crisp-pulse-view .pulse-hero-bubble { position: absolute; z-index: 2; margin: 8px 0 0 12px; transform: translateY(-110%); padding: 6px 10px; border-radius: 9px; background: var(--pulse-ui-surface, var(--background-primary)); box-shadow: 0 4px 14px rgba(0, 0, 0, .12), 0 0 0 1px color-mix(in srgb, var(--text-normal) 8%, transparent); opacity: 0; pointer-events: none; white-space: nowrap; transition: opacity .12s ease; }
+.crisp-pulse-view .pulse-hero-peak-label { position: absolute; transform: translate(-50%, calc(-100% - 8px)); color: var(--pulse-ui-accent, var(--interactive-accent)); font-family: var(--font-monospace); font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
+.crisp-pulse-view .pulse-hero-peak-label.is-left { transform: translate(calc(-100% - 8px), -50%); }
+.crisp-pulse-view .pulse-hero-peak-label.is-right { transform: translate(10px, -50%); }
+.crisp-pulse-view .pulse-hero-tile > .pulse-hero-bar { flex: none; }
+.crisp-pulse-view .pulse-hero-bubble { position: absolute; z-index: 2; margin-left: 12px; transform: translateY(-110%); padding: 6px 10px; border-radius: 9px; background: var(--pulse-ui-surface, var(--background-primary)); box-shadow: 0 4px 14px rgba(0, 0, 0, .12), 0 0 0 1px color-mix(in srgb, var(--text-normal) 8%, transparent); opacity: 0; pointer-events: none; white-space: nowrap; transition: opacity .12s ease; }
 .crisp-pulse-view .pulse-hero-bubble.is-left { margin-left: -12px; transform: translate(-100%, -110%); }
 .crisp-pulse-view .pulse-hero-bubble.is-visible { opacity: 1; }
 .crisp-pulse-view .pulse-hero-bubble-date { color: var(--text-muted); font-size: 11px; }
@@ -2401,11 +2396,11 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 .crisp-pulse-view .pulse-hero-key.is-avg { border-top: 1px dashed color-mix(in srgb, var(--text-normal) 40%, transparent); }
 @media (prefers-reduced-motion: reduce) { .crisp-pulse-view .pulse-hero-bubble { transition: none; } }
 .crisp-pulse-view .pulse-hero-cursor { stroke: var(--text-faint); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
-.crisp-pulse-view .pulse-hero-dot { position: absolute; width: 9px; height: 9px; margin: 8px 0 0 -4.5px; transform: translateY(-50%); border-radius: 50%; background: var(--pulse-ui-surface, var(--background-primary)); border: 2px solid var(--pulse-ui-accent, var(--interactive-accent)); opacity: 0; pointer-events: none; }
+.crisp-pulse-view .pulse-hero-dot { position: absolute; width: 9px; height: 9px; transform: translate(-50%, -50%); border-radius: 50%; background: var(--pulse-ui-surface, var(--background-primary)); border: 2px solid var(--pulse-ui-accent, var(--interactive-accent)); opacity: 0; pointer-events: none; }
 .crisp-pulse-view .pulse-hero-dot.is-visible { opacity: 1; }
 .crisp-pulse-view .pulse-hero-axis { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .crisp-pulse-view .pulse-hero-range { color: var(--text-faint); white-space: nowrap; }
-.crisp-pulse-view .pulse-hero-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.crisp-pulse-view .pulse-hero-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(124px, auto); gap: 10px; align-self: start; }
 .crisp-pulse-view .pulse-hero-tile { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 14px 16px; border-radius: 12px; background: color-mix(in srgb, var(--text-normal) 3.5%, transparent); }
 .crisp-pulse-view .pulse-hero-tile-label { color: var(--text-muted); font-size: 12.5px; }
 .crisp-pulse-view .pulse-hero-tile-value { font-family: var(--font-monospace); font-size: 24px; font-weight: 500; line-height: 1.15; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -2475,6 +2470,30 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
   .crisp-pulse-view .pulse-day-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @container (max-width: 380px) { .crisp-pulse-view .pulse-day-tile { padding: 10px; gap: 10px; } .crisp-pulse-view .pulse-day-icon { width: 28px; height: 28px; } }
+
+/* One time-range control on every page: a segmented bar at the top right of the content. */
+.crisp-pulse-view .pulse-range-bar { display: flex; justify-content: flex-end; }
+.crisp-pulse-view.pulse-v2 .pulse-v2-seg.pulse-range-seg { margin-bottom: 0; }
+.crisp-pulse-view.pulse-v2 .crisp-pulse-wrapper > .pulse-range-bar { margin: -4px 0 -6px; }
+/* Hero tiles: label with the change against the previous period; dotted label means hover for the definition. */
+.crisp-pulse-view .pulse-hero-tile-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.crisp-pulse-view .pulse-hero-tile-label.has-definition { cursor: help; text-decoration: underline dotted color-mix(in srgb, var(--text-normal) 30%, transparent); text-underline-offset: 3px; }
+.crisp-pulse-view .pulse-hero-delta { padding: 0 7px; border-radius: 999px; font-size: 11.5px; font-weight: 500; line-height: 19px; font-variant-numeric: tabular-nums; color: var(--text-muted); background: color-mix(in srgb, var(--text-normal) 6%, transparent); white-space: nowrap; }
+.crisp-pulse-view .pulse-hero-delta.is-up { color: var(--pulse-chart-green); background: color-mix(in srgb, var(--pulse-chart-green) 13%, transparent); }
+.crisp-pulse-view .pulse-hero-delta.is-down { color: var(--pulse-chart-rose); background: color-mix(in srgb, var(--pulse-chart-rose) 12%, transparent); }
+.crisp-pulse-view button.pulse-hero-inline-link { height: auto; padding: 0; margin: 0; border: 0; background: none; box-shadow: none; color: var(--pulse-ui-accent, var(--interactive-accent)); font-size: inherit; cursor: pointer; }
+.crisp-pulse-view button.pulse-hero-inline-link:hover { text-decoration: underline; }
+/* "Show as a table" under a chart: built on first open, newest day first. */
+.crisp-pulse-view .pulse-data-table { margin-top: 10px; font-size: 12.5px; }
+.crisp-pulse-view .pulse-data-table > summary { width: max-content; color: var(--text-muted); cursor: pointer; border-radius: 6px; }
+.crisp-pulse-view .pulse-data-table > summary:hover { color: var(--text-normal); }
+.crisp-pulse-view .pulse-data-table-scroll { max-height: 280px; overflow: auto; margin-top: 8px; border-radius: 10px; border: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); }
+.crisp-pulse-view .pulse-data-table table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.crisp-pulse-view .pulse-data-table caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.crisp-pulse-view .pulse-data-table th, .crisp-pulse-view .pulse-data-table td { padding: 6px 12px; text-align: left; font-weight: 400; border-bottom: 1px solid color-mix(in srgb, var(--pulse-ui-border, var(--background-modifier-border)) 70%, transparent); white-space: nowrap; }
+.crisp-pulse-view .pulse-data-table thead th { position: sticky; top: 0; background: var(--pulse-ui-surface, var(--background-primary)); color: var(--text-muted); font-size: 11.5px; }
+.crisp-pulse-view .pulse-data-table .is-num { text-align: right; font-family: var(--font-monospace); }
+.crisp-pulse-view .pulse-data-table tbody tr:hover { background: var(--background-modifier-hover); }
 
 /* Knowledge review: period bar, clue cards, then materials beside the review notebook. */
 .crisp-pulse-view .crisp-pulse-review-workspace button { cursor: pointer; }
@@ -2944,3 +2963,6 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
   .crisp-pulse-view .pulse-pomo { grid-template-columns: minmax(0, 1fr); }
   .crisp-pulse-view .pulse-tomato { width: 24px; height: 24px; }
 }
+
+/* Settings: invalid daily review time. */
+input.is-invalid[aria-invalid="true"] { border-color: var(--text-error); box-shadow: 0 0 0 1px var(--text-error); }

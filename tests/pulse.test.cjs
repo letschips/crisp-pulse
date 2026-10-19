@@ -1134,7 +1134,8 @@ test('analytics keeps writing and time series in independent units',()=>{
 test('chart axes cover the maximum and line segments break at missing data',()=>{
  const {helpers}=setup();for(const n of [0,0.1,7,115,1000000]){const scale=helpers.analyticsScale(n);assert.ok(scale.max>=n&&scale.max>0);assert.equal(scale.ticks[0],0);}
  const p=helpers.analyticsLinePath([{value:2},{value:null},{value:3},{value:4}], 'value',i=>i*10,v=>100-v);
- assert.equal(p,'M0,98 M20,97 L30,96');
+ // 缺数据处断开；被隔开的单点画成零长线段（圆头线帽显示成点），不会消失
+ assert.equal(p,'M0,98 L0,98 M20,97 L30,96');
 });
 
 test('small daily time values accumulate before rounding in both summaries',async()=>{
@@ -1389,10 +1390,19 @@ test('dashboard hero numbers match the stats and never compare against an empty 
  assert.equal(m.activeDays,stats.activeDays);
  assert.deepEqual([m.best.date,m.best.score],['2026-09-05',30]);
  assert.equal(m.previousTotal,25);assert.equal(m.delta,Math.round((60-25)/25*100));
+ // 小卡的涨跌：活跃天数、交互与专注分钟都和前一个等长区间比，口径与概览一致
+ p.store.daily['2026-09-03']=day('2026-09-03',0,{activeMinutes:30,focusMinutes:10});
+ p.store.daily['2026-08-29']=day('2026-08-29',5,{activeMinutes:60,focusMinutes:0});
+ const withTime=helpers.buildOverviewModel(p.store.daily,'7d','2026-09-08',include);
+ const timeStats=p.calcStats('all','7d');
+ assert.equal(withTime.activeMinutes,timeStats.totalActiveHours*60);
+ assert.equal(withTime.focusMinutes,10);
+ assert.deepEqual([withTime.previous.activeDays,withTime.previous.activeMinutes,withTime.previous.focusMinutes],[2,60,0]);
+ delete p.store.daily['2026-09-03'];delete p.store.daily['2026-08-29'];
  // 上一期没有记录：不给涨跌
  delete p.store.daily['2026-08-28'];
  const lone=helpers.buildOverviewModel(p.store.daily,'7d','2026-09-08',include);
- assert.equal(lone.delta,null);
+ assert.equal(lone.delta,null);assert.equal(lone.previous,null,'上一期没有记录时小卡也不比较');
  // 全是零：没有「最高的一天」
  const empty=helpers.buildOverviewModel({},'30d','2026-09-08',include);
  assert.equal(empty.best,null);assert.equal(empty.days.length,30);assert.equal(empty.total,0);
@@ -1433,7 +1443,8 @@ test('every local SVG draw helper accepts a parent, so gradients get their stops
 test('smooth line passes through every point and never overshoots the data', ()=>{
  const {helpers}=setup();const smooth=helpers.smoothLinePath;
  assert.equal(smooth([]),'');
- assert.equal(smooth([[0,10]]),'M0,10');
+ // 孤立的单日：画成零长线段，靠圆头线帽显示成一个点，不能整段消失
+ assert.equal(smooth([[0,10]]),'M0,10 L0,10');
  assert.equal(smooth([[0,10],[5,20]]),'M0,10 L5,20');
  const pts=[[0,100],[10,100],[20,0],[30,100],[40,100],[50,60],[60,100]];
  const d=smooth(pts);
@@ -1444,6 +1455,47 @@ test('smooth line passes through every point and never overshoots the data', ()=
  for(const [x,y] of pts)assert.ok(d.includes(`${x},${y}`),`经过 ${x},${y}`);
  // 平台段保持水平
  assert.ok(d.includes('C3.33,100 6.67,100 10,100'),d);
+});
+
+test('store repair covers newer fields and setting enums, and counts every repair', ()=>{
+ const {helpers}=setup();
+ const r=helpers.createEmptyDailyRecord('2026-09-01','recorded');
+ r.contribution.externalWords=NaN;r.intensity='x';
+ r.files={'a.md':{wordsAdded:-3,created:false,tasks:1,links:0,rewrittenWords:'5',sessions:-1,sourceWords:{capture:NaN,system:2,unattributed:-1}}};
+ const store={settings:{dataQualityScope:'bogus',defaultDateRange:'2y',defaultMetric:'mood',weekStartsOn:'friday',memoMode:'x',memoReviewTime:'25:99'},daily:{'2026-09-01':r}};
+ const {store:fixed,repairedCount:repaired}=helpers.validateAndRepairStore(store);
+ const d=fixed.daily['2026-09-01'];
+ assert.equal(d.contribution.externalWords,0);
+ assert.deepEqual([d.files['a.md'].wordsAdded,d.files['a.md'].rewrittenWords,d.files['a.md'].sessions],[0,0,0]);
+ assert.deepEqual({...d.files['a.md'].sourceWords},{system:2});
+ assert.equal(d.intensity,0);
+ const st=fixed.settings;
+ assert.deepEqual([st.dataQualityScope,st.defaultDateRange,st.defaultMetric,st.weekStartsOn,st.memoMode,st.memoReviewTime],['reliable','year','contribution','sunday','auto','']);
+ assert.ok(repaired>=10,`修复都要计数，好让启动时落盘：${repaired}`);
+});
+
+test('focus minutes are capped the same in the day total and the session list', async()=>{
+ const {p}=setup();await p.loadPluginData();p.settings.enableCrispFocusSync=true;
+ const now=Date.now();
+ await p.handleFocusSessionEvent({apiVersion:1,id:'f1',kind:'focus',type:'complete',plannedMinutes:300,startedAt:now-5*3600e3,pomodoro:false});
+ const rec=p.store.daily[Object.keys(p.store.daily).sort().pop()];
+ if(rec?.activity?.focusSessions?.length){assert.equal(rec.activity.focusSessions.at(-1).minutes,240);assert.equal(rec.activity.focusMinutes,240);}
+ else assert.fail('没有找到专注事件入口');
+});
+
+test('daily review reminder only uses up the day when it actually has memos to show', async()=>{
+ const {p,helpers}=setup();await p.loadPluginData();helpers.entitle(p,true);
+ let memos=[];p.memoStore={list:async()=>memos};p.settings.memoReviewTime='09:00';
+ await p.checkMemoReviewReminder(new Date(2026,8,8,9,30));
+ assert.notEqual(p.settings.memoReviewNotifiedOn,'2026-09-08','没有可回顾的速记时不占用今天的提醒');
+ memos=[{date:'2026-09-01',time:'09:00',text:'旧想法',tags:[],links:[],path:'a.md',startLine:0}];
+ await p.checkMemoReviewReminder(new Date(2026,8,8,9,40));
+ assert.notEqual(p.settings.memoReviewNotifiedOn,'2026-09-08','30 分钟内不重复读速记');
+ await p.checkMemoReviewReminder(new Date(2026,8,8,10,5));
+ assert.equal(p.settings.memoReviewNotifiedOn,'2026-09-08');
+ p.settings.memoReviewNotifiedOn='';p.settings.memoReviewTime='25:99';
+ await p.checkMemoReviewReminder(new Date(2026,8,8,23,59));
+ assert.notEqual(p.settings.memoReviewNotifiedOn,'2026-09-08','无效时间不提醒');
 });
 
 test('natural weeks keep fixed boundaries and clip the running week to today', ()=>{
