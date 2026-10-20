@@ -1,5 +1,11 @@
 # Changelog - Crisp Pulse
 
+## [1.24.1] - 2026-10-20
+
+### Fixed
+- 插件加载或重新加载时，底部地平线不再在样式生效前反复重画，控制台不再出现「ResizeObserver loop」警告。
+- README 中的速记界面检查脚本 `scripts/memo-runtime.e2e.js` 收入仓库；速记面板在后台标签页未加载时，脚本会先加载面板再检查。
+
 ## [1.24.0] - 2026-10-20
 
 ### Added

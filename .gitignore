@@ -16,6 +16,10 @@ AUDIT*.md
 UPGRADE-REPORT.md
 ANALYTICS*.md
 
+# Live-vault probes stay local; only the documented memo UI check is public
+scripts/*
+!scripts/memo-runtime.e2e.js
+
 # Deleted memos, unsent drafts and unsaved recordings (personal content)
 memo-trash.json
 memo-drafts.json

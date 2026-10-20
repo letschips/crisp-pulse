@@ -4835,6 +4835,7 @@ class CrispPulseView extends ItemView {
     this.bannerResizeObserver?.disconnect();
     for (const animation of this.celestialEl?.getAnimations?.() || []) animation.cancel();
     if (this.analyticsResizeFrame) this.containerEl.ownerDocument.defaultView.cancelAnimationFrame(this.analyticsResizeFrame);
+    if (this.footerResizeFrame) this.containerEl.ownerDocument.defaultView.cancelAnimationFrame(this.footerResizeFrame);
   }
 
   render() {
@@ -6003,17 +6004,22 @@ class CrispPulseView extends ItemView {
   }
 
   /* 页脚画布按地面元素的实际尺寸画：宽度或高度变了（拖动面板、样式晚到、容器查询切换高度）只重画页脚，
-     像素才保持方形。观察器第一次画页脚时创建，开始观察时会立即回调一次。 */
+     像素才保持方形。观察器第一次画页脚时创建，开始观察时会立即回调一次。
+     样式表还没生效时地面高度由画布撑开，重画会再改变地面尺寸；放到下一帧画，避免同一帧里反复触发观察器。 */
   observeFooterSize(ground) {
     const win = ground.ownerDocument?.defaultView;
     if (!win?.ResizeObserver) return;
     if (!this.footerResizeObserver) {
       this.footerResizeObserver = new win.ResizeObserver(() => {
-        const current = this.footerEls?.ground;
-        if (!current?.isConnected) return;
-        const rect = current.getBoundingClientRect();
-        if (Math.abs(rect.width - (this.footerPaintedWidth || 0)) < 4 && Math.abs(rect.height - (this.footerPaintedHeight || 0)) < 2) return;
-        this.paintFooter();
+        if (this.footerResizeFrame) win.cancelAnimationFrame(this.footerResizeFrame);
+        this.footerResizeFrame = win.requestAnimationFrame(() => {
+          this.footerResizeFrame = null;
+          const current = this.footerEls?.ground;
+          if (!current?.isConnected) return;
+          const rect = current.getBoundingClientRect();
+          if (Math.abs(rect.width - (this.footerPaintedWidth || 0)) < 4 && Math.abs(rect.height - (this.footerPaintedHeight || 0)) < 2) return;
+          this.paintFooter();
+        });
       });
     }
     if (this.footerObservedGround) this.footerResizeObserver.unobserve(this.footerObservedGround);
