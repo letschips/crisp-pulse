@@ -2644,6 +2644,60 @@ test('a Focus with the session event API is not wrapped, so nothing is counted t
   adapter.detach();
 });
 
+/* 专注记录带 Tempo 任务名（Pulse 1.25.0 + Focus 1.7.0 的 apiVersion 2）。失败模式：
+   - 新事件里的 Tempo 任务没写进记录，明细里看不到这段专注是为哪件事。
+   - 旧版 Focus（apiVersion 1）或别的来源的 task 被当成 Tempo 任务，点开报错或指错任务。
+   - 带任务的专注改变了计分：中断的也计分。
+   - 存储里任务字段被写坏（超长、类型不对、只剩一半）后照样显示或拖垮整条记录。 */
+test('a focus session started from a Tempo task records the task id and title, scoring unchanged', async () => {
+  const { p } = setup();await p.loadPluginData();
+  p.settings.enableCrispFocusSync = true;p.settings.includeFocusInContribution = true;
+  const task = { source: 'crisp-tempo', id: 'task_A-1', title: '  写 Pulse   发布说明 ' };
+  await p.handleFocusSessionEvent(focusEvent('complete', { apiVersion: 2, completed: true, task }));
+  await p.handleFocusSessionEvent(focusEvent('stop', { apiVersion: 2, id: 's2', completed: false, elapsedMs: 10 * 60000, task }));
+  const today = p.getOrCreateTodayRecord();
+  assert.deepEqual(JSON.parse(JSON.stringify(today.activity.focusSessions)), [
+    { at: '11:30', minutes: 25, completed: true, pomodoro: true, note: 'notes/draft.md', taskId: 'task_A-1', taskTitle: '写 Pulse 发布说明' },
+    { at: '11:30', minutes: 10, completed: false, pomodoro: true, note: 'notes/draft.md', taskId: 'task_A-1', taskTitle: '写 Pulse 发布说明' },
+  ]);
+  assert.equal(today.activity.focusMinutes, 25, '中断的仍只记录不计分');
+});
+
+test('old focus events and tasks from other sources are recorded without a task', async () => {
+  const { p } = setup();await p.loadPluginData();
+  p.settings.enableCrispFocusSync = true;
+  await p.handleFocusSessionEvent(focusEvent('complete', { completed: true }));
+  await p.handleFocusSessionEvent(focusEvent('complete', { id: 's2', completed: true, task: { source: 'crisp-tempo', id: 't1', title: '旧版不该有' } }));
+  await p.handleFocusSessionEvent(focusEvent('complete', { apiVersion: 2, id: 's3', completed: true, task: { source: 'other-plugin', id: 't1', title: '别家任务' } }));
+  await p.handleFocusSessionEvent(focusEvent('complete', { apiVersion: 2, id: 's4', completed: true, task: { source: 'crisp-tempo', id: 'bad id!', title: '坏 id' } }));
+  await p.handleFocusSessionEvent(focusEvent('complete', { apiVersion: 2, id: 's5', completed: true, task: null }));
+  const list = p.getOrCreateTodayRecord().activity.focusSessions;
+  assert.equal(list.length, 5);
+  for (const s of list) { assert.equal('taskId' in s, false); assert.equal('taskTitle' in s, false); }
+});
+
+test('damaged task fields on a focus session are dropped, the session itself is kept', () => {
+  const { helpers } = setup();
+  const base = { at: '09:00', minutes: 25, completed: true, pomodoro: true, note: null };
+  const day = sessions => ({ version: 1, settings: {}, daily: { '2026-09-08': { date: '2026-09-08', quality: 'recorded', contribution: { score: 3 }, activity: { activeMinutes: 5, focusMinutes: 25, focusSessions: sessions }, files: {} } } });
+  const clean = helpers.validateAndRepairStore(day([{ ...base, taskId: 't1', taskTitle: '好的任务' }, { ...base }]));
+  assert.equal(clean.store.daily['2026-09-08'].activity.focusSessions[0].taskTitle, '好的任务');
+  const damaged = helpers.validateAndRepairStore(day([
+    { ...base, taskId: 't1', taskTitle: '好的任务' },
+    { ...base, taskId: 't2', taskTitle: 'x'.repeat(201) },
+    { ...base, taskId: 'x'.repeat(129), taskTitle: '太长的 id' },
+    { ...base, taskId: 42, taskTitle: '数字 id' },
+    { ...base, taskId: 't3' },
+    { ...base, taskTitle: '只有标题' },
+    { ...base, taskId: 't4', taskTitle: '   ' },
+  ]));
+  const list = damaged.store.daily['2026-09-08'].activity.focusSessions;
+  assert.equal(list.length, 7, '坏的只是任务字段，专注本身保留');
+  assert.equal(list[0].taskId, 't1');assert.equal(list[0].taskTitle, '好的任务');
+  for (const s of list.slice(1)) { assert.equal('taskId' in s, false); assert.equal('taskTitle' in s, false); }
+  assert.ok(damaged.repairedCount > clean.repairedCount, '修复计数');
+});
+
 test('damaged focus session records are dropped without touching the rest of the day', () => {
   const { helpers } = setup();
   const store = { version: 1, settings: {}, daily: { '2026-09-08': { date: '2026-09-08', quality: 'recorded', contribution: { score: 3 }, activity: { activeMinutes: 5, focusMinutes: 25, focusSessions: [{ at: '09:00', minutes: 25, completed: true, pomodoro: true, note: null }, { at: 'bad', minutes: 25, completed: true, pomodoro: true }, 'x'] }, files: {} } } };

@@ -466,6 +466,43 @@
   margin-left: 8px;
 }
 
+/* 当日专注：时刻 · 分钟 · Tempo 任务名，右侧番茄/单次、中断 */
+.pulse-day-focus-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 6px 10px;
+  background-color: var(--background-primary);
+  border-radius: var(--radius-s);
+  border: 1px solid var(--background-modifier-border);
+  font-size: var(--font-ui-small);
+}
+.pulse-day-focus-time { color: var(--text-faint); font-variant-numeric: tabular-nums; flex: none; }
+.pulse-day-focus-main { display: flex; align-items: baseline; gap: 6px; min-width: 0; flex: 1; color: var(--text-normal); }
+.pulse-day-focus-main > span:first-child { flex: none; font-variant-numeric: tabular-nums; }
+.pulse-day-focus-sep { color: var(--text-faint); flex: none; }
+.pulse-day-focus-task { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.pulse-day-focus-task.is-link {
+  all: unset;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-accent);
+  font-weight: 500;
+  cursor: pointer;
+}
+button.pulse-day-focus-task.is-link:hover { text-decoration: underline; }
+button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; border-radius: 2px; }
+.pulse-day-focus-kind { font-size: 11px; color: var(--text-faint); white-space: nowrap; flex: none; }
+.pulse-day-focus-item.is-interrupted .pulse-day-focus-main > span:first-child { color: var(--text-muted); }
+@container (max-width: 500px) {
+  /* 窄面板：番茄/中断挪到第二行，给任务名留出整行 */
+  .pulse-day-focus-item { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; row-gap: 2px; }
+  .pulse-day-focus-kind { grid-column: 2; }
+}
+
 .crisp-pulse-empty-files {
   font-size: 12px;
   color: var(--text-faint);

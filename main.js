@@ -1417,6 +1417,14 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
             && Number.isFinite(x.minutes) && x.minutes >= 0 && x.minutes <= 240 && typeof x.completed === "boolean" && typeof x.pomodoro === "boolean"
             && (x.note === undefined || x.note === null || typeof x.note === "string")).slice(-200);
           if (valid.length !== rec.activity.focusSessions.length) { rec.activity.focusSessions = valid; repairedCount++; }
+          // Tempo 任务字段成对出现；任一项不合规就两项一起去掉，专注本身保留
+          for (const x of valid) {
+            if (x.taskId === undefined && x.taskTitle === undefined) continue;
+            const task = focusSessionTask(x.taskId, x.taskTitle);
+            if (task && task.taskTitle === x.taskTitle) continue;
+            delete x.taskId; delete x.taskTitle;
+            repairedCount++;
+          }
         }
       }
       // 24 小时分布只从开始按小时记录的那天起存在；形状不对就当作没记录，不伪造零。
@@ -2144,6 +2152,8 @@ class CrispPulsePlugin extends Plugin {
           at: sameDay ? `${String(started.getHours()).padStart(2, "0")}:${String(started.getMinutes()).padStart(2, "0")}` : "00:00",
           minutes: Math.min(240, minutes), completed, pomodoro: !!event.pomodoro,
           note: typeof event.notePath === "string" ? event.notePath : null,
+          // Focus 1.7.0（apiVersion 2）起事件带任务；只认 Tempo 的任务，点开时交给 Tempo 定位
+          ...(Number(event.apiVersion) >= 2 && event.task?.source === "crisp-tempo" ? focusSessionTask(event.task.id, event.task.title, { clip: true }) : null),
         });
         this.dirty = true;
         if (completed) await this.handleFocusSessionCompleted(Math.min(240, minutes), { quiet: !!event.pomodoro });
@@ -4449,6 +4459,14 @@ function paintPulseSky(canvas, mode = "night", seed = 7) {
     }
   }
   ctx.putImageData(img, 0, 0);
+}
+
+/** 专注记录里的 Tempo 任务：规则和 Crisp Focus 的 focusTaskContext 一致，不合规就当没有任务。
+    clip 用于新事件：标题压空白后截到 200 字；存储自检不截，超长就丢。 */
+function focusSessionTask(id, title, { clip = false } = {}) {
+  let text = typeof title === "string" ? title.replace(/\s+/g, " ").trim() : "";
+  if (clip) text = text.slice(0, 200);
+  return typeof id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(id) && text && text.length <= 200 ? { taskId: id, taskTitle: text } : null;
 }
 
 /* ---------- 番茄：一天里完成 / 中断的番茄，以及像素番茄图标 ---------- */
@@ -6958,6 +6976,32 @@ class CrispPulseView extends ItemView {
         left.createSpan({ text: r.label, cls: "crisp-pulse-breakdown-label" });
         left.createSpan({ text: ` (${r.formula})`, cls: "crisp-pulse-breakdown-formula" });
         rowEl.createSpan({ text: r.val, cls: "crisp-pulse-breakdown-val" });
+      }
+    }
+
+    // 当天的专注：每段一行，开始时刻 · 分钟 · Tempo 任务（Tempo 启用时任务名可点开）；中断的只记录不计分
+    const focusSessions = Array.isArray(rec.activity?.focusSessions) ? rec.activity.focusSessions : [];
+    if (focusSessions.length) {
+      const focusWrap = card.createDiv({ cls: "crisp-pulse-file-list-wrap pulse-day-focus" });
+      focusWrap.createDiv({ cls: "crisp-pulse-file-list-title", text: tr("当日专注", "Focus sessions this day") });
+      const focusList = focusWrap.createDiv({ cls: "crisp-pulse-file-list pulse-day-focus-list" });
+      const tempo = this.plugin.memoTempo();
+      for (const s of focusSessions) {
+        const row = focusList.createDiv({ cls: `pulse-day-focus-item${s.completed ? "" : " is-interrupted"}` });
+        row.createSpan({ cls: "pulse-day-focus-time", text: s.at });
+        const main = row.createSpan({ cls: "pulse-day-focus-main" });
+        main.createSpan({ text: tr(`${s.minutes} 分钟`, `${s.minutes} min`) });
+        if (s.taskTitle) {
+          main.createSpan({ cls: "pulse-day-focus-sep", text: "·" });
+          if (typeof tempo?.revealTask === "function") {
+            const link = main.createEl("button", { cls: "pulse-day-focus-task is-link", text: s.taskTitle, attr: { type: "button", "aria-label": tr(`在 Tempo 中打开任务：${s.taskTitle}`, `Open task in Tempo: ${s.taskTitle}`) } });
+            link.addEventListener("click", async () => {
+              try { await tempo.revealTask(s.taskId); }
+              catch (error) { new Notice(tr(`Crisp Pulse：${error.message || error}`, `Crisp Pulse: ${error.message || error}`)); }
+            });
+          } else main.createSpan({ cls: "pulse-day-focus-task", text: s.taskTitle });
+        }
+        row.createSpan({ cls: "pulse-day-focus-kind", text: [s.pomodoro ? tr("番茄", "Pomodoro") : tr("单次专注", "Single session"), s.completed ? "" : tr("中断", "Interrupted")].filter(Boolean).join(" · ") });
       }
     }
 
