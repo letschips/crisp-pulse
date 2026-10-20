@@ -5385,7 +5385,7 @@ class CrispPulseView extends ItemView {
     big.createSpan({ cls: 'crisp-pulse-analytics-total', text: mix.total ? tr(`${number(mix.total)} 词`, `${number(mix.total)} words`) : '—' });
     const lead = parts.filter(part => part.key !== 'historical').sort((a, b) => mix.parts[b.key] - mix.parts[a.key])[0];
     if (mix.total && mix.parts[lead.key] > 0) big.createSpan({ cls: 'crisp-pulse-mix-of', text: tr(`${lead.label}最多，占 ${pct(mix.parts[lead.key])}%`, `mostly ${lead.label.toLowerCase()}, ${pct(mix.parts[lead.key])}%`) });
-    if (mix.external > 0) head.createDiv({ cls: 'crisp-pulse-mix-note', text: tr(`另有 ${number(mix.external)} 词没有你的输入记录或来自系统目录（Agent、脚本、同步、其他插件），已记下但不计入`, `Another ${number(mix.external)} words had no input from you or came from system folders (Agents, scripts, sync, other plugins); they were logged but not counted`) });
+    if (mix.external > 0) head.createDiv({ cls: 'crisp-pulse-mix-note', text: tr(`另有 ${number(mix.external)} 词不是你输入的（Agent、脚本、同步等），不计入`, `Another ${number(mix.external)} words were not typed by you (Agents, scripts, sync, etc.) and are not counted`) });
     const bar = card.createDiv({ cls: 'crisp-pulse-mix-bar' });
     bar.setAttr('role', 'img');
     bar.setAttr('aria-label', parts.map(part => `${part.label} ${pct(mix.parts[part.key])}%`).join(tr('，', ', ')));
@@ -6738,7 +6738,7 @@ class CrispPulseView extends ItemView {
       const notice = card.createDiv({ cls: "crisp-pulse-empty-notice" });
       notice.createSpan({ cls: "crisp-pulse-empty-notice-icon", text: "💡" });
       notice.createSpan({
-        text: tr("当前筛选为「可靠记录」，已自动隔离旧版异常历史数据。您可以切换上方范围为「全部历史」查看过往脉冲，或在今日编辑笔记开始点亮全新打卡。", "The current filter is “Reliable records”, which sets aside abnormal legacy data. Switch the scope above to “All history” to see past activity, or edit a note today to start a fresh streak.")
+        text: tr("「可靠记录」下还没有数据。切到「全部历史」看过往，或今天编辑一篇笔记开始记录。", "No data under “Reliable records” yet. Switch to “All history”, or edit a note today to start.")
       });
     }
 
@@ -7293,7 +7293,7 @@ class CrispPulseView extends ItemView {
 
   renderReviewChanges(parent, model) {
     const { period, previous } = model;
-    const section = this.reviewSection(parent, 'git-compare', tr('和上一期比', 'Compared with last period'), tr(`上一期 ${period.previousStart} — ${period.previousEnd}，${previous.coverage.recorded}/${period.days} 天有记录。每项按自己的尺度画；点词数、笔记、任务，下面的材料会按它排序。`, `Last period ${period.previousStart} — ${period.previousEnd}, ${previous.coverage.recorded}/${period.days} days recorded. Each bar pair uses its own scale; click words, notes or tasks to sort the materials below by it.`));
+    const section = this.reviewSection(parent, 'git-compare', tr('和上一期比', 'Compared with last period'), tr(`上一期 ${period.previousStart} — ${period.previousEnd}，${previous.coverage.recorded}/${period.days} 天有记录。点词数、笔记、任务可给下方材料排序。`, `Last period ${period.previousStart} — ${period.previousEnd}, ${previous.coverage.recorded}/${period.days} days recorded. Click words, notes or tasks to sort the materials below.`));
     const colors = { wordsAdded: 'purple', rewrittenWords: 'green', notesCreated: 'rose', tasksCompleted: 'teal', focusMinutes: 'orange', totalScore: 'blue' };
     const modes = { wordsAdded: 'words', rewrittenWords: 'rewrittenWords', notesCreated: 'created', tasksCompleted: 'tasks' };
     const order = ['wordsAdded', 'rewrittenWords', 'notesCreated', 'tasksCompleted', 'focusMinutes', 'totalScore'];

@@ -2360,6 +2360,8 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
   .crisp-pulse-view .pulse-hero-total { font-size: 36px; }
   .crisp-pulse-view .pulse-hero-tile { padding: 12px; }
   .crisp-pulse-view .pulse-hero-tile-value { font-size: 20px; }
+  /* 小屏上进度条让位，「14.2 小时」这类数值不被截断 */
+  .crisp-pulse-view .pulse-hero-time-row { grid-template-columns: 30px minmax(0, 1fr) auto; gap: 6px; }
 }
 
 /* Day details: what the score is made of beside the day's 24-hour rhythm, then icon tiles and the files. */
