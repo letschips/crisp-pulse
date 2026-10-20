@@ -4557,8 +4557,9 @@ function groundRidgeRow(height, level) {
   return height * (1 - PULSE_GROUND_BASE - PULSE_GROUND_RISE * level);
 }
 
-/** 画页脚地平线：远处一层淡山，中间是贡献山脊（光从右上来），近处一条暗色地面和几棵像素小树；todayX 处立一根小灯杆，夜里亮灯，白天挂旗。 */
-function paintPulseGround(canvas, mode, profile, todayX = -1, seed = 11) {
+/** 画页脚地平线：远处一层淡山，中间是贡献山脊（光从右上来），近处一条暗色地面和几棵像素小树；todayX 处立一根小灯杆，夜里亮灯，白天挂旗。
+    最下面一条湖面：reflection 给出顶部太阳/月亮所在的列，水里画一道碎开的倒影；stones 是当前连续天数每天在山脊上的列。 */
+function paintPulseGround(canvas, mode, profile, todayX = -1, { reflection = null, stones = [] } = {}, seed = 11) {
   const w = canvas.width, h = canvas.height;
   const p = PULSE_SKY_PALETTES[mode] || PULSE_SKY_PALETTES.night;
   const { hash, noise, fbm } = pulsePixelNoise(seed);
@@ -4579,6 +4580,28 @@ function paintPulseGround(canvas, mode, profile, todayX = -1, seed = 11) {
     last = x;
   }
   const lampTop = todayX >= 0 && todayX < w ? Math.round(ridge[todayX]) - 8 : -99;
+  // 湖面占最下面几行；岸线随噪声高低一行
+  const lakeTop = h - Math.max(6, Math.round(h * 0.12));
+  const shore = new Int16Array(w);
+  for (let x = 0; x < w; x++) shore[x] = lakeTop - (noise(x / 5, 3.3) > 0.6 ? 1 : 0);
+  // 倒影：太阳是一道暖色光柱；月亮按月相亮面宽窄，新月没有
+  let glow = null;
+  if (reflection && reflection.opacity > 0) {
+    const lit = reflection.mode === "night" ? (1 - Math.cos(2 * Math.PI * (reflection.phase ?? 0.5))) / 2 : 1;
+    if (lit > 0.08) glow = {
+      x: Math.round(reflection.x / 100 * w),
+      half: reflection.mode === "night" ? 1 + lit * 1.6 : 2.6,
+      color: reflection.mode === "night" ? [214, 226, 248] : [255, 228, 160],
+      strength: reflection.opacity * (reflection.mode === "night" ? 0.45 + 0.4 * lit : 0.85)
+    };
+  }
+  // 小石子放在最上面那层地表上（低分日子的山脊会被近处地面挡住），两列宽，下面压一行影子
+  const stoneTop = new Map();
+  for (const sx of stones) {
+    if (Math.abs(sx - todayX) <= 2 || sx < 1 || sx >= w - 1) continue;
+    stoneTop.set(sx, Math.min(Math.round(ridge[sx]), Math.round(near[sx])) - 1);
+  }
+  const stoneColor = mode === "night" ? mix(p.lamp, p.cloudEdge, 0.25) : [250, 246, 232];
   const ctx = canvas.getContext("2d");
   const img = ctx.createImageData(w, h);
   for (let y = 0; y < h; y++) {
@@ -4611,6 +4634,25 @@ function paintPulseGround(canvas, mode, profile, todayX = -1, seed = 11) {
           if (row >= 0 && row < th && Math.abs(dx) <= Math.floor(row * 0.6)) c = mix(p.tree, p.treeLit, dx > 0 ? 0.45 : 0);
           if (dx === 0 && row >= th && y < near[x] + 1) c = p.tree;
         }
+      }
+      if (y >= shore[x]) {
+        const r = y - lakeTop;
+        c = y < lakeTop ? mix(p.hillNear, p.cloudEdge, 0.18) : mix(mix(p.seaTop, p.skyHorizon, 0.25), p.seaBottom, clamp01(r / (h - lakeTop)));
+        if (y >= lakeTop && noise(x / 7, y * 1.7) > 0.7) c = mix(c, p.glint, 0.18);
+        if (glow && y >= lakeTop) {
+          // 每行横向错开一点，越往下越散，像水面上碎开的光
+          const shift = Math.round((hash(r * 5 + 1, glow.x & 255) - 0.5) * 3);
+          const half = glow.half + r * 0.5;
+          const dx = Math.abs(x - glow.x - shift);
+          // 一行里断成几截短横线，越往下越淡
+          if (dx <= half && (dx < 1 || hash((x >> 1) + 7, r * 3 + 1) > 0.3)) c = mix(c, glow.color, glow.strength * (1 - 0.45 * dx / (half + 1)) * (1 - 0.35 * r / (h - lakeTop)));
+        }
+      }
+      for (const sx of [x, x - 1]) {
+        const top = stoneTop.get(sx);
+        if (top === undefined) continue;
+        if (y === top) c = stoneColor;
+        else if (y === top + 1) c = mix(c, p.rock, 0.5);
       }
       if (todayX >= 0) {
         const dx = x - todayX;
@@ -4675,6 +4717,11 @@ function celestialPlacement(date, mode, width = PULSE_SKY_WIDTH, height = PULSE_
   const x = t === null ? Math.min(width * 0.86, end) : start + (end - start) * t;
   const y = cramped ? Math.max(half + 2, height * 0.13) : height * (t === null ? 0.20 : 0.36 - 0.23 * Math.sin(Math.PI * t));
   return { t, x: x / width * 100, y: y / height * 100, opacity };
+}
+
+/** 页脚倒影要不要重画：同一列像素、同一昼夜、同样的淡入程度就不重画。 */
+function pulseReflectionKey(sky, width) {
+  return sky && Number.isFinite(sky.x) ? `${sky.mode}:${Math.round(sky.x / 100 * width)}:${sky.opacity.toFixed(2)}` : "none";
 }
 
 /** 月相 0—1：0 新月、0.25 上弦、0.5 满月、0.75 下弦。以 2000-01-06 18:14 UTC 的新月为基准，按朔望月推算。 */
@@ -4811,6 +4858,7 @@ class CrispPulseView extends ItemView {
     container.classList.add("pulse-v2");
     container.classList.toggle("has-banner", !!this.plugin.settings.showHeaderBanner);
     if (this.plugin.settings.showHeaderBanner) this.renderBanner(container);
+    else { this.bannerResizeObserver?.disconnect(); this.celestialEl = null; this.celestialPosition = null; }
 
     const wrapper = container.createDiv({ cls: "crisp-pulse-wrapper" });
 
@@ -5942,7 +5990,9 @@ class CrispPulseView extends ItemView {
       const [, m, day] = d.dates[index].split("-").map(Number);
       const score = d.values[index];
       const status = d.statuses?.[index] || (score > 0 ? "included" : "missing");
-      tip.setText(`${pulseMonthDay(m, day)} · ${status === "included" ? `${Number(score).toLocaleString(PULSE_NUMBER_LOCALE, { maximumFractionDigits: 1 })} ${tr("分", "pts")}` : status === "excluded" ? tr("不在当前数据范围", "outside the data scope") : tr("没有记录", "no records")}`);
+      const nth = d.streak.indexOf(index);
+      const streakDay = nth < 0 ? "" : ` · ${tr(`连续第 ${d.streakLength - (d.streak.length - 1 - nth)} 天`, `streak day ${d.streakLength - (d.streak.length - 1 - nth)}`)}`;
+      tip.setText(`${pulseMonthDay(m, day)} · ${status === "included" ? `${Number(score).toLocaleString(PULSE_NUMBER_LOCALE, { maximumFractionDigits: 1 })} ${tr("分", "pts")}` : status === "excluded" ? tr("不在当前数据范围", "outside the data scope") : tr("没有记录", "no records")}${streakDay}`);
       tip.addClass("is-visible");
       // 提示框以那一天为中心，但不伸出面板两侧
       const half = tip.offsetWidth / 2 + 6;
@@ -5981,7 +6031,7 @@ class CrispPulseView extends ItemView {
     const height = Math.max(32, Math.round((rect.height || PULSE_GROUND_HEIGHT * PULSE_GROUND_SCALE) / PULSE_GROUND_SCALE));
     const today = getTodayKey();
     const todayNumber = reviewDayNumber(today);
-    let dates = [], values = [], statuses = [];
+    let dates = [], values = [], statuses = [], streak = [], streakLength = 0;
     if (!els.locked) {
       // 和看板一样按当前数据范围取分；天数也从这个范围里最早的一条算起
       const daily = this.plugin.store?.daily || {};
@@ -5992,13 +6042,25 @@ class CrispPulseView extends ItemView {
       values = dates.map((d) => (inScope(d) ? Number(daily[d].contribution?.score) || 0 : 0));
       // 悬停要分清「记了但 0 分」「没记录」「不在当前数据范围」
       statuses = dates.map((d) => (!daily[d] ? "missing" : inScope(d) ? "included" : "excluded"));
+      // 当前连续和看板「当前连续」同一口径：今天还没写就从昨天往回数，不受显示天数限制
+      const active = (d) => inScope(d) && isRecordActive(daily[d]);
+      let cursor = active(today) ? todayNumber : todayNumber - 1;
+      const last = cursor;
+      while (active(reviewDayKey(cursor))) cursor--;
+      streakLength = last - cursor;
+      dates.forEach((d, i) => { const k = reviewDayNumber(d); if (k > cursor && k <= last) streak.push(i); });
     }
     const profile = buildGroundProfile(values, width);
     this.footerMode = this.currentBannerMode();
     els.canvas.width = width;
     els.canvas.height = height;
-    paintPulseGround(els.canvas, this.footerMode, profile, dates.length ? groundDayX(dates.length - 1, dates.length, width) : -1);
-    this.footerData = { dates, values, statuses, profile, width, height };
+    // 倒影跟着顶部天空：天空换成自定义图片或天体还没定位时不画
+    const sky = this.bannerMode !== "image" ? this.celestialPosition : null;
+    const reflection = sky && Number.isFinite(sky.x) ? sky : null;
+    this.footerReflectionKey = pulseReflectionKey(reflection, width);
+    paintPulseGround(els.canvas, this.footerMode, profile, dates.length ? groundDayX(dates.length - 1, dates.length, width) : -1,
+      { reflection, stones: streak.map((i) => groundDayX(i, dates.length, width)) });
+    this.footerData = { dates, values, statuses, profile, width, height, streak, streakLength };
     this.footerPaintedWidth = cssWidth;
     this.footerPaintedHeight = rect.height;
     let peak = -1;
@@ -6006,7 +6068,8 @@ class CrispPulseView extends ItemView {
     const caption = els.locked ? "" : peak < 0 ? tr("开始写作后，这里会长出你的贡献山脊", "Start writing and your contribution ridge will grow here")
       : tr(`山脊是最近 ${dates.length} 天的贡献 · 峰值 ${Number(dates[peak].slice(5, 7))}月${Number(dates[peak].slice(8))}日 · ${this.footerMode === "night" ? "小灯" : "小旗"}是今天`,
         `The ridge shows the last ${dates.length} days of contributions · peak ${pulseMonthDay(Number(dates[peak].slice(5, 7)), Number(dates[peak].slice(8)))} · the ${this.footerMode === "night" ? "lamp" : "flag"} is today`);
-    els.caption.setText(caption);
+    const streakNote = caption && streakLength >= 2 ? tr(` · 小石子是连续 ${streakLength} 天`, ` · pebbles mark a ${streakLength}-day streak`) : "";
+    els.caption.setText(caption + streakNote);
   }
 
   // Banner above the header: the user's image, else a sky matching the selected base-theme rule.
@@ -6064,7 +6127,9 @@ class CrispPulseView extends ItemView {
     if (animate && el.animate && (reset || previous.transform !== transform)) {
       el.animate(reset ? [{ opacity: 0 }, { opacity }] : [{ transform: from, opacity: fromOpacity }, { transform, opacity }], { duration: 1000, easing: 'linear' });
     }
-    this.celestialPosition = { mode, t, transform };
+    this.celestialPosition = { mode, t, transform, x, opacity, phase: lunarPhase(now) };
+    // 页脚湖面的倒影跟着走：换了一列像素、昼夜切换或淡入淡出时才重画页脚
+    if (this.footerEls?.canvas.isConnected && this.footerData && pulseReflectionKey(this.celestialPosition, this.footerData.width) !== this.footerReflectionKey) this.paintFooter();
   }
 
   renderHeader(parent) {

@@ -3,7 +3,9 @@
    - 新用户只有几天数据却画 180 天，几乎全是平地；画布太窄时一天挤不到一列。
    - 未激活时页脚偷偷读统计数据（锁定页不该显示任何统计）。
    - 数据范围（可靠记录等）之外的日子仍然顶高山脊。
-   - 「今天」的标记贴着右边被切掉。 */
+   - 「今天」的标记贴着右边被切掉。
+   - 连续天数的小石子和看板的「当前连续」口径不一致：范围外的日子没把连续打断，今天还没写就把昨天以前的连续清零。
+   - 湖面倒影和顶部的太阳/月亮不在同一列，或者天空换成自定义图片后还在画倒影。 */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -38,12 +40,14 @@ test('the day range follows the history and the canvas width', () => {
   assert.ok(F.groundDayX(n - 1, n, w) <= w - F.PULSE_GROUND_MARGIN, '今天的标记不贴右边');
 });
 
-function footerView({ daily, locked = false, scope = 'reliable' }) {
+function footerView({ daily, locked = false, scope = 'reliable', celestial = null, bannerMode = 'day' }) {
   let painted = null;
   const canvas = { isConnected: true, width: 0, height: 0, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData: (img) => { painted = img; } }) };
   const v = Object.create(F.CrispPulseView.prototype);
   v.containerEl = { ownerDocument: { body: { classList: { contains: () => false } } } };
   v.currentScope = scope;
+  v.celestialPosition = celestial;
+  v.bannerMode = bannerMode;
   const store = {};
   Object.defineProperty(store, 'daily', { get() { if (locked) throw new Error('未激活时读了统计'); return daily; } });
   v.plugin = { store, recordMatchesScope: (record, key, s) => s === 'all' || record.quality === 'recorded' };
@@ -74,6 +78,45 @@ test('days outside the selected data scope do not raise the ridge', () => {
   assert.match(v.footerEls.caption.text, new RegExp(`峰值 ${Number(ago(2).slice(5, 7))}月${Number(ago(2).slice(8))}日`));
   assert.match(v.footerEls.caption.text, /小旗是今天/, '浅色主题下是小旗');
   assert.equal(v.footerEls.canvas.height * 2, 120, '画布高度跟显示高度走，像素保持方形');
+});
+
+test('pebbles mark the current streak with the same rules as the streak tile', () => {
+  const today = F.getTodayKey();
+  const ago = (n) => F.reviewDayKey(F.reviewDayNumber(today) - n);
+  const daily = {
+    [ago(6)]: { quality: 'recorded', contribution: { score: 30 } },
+    [ago(5)]: { quality: 'estimated', contribution: { score: 30 } },
+    [ago(4)]: { quality: 'recorded', contribution: { score: 0, meaningfulEdits: 2 } },
+    [ago(3)]: { quality: 'recorded', contribution: { score: 12 } },
+    [ago(2)]: { quality: 'recorded', contribution: { score: 8 } },
+    [ago(1)]: { quality: 'recorded', contribution: { score: 5 } },
+  };
+  const { v } = footerView({ daily });
+  const { dates, streak } = v.footerData;
+  assert.deepEqual([...streak.map((i) => dates[i])], [ago(4), ago(3), ago(2), ago(1)], '今天还没写不清零；范围外的那天打断连续；有效编辑也算活跃');
+  assert.match(v.footerEls.caption.text, /连续 4 天/);
+  const broken = footerView({ daily: { [ago(2)]: { quality: 'recorded', contribution: { score: 5 } } } }).v;
+  assert.equal(broken.footerData.streak.length, 0, '昨天和今天都没写，连续已经断了');
+  assert.doesNotMatch(broken.footerEls.caption.text, /连续/);
+});
+
+function lakeLuminance({ celestial, bannerMode = 'day', at }) {
+  const { v, painted } = footerView({ daily: {}, celestial, bannerMode });
+  const img = painted(), w = v.footerData.width, h = v.footerData.height;
+  let sum = 0;
+  for (let y = h - 4; y < h; y++) { const o = (y * w + at(w)) * 4; sum += img.data[o] + img.data[o + 1] + img.data[o + 2]; }
+  return sum;
+}
+
+test('the lake reflects the sun or moon in the same column as the sky above', () => {
+  const sun = { mode: 'day', x: 60, opacity: 1, phase: 0.5 };
+  const under = lakeLuminance({ celestial: sun, at: (w) => Math.round(w * 0.6) });
+  const aside = lakeLuminance({ celestial: sun, at: (w) => Math.round(w * 0.25) });
+  assert.ok(under > aside + 150, `太阳正下方的水面更亮：${under} vs ${aside}`);
+  const image = lakeLuminance({ celestial: sun, bannerMode: 'image', at: (w) => Math.round(w * 0.6) });
+  assert.ok(image < under - 150, '天空换成自定义图片时不画倒影');
+  const newMoon = lakeLuminance({ celestial: { mode: 'night', x: 60, opacity: 1, phase: 0.01 }, at: (w) => Math.round(w * 0.6) });
+  assert.ok(newMoon < under - 150, '新月没有倒影');
 });
 
 /* 顶部天空的太阳和月亮。失败模式：
