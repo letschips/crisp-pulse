@@ -5014,7 +5014,7 @@ class CrispPulseView extends ItemView {
     const heading = section.createDiv({ cls: 'crisp-pulse-analytics-heading' });
     const text = heading.createDiv();
     text.createEl('h2', { text: tr('数据分析', 'Analytics') });
-    text.createEl('p', { text: tr('把每天的记录连起来，看看写作与投入如何变化。', 'Connect your daily records to see how your writing and effort change.') });
+    text.createEl('p', { text: tr('每天的写作与投入怎么变化。', 'How your writing and effort change day to day.') });
     this.renderRangeBar(heading, [7, 30, 90].map(days => [days, tr(`近 ${days} 天`, `${days} days`)]), this.analyticsDays, days => {
       this.analyticsDays = days;
       this.render();
@@ -5024,11 +5024,11 @@ class CrispPulseView extends ItemView {
     const dates = Array.from({ length: this.analyticsDays }, (_, i) => dateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - this.analyticsDays + 1 + i)));
     const data = buildAnalyticsData(this.plugin.store.daily || {}, dates, (record, key) => this.plugin.recordMatchesScope(record, key, this.currentScope));
     const scopeLabel = REVIEW_SCOPE_LABELS[this.currentScope];
-    section.createDiv({ cls: 'crisp-pulse-analytics-coverage', text: tr(`${dates[0]} — ${dates.at(-1)} · ${scopeLabel} · 已纳入 ${data.recordedDays} / ${dates.length} 天。未记录或被筛选的日期留空，不视作零。`, `${dates[0]} — ${dates.at(-1)} · ${scopeLabel} · ${data.recordedDays} / ${dates.length} days included. Days not recorded or filtered out are left blank, not counted as zero.`) });
+    section.createDiv({ cls: 'crisp-pulse-analytics-coverage', text: tr(`${dates[0]} — ${dates.at(-1)} · ${scopeLabel} · 已纳入 ${data.recordedDays} / ${dates.length} 天，未记录的日期留空。`, `${dates[0]} — ${dates.at(-1)} · ${scopeLabel} · ${data.recordedDays} / ${dates.length} days included. Unrecorded days are left blank.`) });
     const configs = [
-      { title: tr('每日贡献', 'Daily contribution'), icon: 'bar-chart-3', description: tr('查看记录下来的工作节奏；分数依照当前插件计分口径，不代表知识质量。', 'See the rhythm of your recorded work. Scores follow the plugin’s current scoring rules and do not reflect knowledge quality.'), type: 'bar', unit: tr('分', 'pts'), total: 'score', totalLabel: tr('区间贡献', 'Period contribution'), series: [{ key: 'score', label: tr('贡献得分', 'Contribution score'), color: 'blue' }] },
-      { title: tr('写作变化', 'Writing changes'), icon: 'line-chart', description: tr('新增与删除来自保存前后的词数变化，改写为现有算法估算。三条曲线分别展示，不相加。', 'Added and removed come from word-count changes between saves; rewrites are estimated by the current algorithm. The three lines are shown separately, not summed.'), type: 'line', unit: tr('词', 'words'), total: 'wordsAdded', totalLabel: tr('新增词数', 'Words added'), series: [{ key: 'wordsAdded', label: tr('新增', 'Added'), color: 'blue' }, { key: 'wordsRemoved', label: tr('删除', 'Removed'), color: 'orange' }, { key: 'rewrittenWords', label: tr('改写估算', 'Rewrites (est.)'), color: 'green' }] },
-      { title: tr('时间投入', 'Time invested'), icon: 'clock', description: tr('交互时长按操作间隔估算，专注时长来自已有 Focus 记录。两者可能重叠，不合并计算。', 'Active time is estimated from gaps between actions; focus time comes from Focus records. They may overlap and are not combined.'), type: 'line', unit: tr('分钟', 'min'), total: 'activeMinutes', totalLabel: tr('交互活跃', 'Active time'), series: [{ key: 'activeMinutes', label: tr('交互活跃', 'Active time'), color: 'blue' }, { key: 'focusMinutes', label: tr('Focus 记录', 'Focus logged'), color: 'orange' }] }
+      { title: tr('每日贡献', 'Daily contribution'), icon: 'bar-chart-3', description: tr('每天的贡献分，不代表知识质量。', 'Daily contribution scores; they do not reflect knowledge quality.'), type: 'bar', unit: tr('分', 'pts'), total: 'score', totalLabel: tr('区间贡献', 'Period contribution'), series: [{ key: 'score', label: tr('贡献得分', 'Contribution score'), color: 'blue' }] },
+      { title: tr('写作变化', 'Writing changes'), icon: 'line-chart', description: tr('新增、删除、改写分开看，不相加。', 'Added, removed and rewritten, shown separately, not summed.'), type: 'line', unit: tr('词', 'words'), total: 'wordsAdded', totalLabel: tr('新增词数', 'Words added'), series: [{ key: 'wordsAdded', label: tr('新增', 'Added'), color: 'blue' }, { key: 'wordsRemoved', label: tr('删除', 'Removed'), color: 'orange' }, { key: 'rewrittenWords', label: tr('改写估算', 'Rewrites (est.)'), color: 'green' }] },
+      { title: tr('时间投入', 'Time invested'), icon: 'clock', description: tr('交互按操作间隔估算，专注来自 Focus，两者可能重叠。', 'Active time is estimated from gaps between actions; focus comes from Focus. They may overlap.'), type: 'line', unit: tr('分钟', 'min'), total: 'activeMinutes', totalLabel: tr('交互活跃', 'Active time'), series: [{ key: 'activeMinutes', label: tr('交互活跃', 'Active time'), color: 'blue' }, { key: 'focusMinutes', label: tr('Focus 记录', 'Focus logged'), color: 'orange' }] }
     ];
     const include = (record, key) => this.plugin.recordMatchesScope(record, key, this.currentScope);
     this.renderAnalyticsPace(section, include);
@@ -5044,7 +5044,7 @@ class CrispPulseView extends ItemView {
 
   // 24 小时活跃时段：本机交互活跃分钟按小时分布，外加星期 × 小时矩阵。
   renderAnalyticsHours(parent, profile) {
-    const card = this.analyticsSection(parent, tr('活跃时段', 'Active hours'), tr('本机交互活跃分钟按小时分布，帮你找到一天里最容易进入状态的时间。只统计开始按小时记录之后的日期；更早的日期只有全天总数，不计入。', 'Active minutes on this device by hour, to help you find when you get into the zone most easily. Only days since hourly recording began are counted; earlier days only have daily totals and are left out.'), 'clock-4');
+    const card = this.analyticsSection(parent, tr('活跃时段', 'Active hours'), tr('本机交互分钟按小时分布，看你一天里什么时候最投入。', 'Active minutes on this device by hour: when you are most engaged.'), 'clock-4');
     const pad = (h) => String(h).padStart(2, '0');
     const fmt = (v) => Number(v).toLocaleString(PULSE_NUMBER_LOCALE, { maximumFractionDigits: 0 });
     const summary = card.createDiv({ cls: 'crisp-pulse-analytics-summary' });
@@ -5203,7 +5203,7 @@ class CrispPulseView extends ItemView {
     draw('circle', { cx: x(pace.today), cy: y(pace.actualToDate), r: 3.5, class: 'pulse-pace-dot' });
     const cursor = draw('line', { x1: 0, x2: 0, y1: top, y2: bottom, class: 'pulse-chart-cursor', visibility: 'hidden' });
     const number = v => Number(v).toLocaleString(PULSE_NUMBER_LOCALE, { maximumFractionDigits: 1 });
-    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: tr('实线是本月累计，虚线是上月同日的累计，点线是按最近节奏推算到月底。', 'The solid line is this month’s running total, the dashed line is last month’s total on the same day, and the dotted line projects the recent pace to month end.') });
+    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: tr('实线本月累计，虚线上月同期，点线推算到月底。', 'Solid: this month. Dashed: last month. Dotted: projected to month end.') });
     readout.setAttr('aria-live', 'polite');
     const legend = card.createDiv({ cls: 'crisp-pulse-analytics-legend' });
     for (const [cls, text] of [['pulse-pace-key-actual', tr('本月累计', 'This month')], ['pulse-pace-key-baseline', tr('上月同期', 'Last month')], ['pulse-pace-key-projection', tr('推算', 'Projected')]]) {
@@ -5285,7 +5285,7 @@ class CrispPulseView extends ItemView {
       { key: 'notesCreated', label: tr('新建笔记', 'Notes created'), color: 'rose', unit: tr('篇', 'notes') },
       { key: 'tasksCompleted', label: tr('完成任务', 'Tasks completed'), color: 'teal', unit: tr('项', 'tasks') }
     ];
-    const card = this.analyticsSection(parent, tr('投入节律', 'Effort rhythm'), tr('每行一个指标，颜色深浅按该指标在本区间内的相对高低。竖向对齐同一天，可以看出哪天是全面投入，哪天只在一个方向上用力。', 'One metric per row, shaded by how high it is relative to this period. Columns line up by day, so you can see which days were all-round efforts and which focused on one direction.'), 'layout-grid');
+    const card = this.analyticsSection(parent, tr('投入节律', 'Effort rhythm'), tr('每行一个指标，颜色越深越高；同一列是同一天。', 'One metric per row, darker is higher; each column is a day.'), 'layout-grid');
     const { points } = data;
     const number = value => Number(value).toLocaleString(PULSE_NUMBER_LOCALE, { maximumFractionDigits: 1 });
     const compact = value => Number(value).toLocaleString(PULSE_NUMBER_LOCALE, { notation: 'compact', maximumFractionDigits: 1 });
@@ -5337,7 +5337,7 @@ class CrispPulseView extends ItemView {
 
     const pad = Math.max(3, Math.min(6, colW * 0.2));
     const selector = draw('rect', { x: 0, y: top - 2, width: cellW + pad * 2, height: rows.length * rowH - 2, rx: Math.min(9, cellW / 2 + pad), class: 'pulse-rhythm-selector', visibility: 'hidden' });
-    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: tr('悬停或用方向键查看某一天的全部指标；点击可打开该日明细。', 'Hover or use the arrow keys to see every metric for a day; click to open its details.') });
+    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: tr('悬停查看某天，点击打开明细。', 'Hover to see a day; click to open details.') });
     readout.setAttr('aria-live', 'polite');
     const describe = p => p.status === 'missing' ? `${p.date} · ${tr('未记录', 'not recorded')}` : p.status === 'excluded' ? `${p.date} · ${tr('已被当前数据范围排除', 'excluded by the current data scope')}`
       : `${p.date} · ` + rows.map(row => `${row.label} ${p[row.key] === null ? tr('未记录', 'not recorded') : `${number(p[row.key])} ${row.unit}`}`).join(' · ');
@@ -5375,7 +5375,7 @@ class CrispPulseView extends ItemView {
       { key: 'system', label: tr('系统目录', 'System folders'), hint: tr('1.13.1 之前记下的日志、备份；之后不再计入新增', 'logs and backups recorded before 1.13.1; no longer counted after that'), color: 'gray' },
       { key: 'historical', label: tr('未分类', 'Unclassified'), hint: tr('早期记录没有来源信息', 'early records have no source info'), color: 'faint' }
     ];
-    const card = this.analyticsSection(parent, tr('写作来源', 'Writing sources'), tr('新增词数只算你在笔记里键入、粘贴或在速记里提交的内容，按保存方式拆分。大段捕获按单次新增量推断，粘贴、导入都落在这里。', 'Words added only count what you type or paste into notes or submit as memos, split by how it was saved. Large captures are inferred from the amount added per save; pastes and imports land there.'), 'pen-line');
+    const card = this.analyticsSection(parent, tr('写作来源', 'Writing sources'), tr('新增词数按保存方式拆分：键入、速记、大段捕获。', 'Words added, split by how they were saved: typing, memos, large captures.'), 'pen-line');
     card.addClass('crisp-pulse-mix-card');
     const number = value => Number(value).toLocaleString(PULSE_NUMBER_LOCALE, { maximumFractionDigits: 0 });
     const pct = value => mix.total ? Math.round(value / mix.total * 1000) / 10 : 0;
@@ -5417,7 +5417,7 @@ class CrispPulseView extends ItemView {
   // Share of recorded note-days per project folder.
   renderAnalyticsFolders(parent, share) {
     const colors = ['blue', 'purple', 'orange', 'green', 'rose', 'gray'];
-    const card = this.analyticsSection(parent, tr('投入去向', 'Where effort went'), tr('按“笔记 × 天”计数：同一篇笔记在一天内有记录算一次。目录取到项目一级，其余合并为“其他”。', 'Counted as “note × day”: a note with records on a day counts once. Folders go down to the project level; the rest are grouped as “Other”.'), 'folder-tree');
+    const card = this.analyticsSection(parent, tr('投入去向', 'Where effort went'), tr('按项目目录统计，一篇笔记一天算一次。', 'By project folder; a note counts once per day.'), 'folder-tree');
     card.addClass('crisp-pulse-folder-card');
     if (!share.total) { card.createDiv({ cls: 'crisp-pulse-analytics-empty', text: tr('所选范围内还没有按笔记记录的数据。', 'No per-note records in the selected range yet.') }); return; }
     const body = card.createDiv({ cls: 'crisp-pulse-folder-body' });
@@ -5472,7 +5472,7 @@ class CrispPulseView extends ItemView {
     const heading = section.createDiv({ cls: 'crisp-pulse-analytics-heading' });
     const text = heading.createDiv();
     text.createEl('h2', { text: tr('年度画像', 'Year Portrait') });
-    text.createEl('p', { text: tr('把长期记录换几种形状看：年轮、指纹、月相和地层。', 'See your long-term records in a few shapes: rings, fingerprint, moon phases and strata.') });
+    text.createEl('p', { text: tr('用年轮、指纹、月相和地层看长期记录。', 'Your long-term records as rings, fingerprint, moons and strata.') });
     const options = ['auto', ...years];
     const bar = this.renderRangeBar(heading, options.map(option => [option, option === 'auto' ? tr('自动', 'Auto') : String(option)]), this.yearlyYear, option => { this.yearlyYear = option; this.render(); }, tr('选择时间范围', 'Choose time range'));
     bar.querySelectorAll('button').forEach((button, i) => button.setAttr('title', options[i] === 'auto' ? tr('从第一条记录到今天，至少 30 天', 'From the first record to today, at least 30 days') : tr(`${options[i]} 年完整日历年`, `Calendar year ${options[i]}`)));
@@ -5483,7 +5483,7 @@ class CrispPulseView extends ItemView {
     const portrait = profile.days.length > 120 ? buildWeekProfile(profile) : profile;
     const scopeLabel = REVIEW_SCOPE_LABELS[this.currentScope] || this.currentScope;
     const span = profile.year ? tr(`${profile.year} 年`, String(profile.year)) : `${formatDateDisplay(profile.days[0].date)} — ${tr('今天', 'today')}`;
-    section.createDiv({ cls: 'crisp-pulse-analytics-coverage', text: tr(`${span} · ${scopeLabel} · 已纳入 ${profile.recordedDays} 天，其中 ${profile.activeDays} 天活跃（有贡献分或有效编辑）。未记录或被筛选的日期留空。`, `${span} · ${scopeLabel} · ${plural(profile.recordedDays, 'day')} included, ${profile.activeDays} active (a score or a meaningful edit). Days not recorded or filtered out are left blank.`) });
+    section.createDiv({ cls: 'crisp-pulse-analytics-coverage', text: tr(`${span} · ${scopeLabel} · 已纳入 ${profile.recordedDays} 天，${profile.activeDays} 天活跃。`, `${span} · ${scopeLabel} · ${plural(profile.recordedDays, 'day')} included, ${profile.activeDays} active.`) });
     this.renderYearRing(section, portrait);
     this.renderYearFingerprint(section, portrait);
     this.renderYearMoons(section, profile);
@@ -5513,7 +5513,7 @@ class CrispPulseView extends ItemView {
   renderYearRing(parent, profile) {
     const colors = { write: 'purple', interact: 'green', focus: 'orange', create: 'rose' };
     const weekly = profile.unit === 'week', unitName = weekly ? tr('周', 'week') : tr('天', 'day');
-    const card = this.analyticsSection(parent, tr('年轮', 'Year Rings'), tr(`从顶部缺口右侧开始顺时针，每${unitName}一片花瓣：越长表示当${unitName}贡献越高，颜色是当${unitName}相对自己最突出的投入方向。${weekly ? '范围超过 120 天，按周汇总。' : ''}`, `Clockwise from the right of the gap at the top, one petal per ${unitName}: longer petals mean a higher contribution that ${unitName}, and the color shows that ${unitName}’s most prominent kind of effort.${weekly ? ' The range exceeds 120 days, so it is grouped by week.' : ''}`), 'orbit');
+    const card = this.analyticsSection(parent, tr('年轮', 'Year Rings'), tr(`从顶部顺时针，每${unitName}一片花瓣，越长贡献越高，颜色是主要投入方向。${weekly ? '超过 120 天按周汇总。' : ''}`, `Clockwise from the top, one petal per ${unitName}; longer is higher, color is the main kind of effort.${weekly ? ' Grouped by week past 120 days.' : ''}`), 'orbit');
     const size = Math.max(300, Math.min(600, card.clientWidth - 48));
     const c = size / 2, inner = size * 0.19, outer = size * 0.42, labelR = size * 0.47;
     const wrap = card.createDiv({ cls: 'crisp-pulse-ring-wrap' });
@@ -5528,16 +5528,26 @@ class CrispPulseView extends ItemView {
     const at = (angle, r) => [c + r * Math.sin(angle), c - r * Math.cos(angle)];
     const petalW = Math.max(1.4, Math.min(18, inner * arc / n * 0.64));
     for (const f of [0.5, 1]) draw('circle', { cx: c, cy: c, r: inner + (outer - inner) * f, class: 'pulse-ring-guide' });
-    const ticks = portraitTicks(days);
-    for (const tick of ticks) {
-      const [lx, ly] = at(angleOf(tick.index), labelR);
-      draw('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'middle', class: 'pulse-ring-month' }, tick.label);
-    }
+    // 「起」「今天」贴着缺口两侧；和它们叠在一起的日期刻度让给端点标签
+    const edges = [];
     if (!profile.year) {
       const [sx, sy] = at(startAngle, outer + 2), [ex, ey] = at(-startAngle, outer + 2);
-      draw('text', { x: sx + 4, y: sy - 8, 'text-anchor': 'start', class: 'pulse-ring-edge' }, tr('起', 'start'));
-      draw('text', { x: ex - 4, y: ey - 8, 'text-anchor': 'end', class: 'pulse-ring-edge' }, tr('今天', 'today'));
+      edges.push({ x: sx + 4, y: sy - 8, anchor: 'start', label: tr('起', 'start') }, { x: ex - 4, y: ey - 8, anchor: 'end', label: tr('今天', 'today') });
     }
+    // 估算文字框：中文约 1em 宽，数字和斜杠约 0.6em
+    const textBox = (x, y, label, size, anchor) => {
+      const w = [...label].reduce((sum, ch) => sum + (/[\u0000-\u00ff]/.test(ch) ? 0.6 : 1) * size, 0);
+      const left = anchor === 'start' ? x : anchor === 'end' ? x - w : x - w / 2;
+      return { left: left - 3, right: left + w + 3, top: y - size / 2 - 2, bottom: y + size / 2 + 2 };
+    };
+    const edgeBoxes = edges.map(edge => textBox(edge.x, edge.y - 4, edge.label, 11, edge.anchor));
+    for (const tick of portraitTicks(days)) {
+      const [lx, ly] = at(angleOf(tick.index), labelR);
+      const box = textBox(lx, ly, tick.label, 12, 'middle');
+      if (edgeBoxes.some(e => box.left < e.right && e.left < box.right && box.top < e.bottom && e.top < box.bottom)) continue;
+      draw('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'middle', class: 'pulse-ring-month' }, tick.label);
+    }
+    for (const edge of edges) draw('text', { x: edge.x, y: edge.y, 'text-anchor': edge.anchor, class: 'pulse-ring-edge' }, edge.label);
     const base = inner + petalW / 2 + 2;
     const petals = days.map((day, i) => {
       const angle = angleOf(i);
@@ -5554,7 +5564,7 @@ class CrispPulseView extends ItemView {
     const centerSub = center.createDiv({ cls: 'crisp-pulse-ring-sub' });
     const resetCenter = () => { centerTop.textContent = profile.year ? tr(`${profile.year} 年`, String(profile.year)) : weekly ? tr(`${n} 周`, plural(n, 'week')) : tr(`${n} 天`, plural(n, 'day')); centerMain.textContent = String(profile.activeDays); centerSub.textContent = tr('天活跃', 'active days'); };
     resetCenter();
-    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: weekly ? tr('悬停在花瓣上查看某一周，点击打开当周贡献最高的一天。', 'Hover over a petal to see a week; click to open its highest-contribution day.') : tr('悬停在花瓣上查看某一天，点击打开日明细。', 'Hover over a petal to see a day; click to open its details.') });
+    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: weekly ? tr('悬停查看某周，点击打开当周最高的一天。', 'Hover to see a week; click to open its top day.') : tr('悬停查看某天，点击打开明细。', 'Hover to see a day; click to open details.') });
     readout.setAttr('aria-live', 'polite');
     let current = null;
     const show = index => {
@@ -5611,7 +5621,7 @@ class CrispPulseView extends ItemView {
 
   renderYearFingerprint(parent, profile) {
     const weekly = profile.unit === 'week', unitName = weekly ? tr('周', 'week') : tr('天', 'day');
-    const card = this.analyticsSection(parent, tr('知识指纹', 'Knowledge Fingerprint'), tr(`每${unitName}一根竖条，按写作、交互、专注、新建四个方向的相对比例分段上色，亮度随当${unitName}强度变化。每个人的都不一样，可以导出成图片。${weekly ? '范围超过 120 天，按周汇总。' : ''}`, `One bar per ${unitName}, colored in segments by the relative share of writing, interaction, focus and new notes; brightness follows that ${unitName}’s intensity. Everyone’s looks different, and you can export it as an image.${weekly ? ' The range exceeds 120 days, so it is grouped by week.' : ''}`), 'fingerprint');
+    const card = this.analyticsSection(parent, tr('知识指纹', 'Knowledge Fingerprint'), tr(`每${unitName}一根竖条，按四类投入的比例上色，可导出成图片。${weekly ? '超过 120 天按周汇总。' : ''}`, `One bar per ${unitName}, colored by the share of four kinds of effort; exportable as an image.${weekly ? ' Grouped by week past 120 days.' : ''}`), 'fingerprint');
     const palette = this.fingerprintPalette();
     card.addClass('crisp-pulse-fingerprint-card');
     card.style.background = palette.bg;
@@ -5698,7 +5708,7 @@ class CrispPulseView extends ItemView {
 
   // A month calendar of moons: the lit share of each moon is that day's intensity percentile in the range.
   renderYearMoons(parent, profile) {
-    const card = this.analyticsSection(parent, tr('月相日历', 'Moon Calendar'), tr('每天一个月亮，亮面比例是当天强度在本范围内的百分位：满月是高峰日，新月是有记录但没有贡献的日子，虚线圈表示未记录。', 'One moon per day; the lit portion is that day’s intensity percentile within this range. A full moon is a peak day, a new moon is a recorded day with no contribution, and a dashed circle means not recorded.'), 'moon');
+    const card = this.analyticsSection(parent, tr('月相日历', 'Moon Calendar'), tr('每天一个月亮，越满越投入，虚线圈是未记录。', 'One moon per day; fuller means more effort, a dashed circle means not recorded.'), 'moon');
     const doc = card.ownerDocument;
     const days = profile.days;
     const full = days.filter(day => day.status === 'included' && day.intensity >= 0.9).length;
@@ -5716,7 +5726,7 @@ class CrispPulseView extends ItemView {
     });
     const grid = card.createDiv({ cls: `crisp-pulse-moon-months${months.size <= 2 ? ' is-few' : ''}` });
     const cells = [];
-    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: tr('悬停在月亮上查看某一天，点击打开日明细。', 'Hover over a moon to see a day; click to open its details.') });
+    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: tr('悬停查看某天，点击打开明细。', 'Hover to see a day; click to open details.') });
     readout.setAttr('aria-live', 'polite');
     const lastIndex = days.findLastIndex(day => day.status !== 'future');
     for (const [key, entries] of months) {
@@ -5784,7 +5794,7 @@ class CrispPulseView extends ItemView {
   // Weekly strata, newest on top: thickness follows words added, colour bands follow project folders.
   renderYearStrata(parent, strata) {
     const palette = ['blue', 'purple', 'orange', 'green', 'rose', 'teal'];
-    const card = this.analyticsSection(parent, tr('知识地层', 'Knowledge Strata'), tr('每周一层，最新的一周在最上面。层的厚度随当周新增词数变化，层内按项目目录分色；持续投入的项目会连成一条贯穿多层的矿脉。', 'One layer per week, newest on top. Thickness follows the words added that week, and colors mark project folders; projects you keep working on form a vein running through many layers.'), 'layers');
+    const card = this.analyticsSection(parent, tr('知识地层', 'Knowledge Strata'), tr('每周一层，最新在上，越厚写得越多，颜色是项目。', 'One layer per week, newest on top; thicker means more words, colors are projects.'), 'layers');
     if (!strata.weeks.some(week => week.recorded)) { card.createDiv({ cls: 'crisp-pulse-analytics-empty', text: tr('这一年还没有可用记录。', 'No usable records for this year yet.') }); return; }
     const width = Math.max(300, Math.min(1000, card.clientWidth - 48));
     const compact = width < 520, labelW = compact ? 34 : 50;
@@ -5850,7 +5860,7 @@ class CrispPulseView extends ItemView {
       lastMonth = month;
     });
     layers.forEach((layer, k) => { if (k && layer.week.recorded && layers[k - 1].week.recorded) draw('path', { d: 'M' + edge(k, layer.top).map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`).join(' L'), class: 'pulse-strata-seam' }); });
-    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: tr('悬停在某一层查看当周的投入分布。', 'Hover over a layer to see how that week’s effort was spread.') });
+    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: tr('悬停查看当周投入分布。', 'Hover to see that week’s effort.') });
     readout.setAttr('aria-live', 'polite');
     const describe = week => {
       const range = `${week.start.slice(5).replace('-', '/')}–${week.end.slice(5).replace('-', '/')}`;
@@ -5960,7 +5970,7 @@ class CrispPulseView extends ItemView {
       }
     }
     const marker = draw('line', { x1: left, x2: left, y1: top, y2: bottom, class: 'pulse-chart-cursor', visibility: 'hidden' });
-    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: tr('悬停或用方向键查看每日数值；点击可打开该日明细。', 'Hover or use the arrow keys to see daily values; click to open a day’s details.') });
+    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: tr('悬停查看每日数值，点击打开明细。', 'Hover to see daily values; click to open details.') });
     readout.setAttr('aria-live', 'polite');
     const description = point => {
       if (point.status === 'missing') return `${point.date} · ${tr('未记录', 'not recorded')}`;
@@ -7320,7 +7330,7 @@ class CrispPulseView extends ItemView {
   }
 
   renderReviewMaterials(parent, model) {
-    const section = this.reviewSection(parent, 'folder-tree', tr('本期材料', 'Material from this period'), tr('先按目录看精力落在哪，再挑笔记回看。条形是“笔记 × 天”，不代表工时；点「引用」把笔记记为这次复盘的依据。', 'See which folders took your attention, then pick notes to revisit. Bars count “note × day”, not hours; click Cite to keep a note as evidence for this review.'));
+    const section = this.reviewSection(parent, 'folder-tree', tr('本期材料', 'Material from this period'), tr('精力落在哪些目录。点「引用」把笔记记为复盘依据。', 'Which folders took your attention. Click Cite to keep a note as evidence.'));
     section.addClass?.('crisp-pulse-review-materials');
     const { start, end } = model.period;
     const files = model.current.allFiles || [];
@@ -7453,7 +7463,7 @@ class CrispPulseView extends ItemView {
 
   /** 速记走向：本期记下的速记，现在去了任务、笔记还是 Now；一条可以去几处，已转化按速记去重。 */
   renderReviewMemos(parent, model, memoSummary, live) {
-    const section = this.reviewSection(parent, CRISP_PULSE_MEMO_ICON_ID, tr('速记走到了哪里', 'Where your memos went'), tr('本期记下的速记，现在转成了什么。一条可以同时去几处，已转化按速记去重；状态截至现在，条数不代表知识质量。', 'What this period’s memos have turned into so far. One memo can go to several places; converted counts each memo once. Status is as of now, and counts do not reflect knowledge quality.'));
+    const section = this.reviewSection(parent, CRISP_PULSE_MEMO_ICON_ID, tr('速记走到了哪里', 'Where your memos went'), tr('本期速记现在转成了什么，状态截至现在。', 'What this period’s memos have turned into, as of now.'));
     section.addClass?.('crisp-pulse-review-memo-card');
     const body = section.createDiv({ cls: 'crisp-pulse-review-memos' });
     body.createDiv({ cls: 'crisp-pulse-review-note', text: tr('正在读取速记…', 'Loading memos…') });
@@ -7521,7 +7531,7 @@ class CrispPulseView extends ItemView {
   }
 
   renderReviewSources(parent, model) {
-    const section = this.reviewSection(parent, 'pen-line', tr('新增内容从哪里来', 'Where new words came from'), tr('系统目录按路径识别，大段捕获是估算，其他来源未确认；分不出人工和 AI 写作。点大段捕获，可以看对应的笔记。', 'System folders are matched by path, large captures are estimates, and other sources are unconfirmed; this cannot tell human from AI writing. Click Large captures to see those notes.'));
+    const section = this.reviewSection(parent, 'pen-line', tr('新增内容从哪里来', 'Where new words came from'), tr('大段捕获是估算，分不出人工和 AI 写作。点大段捕获看对应笔记。', 'Large captures are estimates and cannot tell human from AI writing. Click them to see the notes.'));
     const words = model.current.sourceWords;
     const total = Object.values(words).reduce((sum, value) => sum + (value || 0), 0);
     const parts = [['capture', 'orange'], ['unattributed', 'blue'], ['system', 'gray'], ['historical', 'faint']];

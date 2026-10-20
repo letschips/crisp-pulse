@@ -467,6 +467,8 @@
 }
 
 /* 当日专注：时刻 · 分钟 · Tempo 任务名，右侧番茄/单次、中断 */
+/* 一天顶多十几段，整列展开，免得手机上页面里再套一个小滚动区 */
+.pulse-day-focus-list { max-height: none; overflow: visible; }
 .pulse-day-focus-item {
   display: flex;
   align-items: center;
@@ -477,6 +479,8 @@
   border-radius: var(--radius-s);
   border: 1px solid var(--background-modifier-border);
   font-size: var(--font-ui-small);
+  /* 列表有 max-height，不能让 flex 把换成两行的条目压回一行高 */
+  flex-shrink: 0;
 }
 .pulse-day-focus-time { color: var(--text-faint); font-variant-numeric: tabular-nums; flex: none; }
 .pulse-day-focus-main { display: flex; align-items: baseline; gap: 6px; min-width: 0; flex: 1; color: var(--text-normal); }
@@ -499,7 +503,7 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
 .pulse-day-focus-item.is-interrupted .pulse-day-focus-main > span:first-child { color: var(--text-muted); }
 @container (max-width: 500px) {
   /* 窄面板：番茄/中断挪到第二行，给任务名留出整行 */
-  .pulse-day-focus-item { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; row-gap: 2px; }
+  .pulse-day-focus-item { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; column-gap: 10px; row-gap: 2px; }
   .pulse-day-focus-kind { grid-column: 2; }
 }
 
