@@ -2088,6 +2088,8 @@ class CrispPulsePlugin extends Plugin {
     this.statusBarEl = this.addStatusBarItem();
     this.statusBarEl.classList.add("crisp-pulse-status");
     this.statusBarEl.setAttr("aria-label", tr("Crisp Pulse 知识脉冲", "Crisp Pulse"));
+    // 状态栏贴着窗口底边，提示框默认朝下放不下，会被挤回来盖住状态栏
+    this.statusBarEl.setAttr("data-tooltip-position", "top");
     this.statusBarEl.setAttr("role", "button");
     this.statusBarEl.tabIndex = 0;
     this.registerDomEvent(this.statusBarEl, "keydown", (event) => {
