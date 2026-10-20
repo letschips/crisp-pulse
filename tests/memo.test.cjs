@@ -645,3 +645,67 @@ test('a voice-only memo does not count as having a link; links inside code do no
   assert.equal(memoHasLink('看 [[笔记]]'), true);
   assert.equal(memoHasImage('```\n![[图.png]]\n```'), false);
 });
+
+/* 1.25.1（全链体检）。失败模式：
+   - 笔记里有一段没闭合的代码块，新速记写在它后面，渲染和解析都把它当代码，记下了却看不见。
+   - 插件重载那一刻，旧实例还没写完回收站，新实例又删一条，两边互相覆盖，其中一条从笔记和回收站同时消失。
+   - 先粘贴图片（链接按当时的速记文件算相对路径），过了零点或换了 Topic 再发送，写进别的文件后图片断链。 */
+test('a memo written after an unclosed code block closes the block first and stays visible', () => {
+  const block = '> [!memo] 10:00\n> 新的想法';
+  for (const [content, heading, fence] of [
+    ['# 日记\n\n```js\nconst a = 1;\n', '', '```'],
+    ['# 日记\n\n## 速记\n\n~~~~\n代码\n', '## 速记', '~~~~'],
+    ['# 日记\n\n````\n```\n里面的围栏\n', '', '````'],
+  ]) {
+    const out = memo.insertMemoBlock(content, block, heading);
+    assert.equal(memo.parseMemoBlocks(out).length, 1, JSON.stringify(content));
+    assert.ok(out.startsWith(content.replace(/\s+$/, '')), '原有内容不变');
+    assert.match(out, new RegExp(`\\n${fence}\\n\\n> \\[!memo\\] 10:00`), '先补上同样的围栏再写速记');
+  }
+  const closed = '# 日记\n\n```\ncode\n```\n';
+  assert.equal(memo.insertMemoBlock(closed, block, ''), '# 日记\n\n```\ncode\n```\n\n> [!memo] 10:00\n> 新的想法\n', '已闭合的不动');
+});
+
+test('the memo trash stays consistent when the plugin reloads in the middle of a delete', async () => {
+  const { app, store, disk } = trashApp();
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const write = app.vault.adapter.write;
+  let calls = 0;
+  app.vault.adapter.write = async (p, c) => { if (calls++ === 0) await gate; return write(p, c); };
+  const settings = () => ({ memoMode: 'general', memoHeading: '## 速记' });
+  const before = new memo.MemoStore(app, settings, null, { trashPath: 'plugin/memo-trash.json' });
+  const after = new memo.MemoStore(app, settings, null, { trashPath: 'plugin/memo-trash.json' });
+  const [second, first] = await before.list();
+  const slow = before.remove(first, new Date(2026, 9, 9, 10, 0));
+  await new Promise((r) => setTimeout(r, 5));
+  const fast = after.remove(second, new Date(2026, 9, 9, 10, 1));
+  await new Promise((r) => setTimeout(r, 5));
+  release();
+  await Promise.all([slow, fast]);
+  const items = JSON.parse(disk['plugin/memo-trash.json']).items;
+  assert.deepEqual(items.map((t) => t.text).sort(), ['第一条', '第二条 #想法'], '两条都在回收站');
+  assert.doesNotMatch(store.get('Daily/2026-10-09.md').content, /第一条|第二条/);
+});
+
+test('an attachment pasted before midnight still resolves when the memo is sent into the next day', async () => {
+  const { app, store } = fakeApp({ dailyOptions: { folder: 'Daily', format: 'YYYY/MM/DD' } });
+  app.vault.createBinary = async (p) => { const f = new TFile(p); store.set(p, f); return f; };
+  app.fileManager.getAvailablePathForAttachment = async (name, source) => `${source.slice(0, source.lastIndexOf('/'))}/assets/${name}`;
+  app.fileManager.generateMarkdownLink = (file, source) => `[](${file.path.slice(source.lastIndexOf('/') + 1)})`;
+  const resolve = (lp, from) => {
+    const dir = from.slice(0, from.lastIndexOf('/'));
+    const parts = [];
+    for (const s of `${dir}/${lp}`.split('/')) { if (s === '..') parts.pop(); else if (s && s !== '.') parts.push(s); }
+    return store.has(parts.join('/')) ? parts.join('/') : null;
+  };
+  app.metadataCache.getFirstLinkpathDest = (lp, from) => { const p = resolve(lp, from); return p ? { path: p } : null; };
+  const s = new memo.MemoStore(app, () => ({ memoMode: 'general', memoHeading: '' }));
+  const link = await s.saveAttachment('p.png', new Uint8Array([1]).buffer, D(2026, 10, 31, 23, 59));
+  assert.equal(link, '![](assets/p.png)');
+  const { path } = await s.capture(`截图 ${link}`, D(2026, 11, 1, 0, 1));
+  assert.equal(path, 'Daily/2026/11/01.md');
+  const [written] = memo.parseMemoBlocks(store.get(path).content);
+  const target = /\]\(([^)]+)\)/.exec(written.text)[1];
+  assert.equal(resolve(target, path), 'Daily/2026/10/assets/p.png', `链接 ${target} 要指到原图`);
+});

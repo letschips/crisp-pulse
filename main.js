@@ -299,11 +299,23 @@ const PULSE_GATED_FEATURES = Object.freeze({
 const PULSE_LICENSE_STATE = new WeakMap();
 const PULSE_LICENSE_VERIFIER = new WeakMap();
 const PULSE_LICENSE_OWNER = new WeakMap();
+const PULSE_LICENSE_EXPIRY = new WeakMap();
+
+/** 管理器当前是否放行。带到期时间的授权到点立即失效：Obsidian 一直开着也不会继续放行，并通知界面一次。 */
+function pulseLicenseActive(manager) {
+  if (!manager || PULSE_LICENSE_STATE.get(manager) !== true) return false;
+  const expiry = PULSE_LICENSE_EXPIRY.get(manager);
+  if (expiry === undefined || manager.now() < expiry) return true;
+  PULSE_LICENSE_STATE.set(manager, false);
+  manager.status = { valid: false, reason: tr("授权已到期", "License expired") };
+  // 判断常发生在渲染途中；通知会重绘界面，放到下一轮，不在渲染里再渲染
+  setTimeout(() => manager.onEntitlementChange(false), 0);
+  return false;
+}
 
 /** 插件内部所有门控都走这里：只认插件自己创建并登记的管理器、且真正验签通过。 */
 function pulseEntitled(plugin) {
-  const manager = plugin ? PULSE_LICENSE_OWNER.get(plugin) : null;
-  return !!manager && PULSE_LICENSE_STATE.get(manager) === true;
+  return pulseLicenseActive(plugin ? PULSE_LICENSE_OWNER.get(plugin) : null);
 }
 
 function pulseLicenseManagerFor(plugin, options = {}) {
@@ -320,6 +332,8 @@ function applyLicenseResult(manager, result, code) {
   const wasEntitled = PULSE_LICENSE_STATE.get(manager) === true;
   manager.status = result;
   PULSE_LICENSE_STATE.set(manager, result?.valid === true);
+  const expiry = result?.valid ? new Date(result.payload?.expiresAt).getTime() : NaN;
+  if (Number.isFinite(expiry)) PULSE_LICENSE_EXPIRY.set(manager, expiry); else PULSE_LICENSE_EXPIRY.delete(manager);
   if (result?.valid && manager.settings) {
     manager.settings.licenseCode = code;
     if (result.source === "online") manager.settings.licenseLastOnlineAt = manager.now();
@@ -343,7 +357,7 @@ class CrispPulseLicenseManager {
   }
 
   isEntitled() {
-    return PULSE_LICENSE_STATE.get(this) === true;
+    return pulseLicenseActive(this);
   }
 
   getStatus() {
@@ -1943,6 +1957,26 @@ class CrispPulsePlugin extends Plugin {
     return pending;
   }
 
+  /** 清空全部统计：先备份，备份失败就不动；保存失败把内存里的统计放回去，免得下次自动保存写进空数据。 */
+  async resetAllStatistics() {
+    const backupRes = await this.createBackup("pre-reset");
+    if (!backupRes.success) throw Object.assign(new Error("backup failed"), { backupFailed: true, cause: backupRes.error });
+    await Promise.all([...(this.fileQueues?.values() || [])]);
+    const previous = { daily: this.store.daily, hasRunBackfill: this.settings.hasRunBackfill };
+    this.activeSessions?.clear();
+    this.lastInteractionTime = null;
+    this.store.daily = {};
+    this.settings.hasRunBackfill = true;
+    try {
+      await this.savePluginData({ throwOnError: true });
+    } catch (error) {
+      this.store.daily = previous.daily;
+      this.settings.hasRunBackfill = previous.hasRunBackfill;
+      throw error;
+    }
+    return backupRes;
+  }
+
   async writeBackup(reason) {
     try {
       const adapter = this.app?.vault?.adapter;
@@ -1970,6 +2004,10 @@ class CrispPulsePlugin extends Plugin {
           if (typeof adapter.mkdir === "function") await adapter.mkdir(backupDir);
         }
         await adapter.write(filePath, payload);
+        // 读回核对通过才算备份成功、才清理更早的备份；写坏的备份不能顶掉好的
+        if (typeof adapter.read === "function" && await adapter.read(filePath) !== payload) {
+          throw new Error(tr("备份文件未通过读回核对", "The backup file failed the read-back check"));
+        }
 
         if (typeof adapter.list === "function") {
           const list = await adapter.list(backupDir);
@@ -3423,6 +3461,13 @@ class CrispPulsePlugin extends Plugin {
     return tempo && !tempo.unloaded && typeof tempo.activateView === "function" ? tempo : null;
   }
 
+  /** 看板上的 Tempo 入口要不要显示：能用，或者已启用只是正在重新加载（重载期间实例暂时不可用）。
+      点击时再取当时的 Tempo，不用渲染时拿到的旧实例。 */
+  tempoLinked() {
+    if (this.tempoEntry()) return true;
+    try { return !!this.app.plugins?.enabledPlugins?.has?.("crisp-tempo"); } catch (_) { return false; }
+  }
+
   memoTempo() {
     const tempo = this.app.plugins?.plugins?.["crisp-tempo"];
     if (!tempo || tempo.unloaded || typeof tempo.createTaskFromSource !== "function" || typeof tempo.getTasksBySource !== "function") return null;
@@ -4465,7 +4510,8 @@ function paintPulseSky(canvas, mode = "night", seed = 7) {
     clip 用于新事件：标题压空白后截到 200 字；存储自检不截，超长就丢。 */
 function focusSessionTask(id, title, { clip = false } = {}) {
   let text = typeof title === "string" ? title.replace(/\s+/g, " ").trim() : "";
-  if (clip) text = text.slice(0, 200);
+  // 截完再去掉末尾的空白和半个 emoji，否则存储自检（不截、要求与原值一致）会在下次加载时把任务关联删掉
+  if (clip) text = text.slice(0, 200).replace(/[\uD800-\uDBFF]$/, "").trim();
   return typeof id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(id) && text && text.length <= 200 ? { taskId: id, taskTitle: text } : null;
 }
 
@@ -4822,6 +4868,16 @@ class CrispPulseView extends ItemView {
     this.registerDomEvent(container.ownerDocument, 'visibilitychange', () => {
       if (!container.ownerDocument.hidden) this.updateCelestial(true);
     });
+    // Tempo 启用、停用时页脚入口和明细里的任务链接跟着变；Tempo 编辑任务也会发这个事件，所以只在可用与否翻转时重绘
+    this.tempoWasLinked = this.plugin.tempoLinked();
+    this.registerEvent(this.app.workspace.on("crisp-tempo:state", () => {
+      win.setTimeout(() => {
+        const linked = this.plugin.tempoLinked();
+        if (linked === this.tempoWasLinked || !container.isConnected) return;
+        this.tempoWasLinked = linked;
+        this.render();
+      }, 0);
+    }));
     this.registerEvent(this.app.workspace.on("css-change", () => {
       const mode = this.currentBannerMode();
       const flipped = this.themeMode && this.themeMode !== mode;
@@ -5987,8 +6043,11 @@ class CrispPulseView extends ItemView {
     };
     link(tr("速记", "Memos"), () => this.plugin.activateMemoView());
     // 只放和 Pulse 有数据往来的插件：速记转出的任务在 Tempo 里推进。没装或没启用就不显示。
-    const tempo = this.plugin.tempoEntry();
-    if (tempo) link("Tempo", () => { void tempo.activateView(); });
+    if (this.plugin.tempoLinked()) link("Tempo", () => {
+      const tempo = this.plugin.tempoEntry();
+      if (tempo) void tempo.activateView();
+      else new Notice(tr("Crisp Tempo 尚未启用或正在重新加载", "Crisp Tempo is not enabled or is reloading"));
+    });
     link(tr("设置", "Settings"), () => { const setting = this.app.setting; if (setting?.open) { setting.open(); setting.openTabById?.(this.plugin.manifest.id); } });
     const ground = footer.createDiv({ cls: "crisp-pulse-footer-ground" });
     const canvas = ground.createEl("canvas", { attr: { "aria-hidden": "true" } });
@@ -6985,7 +7044,7 @@ class CrispPulseView extends ItemView {
       const focusWrap = card.createDiv({ cls: "crisp-pulse-file-list-wrap pulse-day-focus" });
       focusWrap.createDiv({ cls: "crisp-pulse-file-list-title", text: tr("当日专注", "Focus sessions this day") });
       const focusList = focusWrap.createDiv({ cls: "crisp-pulse-file-list pulse-day-focus-list" });
-      const tempo = this.plugin.memoTempo();
+      const tempoLinked = this.plugin.tempoLinked();
       for (const s of focusSessions) {
         const row = focusList.createDiv({ cls: `pulse-day-focus-item${s.completed ? "" : " is-interrupted"}` });
         row.createSpan({ cls: "pulse-day-focus-time", text: s.at });
@@ -6993,11 +7052,14 @@ class CrispPulseView extends ItemView {
         main.createSpan({ text: tr(`${s.minutes} 分钟`, `${s.minutes} min`) });
         if (s.taskTitle) {
           main.createSpan({ cls: "pulse-day-focus-sep", text: "·" });
-          if (typeof tempo?.revealTask === "function") {
+          if (tempoLinked) {
             const link = main.createEl("button", { cls: "pulse-day-focus-task is-link", text: s.taskTitle, attr: { type: "button", "aria-label": tr(`在 Tempo 中打开任务：${s.taskTitle}`, `Open task in Tempo: ${s.taskTitle}`) } });
             link.addEventListener("click", async () => {
-              try { await tempo.revealTask(s.taskId); }
-              catch (error) { new Notice(tr(`Crisp Pulse：${error.message || error}`, `Crisp Pulse: ${error.message || error}`)); }
+              const tempo = this.plugin.memoTempo();
+              try {
+                if (typeof tempo?.revealTask !== "function") throw new Error(tr("Crisp Tempo 尚未启用或正在重新加载", "Crisp Tempo is not enabled or is reloading"));
+                await tempo.revealTask(s.taskId);
+              } catch (error) { new Notice(tr(`Crisp Pulse：${error.message || error}`, `Crisp Pulse: ${error.message || error}`)); }
             });
           } else main.createSpan({ cls: "pulse-day-focus-task", text: s.taskTitle });
         }
@@ -7947,9 +8009,26 @@ function memoHeadingLevel(line) {
   return match ? match[1].length : 0;
 }
 
+/** lines 末尾是否停在一段没闭合的围栏代码块里；是就返回它的开头围栏。判断规则和 parseMemoBlocks 一致。 */
+function memoOpenFence(lines) {
+  let fence = null;
+  for (const line of lines) {
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fence) {
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = null;
+    } else if (marker && (marker[1][0] !== "`" || !marker[2].includes("`"))) fence = marker[1];
+  }
+  return fence;
+}
+
 function insertMemoBlock(content, block, heading) {
   const text = String(content ?? "");
-  const trimmedEnd = text.replace(/\s+$/, "");
+  // 写在一段没闭合的代码块后面，速记会被当成代码：先补上同样的围栏把它闭合
+  const closeOpen = (head) => {
+    const fence = memoOpenFence(head.split("\n"));
+    return fence ? `${head}\n${fence}` : head;
+  };
+  const trimmedEnd = text.replace(/\s+$/, "") && closeOpen(text.replace(/\s+$/, ""));
   const headingLine = String(heading ?? "").trim();
   if (!headingLine) return trimmedEnd ? `${trimmedEnd}\n\n${block}\n` : `${block}\n`;
   const lines = text.split("\n");
@@ -7967,6 +8046,8 @@ function insertMemoBlock(content, block, heading) {
   let last = next - 1;
   while (last > at && !lines[last].trim()) last--;
   const before = lines.slice(0, last + 1);
+  const openFence = memoOpenFence(before);
+  if (openFence) before.push(openFence);
   const after = lines.slice(next);
   const merged = [...before, "", ...block.split("\n")];
   if (after.length) return [...merged, "", ...after].join("\n");
@@ -8720,6 +8801,7 @@ const MEMO_DICTATION_FINALIZE_TIMEOUT = 10000;
 // 同一个草稿文件在所有插件实例之间共用一条写入队列（挂在 vault adapter 上，插件重载后仍是同一个对象）：
 // 卸载前已经开始的写入落盘之后，新实例才读取和写入
 const MEMO_DRAFT_WRITES = Symbol.for("crisp-pulse.memo-drafts.writes");
+const MEMO_TRASH_WRITES = Symbol.for("crisp-pulse.memo-trash.writes");
 // 草稿归属（哪个面板接手了哪份草稿）和还在存进库的附件，同样挂在 adapter 上跨实例共用：
 // 插件重载后，新面板仍知道旧面板的附件没存好，提交照样要等
 const MEMO_DRAFT_SHARED = Symbol.for("crisp-pulse.memo-drafts.shared");
@@ -9043,11 +9125,18 @@ class MemoStore {
 
   async capture(text, now = new Date()) {
     if (!String(text ?? "").trim()) throw new Error(tr("速记内容为空", "The memo is empty"));
-    return this.writeBlock(buildMemoBlock(text, now), now, (path) => this.onOwnWrite?.(path));
+    return this.writeBlock(null, now, (path) => this.onOwnWrite?.(path), (path) => buildMemoBlock(this.relinkAttachments(text, path), now));
   }
 
-  /** 把一整块速记写进 now 那天的速记文件（没有就按当前模式新建）。 */
-  async writeBlock(block, now, beforeWrite = null) {
+  /** 附件链接是按粘贴那一刻的速记文件算的；发送时写进了别的文件（换了 Topic、过了零点），把解析不到的相对链接改过来。 */
+  relinkAttachments(text, targetPath) {
+    let out = String(text ?? "");
+    for (const source of this.attachmentSources || []) if (source !== targetPath) out = this.relinkFor(out, source, targetPath);
+    return out;
+  }
+
+  /** 把一整块速记写进 now 那天的速记文件（没有就按当前模式新建）。blockFor：知道目标文件后再生成这一块。 */
+  async writeBlock(block, now, beforeWrite = null, blockFor = null) {
     const date = dateKey(now);
     const mode = await this.resolveMode();
     const heading = mode === "anks" ? "" : (this.settings().memoHeading ?? MEMO_DEFAULT_HEADING);
@@ -9069,6 +9158,7 @@ class MemoStore {
         initial = await this.newDailyContent(now);
       }
     }
+    if (blockFor) block = blockFor(path);
     if (beforeWrite) await beforeWrite(path, initial || "", heading);
     if (mode === "anks") this.capturedSources.set(path, date);
     let file = this.app.vault.getAbstractFileByPath(path);
@@ -9094,6 +9184,8 @@ class MemoStore {
   /** 图片存进库里（跟随 Obsidian 的附件位置设置），返回可插入速记的嵌入链接。 */
   async saveAttachment(name, data, now = new Date()) {
     const source = await this.memoFilePath(now);
+    // 记下链接是相对哪个文件算的，发送时目标文件变了要重算（只留最近几个）
+    this.attachmentSources = [source, ...(this.attachmentSources || []).filter((p) => p !== source)].slice(0, 20);
     const fm = this.app.fileManager;
     const path = await fm.getAvailablePathForAttachment(name, source);
     const folder = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
@@ -9175,10 +9267,15 @@ class MemoStore {
     return { memos, files: paths.length };
   }
 
-  // 同一个插件的所有面板共用队列，整个读改写事务（含失败回滚）按顺序完成。
+  // 所有面板共用队列，整个读改写事务（含失败回滚）按顺序完成。队列挂在 adapter 上（同 MEMO_DRAFT_WRITES），
+  // 插件重载时旧实例没做完的删除和新实例的操作也排在同一条队列里，不会互相覆盖回收站。
   queueTrash(operation) {
-    const job = (this.trashQueue || Promise.resolve()).then(operation);
-    this.trashQueue = job.catch(() => {});
+    let queues = null;
+    try { queues = this.app.vault.adapter[MEMO_TRASH_WRITES] ||= new Map(); } catch (_) { queues = null; }
+    const key = this.trashPath || "";
+    const job = ((queues ? queues.get(key) : this.trashQueue) || Promise.resolve()).then(operation);
+    const tail = job.catch(() => {});
+    if (queues) queues.set(key, tail); else this.trashQueue = tail;
     return job;
   }
 
@@ -11565,26 +11662,15 @@ class CrispPulseSettingTab extends PluginSettingTab {
                     }
                     button.setDisabled(true);
 
-                    const backupRes = await this.plugin.createBackup("pre-reset");
-                    if (!backupRes.success) {
-                      new Notice(tr("自动备份失败，已取消重置以保护数据：", "Automatic backup failed, so the reset was cancelled to protect your data: ") + (backupRes.error?.message || backupRes.error));
-                      button.setDisabled(false);
-                      return;
-                    }
-
-                    await Promise.all([...(this.plugin.fileQueues?.values() || [])]);
-                    this.plugin.activeSessions.clear();
-                    this.plugin.lastInteractionTime = null;
-                    this.plugin.store.daily = {};
-                    this.plugin.settings.hasRunBackfill = true;
-
+                    let backupRes;
                     try {
-                      await this.plugin.savePluginData({ throwOnError: true });
+                      backupRes = await this.plugin.resetAllStatistics();
                       this.plugin.refreshViews();
                       modal.close();
                       new Notice(tr(`Crisp Pulse: 数据已重置（已备份至 backups/${backupRes.fileName}）`, `Crisp Pulse: data reset (backed up to backups/${backupRes.fileName})`));
-                    } catch (saveErr) {
-                      new Notice(tr("Crisp Pulse：数据保存失败，请检查文件权限。", "Crisp Pulse: failed to save data. Check file permissions."));
+                    } catch (err) {
+                      if (err?.backupFailed) new Notice(tr("自动备份失败，已取消重置以保护数据：", "Automatic backup failed, so the reset was cancelled to protect your data: ") + (err.cause?.message || err.cause || ""));
+                      else new Notice(tr("Crisp Pulse：数据保存失败，统计未清空，请检查文件权限。", "Crisp Pulse: failed to save data; your statistics were kept. Check file permissions."));
                       button.setDisabled(false);
                     }
                   })

@@ -258,3 +258,20 @@ test("周报命令未授权时不输出内容，已授权时放行", async () =>
   assert.equal(locked.requireEntitlement("weeklyReport"), false);
   assert.equal(run(true).requireEntitlement("weeklyReport"), true);
 });
+
+test("带到期时间的授权到点立即失效，Obsidian 一直开着也一样", async (t) => {
+  let now = Date.now();
+  const changes = [];
+  const expiring = code(["all"], { expiresAt: new Date(now + 3600_000).toISOString() });
+  const manager = new lib.CrispPulseLicenseManager(makeVault(t, []), { licenseCode: expiring }, { now: () => now, onEntitlementChange: (v) => changes.push(v) });
+  await manager.initialize();
+  await manager.backgroundVerification;
+  assert.equal(manager.isEntitled(), true);
+  now += 3600_000 + 1;
+  assert.equal(manager.isEntitled(), false, "过了到期时间不再放行");
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(changes, [true, false], "失效时通知界面一次（不在渲染途中同步重绘）");
+  assert.equal(manager.isEntitled(), false);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(changes, [true, false]);
+});

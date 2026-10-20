@@ -2942,3 +2942,55 @@ test('opening the memo view falls back to a new tab when the right sidebar has n
   assert.equal(leaf.state?.type, 'crisp-pulse-memo-view');
   assert.equal(revealed, leaf);
 });
+
+/* 1.25.1（全链体检）。失败模式：
+   - 超长任务标题截到 200 字时末尾留空格或半个 emoji，下次加载被自检当成坏字段删掉任务关联。
+   - 备份写坏了（被截断、同步出错）却报成功，接着按数量清掉更早的好备份。
+   - 「重置所有统计数据」保存失败，内存里已经清空，下一次自动保存把空数据写进 data.json。 */
+test('a clipped Tempo task title survives the next load check', async () => {
+  const { p, helpers } = setup();await p.loadPluginData();
+  p.settings.enableCrispFocusSync = true;
+  for (const [id, title] of [['s1', `${'a'.repeat(199)} bbb`], ['s2', `${'b'.repeat(199)}😀x`]]) {
+    await p.handleFocusSessionEvent(focusEvent('complete', { apiVersion: 2, id, completed: true, task: { source: 'crisp-tempo', id: `t-${id}`, title } }));
+  }
+  const store = JSON.parse(JSON.stringify(p.store));
+  const list = Object.values(store.daily)[0].activity.focusSessions;
+  for (const s of list) {
+    assert.ok(s.taskTitle.length <= 200 && s.taskTitle === s.taskTitle.trim(), JSON.stringify(s.taskTitle.slice(-3)));
+    assert.doesNotMatch(s.taskTitle, /[\uD800-\uDBFF]$/, '不留半个 emoji');
+  }
+  const { store: checked } = helpers.validateAndRepairStore(store);
+  assert.deepEqual(Object.values(checked.daily)[0].activity.focusSessions.map((s) => s.taskId), ['t-s1', 't-s2'], '重启自检不删任务关联');
+});
+
+test('a backup that does not read back intact fails and keeps the older backups', async () => {
+  const { p } = setup();await p.loadPluginData();
+  const files = new Map([1, 2, 3, 4, 5].map((n) => [`.obsidian/plugins/crisp-pulse/backups/pulse-backup-2026090${n}-120000-manual.json`, '{}']));
+  p.manifest = { dir: '.obsidian/plugins/crisp-pulse' };
+  p.app.vault.adapter = {
+    exists: async () => true,
+    write: async (f, c) => { files.set(f, c.slice(0, 20)); },
+    read: async (f) => files.get(f),
+    list: async () => ({ files: [...files.keys()] }),
+    remove: async (f) => { files.delete(f); },
+  };
+  const res = await p.createBackup('test');
+  assert.equal(res.success, false, '读回不一致要报失败');
+  for (let n = 1; n <= 5; n++) assert.ok(files.has(`.obsidian/plugins/crisp-pulse/backups/pulse-backup-2026090${n}-120000-manual.json`), `旧备份 ${n} 不能被清掉`);
+});
+
+test('a reset whose save fails puts the statistics back in memory', async () => {
+  const { p, helpers } = setup();await p.loadPluginData();
+  const r = helpers.createEmptyDailyRecord('2026-09-08');r.contribution.wordsAdded = 999;
+  p.store.daily['2026-09-08'] = r;
+  p.settings.hasRunBackfill = false;
+  p.createBackup = async () => ({ success: true, fileName: 'b.json' });
+  p.savePluginData = async () => { throw new Error('disk full'); };
+  await assert.rejects(() => p.resetAllStatistics(), /disk full/);
+  assert.equal(p.store.daily['2026-09-08'].contribution.wordsAdded, 999, '保存失败时统计放回内存');
+  assert.equal(p.settings.hasRunBackfill, false);
+  p.savePluginData = async () => {};
+  const ok = await p.resetAllStatistics();
+  assert.equal(ok.fileName, 'b.json');
+  assert.deepEqual(JSON.parse(JSON.stringify(p.store.daily)), {});
+});
