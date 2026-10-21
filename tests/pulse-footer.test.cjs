@@ -345,7 +345,7 @@ test('seasons follow the month, and the snow cap sits on the peak day', () => {
     return img.data;
   };
   const white = (d, x0, x1) => { let n = 0; for (let y = 0; y < 92; y++) for (let x = x0; x < x1; x++) { const o = (y * 200 + x) * 4; if (d[o] > 235 && d[o + 1] > 235 && d[o + 2] > 235) n++; } return n; };
-  const snowy = paint({ snowX: 100 }), plain = paint({});
+  const snowy = paint({ peakX: 100 }), plain = paint({});
   assert.ok(white(snowy, 92, 108) > white(plain, 92, 108) + 10, '峰值那几列山顶有雪');
   assert.equal(white(snowy, 0, 60), white(plain, 0, 60), '别处不画雪');
   const autumn = paint({ season: 'autumn' }), summer = paint({});
@@ -376,4 +376,27 @@ test('lanterns rise only when Tempo’s done-today count grows', async () => {
   v.app.plugins.plugins['crisp-tempo'] = { activateView() {} };
   await v.checkLanterns();
   assert.doesNotMatch(v.footerEls.caption.attrs['aria-label'] || '', /孔明灯/, '旧版 Tempo：不显示也不报错');
+});
+
+/* 峰值山尖上的小城堡。失败模式：城堡立在峰值那天的列上、但山尖其实偏了几列，城堡悬空或埋进坡里；
+   没有峰值也画城堡。 */
+test('the castle stands on the true summit near the peak day', () => {
+  const paint = (peakX, todayX = 180) => {
+    let img = null;
+    const canvas = { width: 200, height: 92, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData: (i) => { img = i; } }) };
+    const profile = new Float32Array(200).fill(0.3);
+    for (let x = 96; x < 110; x++) profile[x] = 0.6 + 0.3 * (1 - Math.abs(x - 103) / 7);
+    F.paintPulseGround(canvas, 'day', profile, todayX, { peakX });
+    return img.data;
+  };
+  // 屋顶红色像素的平均列：应在山尖 103 附近，而不是传进去的 98
+  // 只看左边 160 列：右边今天的小旗也是这种红
+  const roofCols = (d) => { const xs = []; for (let y = 0; y < 92; y++) for (let x = 0; x < 160; x++) { const o = (y * 200 + x) * 4; if (d[o] > 140 && d[o + 1] < 90 && d[o + 2] < 80) xs.push(x); } return xs; };
+  const xs = roofCols(paint(98));
+  assert.ok(xs.length > 6, '画出了城堡屋顶');
+  const mid = xs.reduce((a, b) => a + b, 0) / xs.length;
+  assert.ok(Math.abs(mid - 103) <= 3, `城堡在山尖上：${mid}`);
+  assert.equal(roofCols(paint(-1)).length, 0, '没有峰值就没有城堡');
+  const flag = (d) => { let n = 0; for (let y = 0; y < 92; y++) for (let x = 170; x < 190; x++) { const o = (y * 200 + x) * 4; if (d[o] > 180 && d[o + 1] < 100 && d[o + 2] < 90) n++; } return n; };
+  assert.ok(flag(paint(98, 180)) > 0, '平时右边有今天的小旗');
 });
