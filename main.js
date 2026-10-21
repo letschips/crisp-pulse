@@ -24,7 +24,7 @@ const PULSE_ZH = /^zh\b/i.test(PULSE_LANGUAGE);
 const PULSE_HANT = PULSE_ZH && /^zh[-_](tw|hk|mo|hant)\b/i.test(PULSE_LANGUAGE);
 /* 繁体文案由简体文案转出来（OpenCC s2twp：台湾正体 + 台湾用语），表由 scripts/gen-hant.cjs 生成，只收源码里用到的字词。
    分两段按最长匹配替换：s 简→繁，t 台湾用语。插值进来的内容（文件名、标签）也会被转，只影响显示。 */
-const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"65e20d1e96b96843","s":"一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不出 不出|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|严 嚴|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|买 買|了话 了話|于 於|于今 於今|于此 於此|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写回 寫回|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出人 出人|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分不出 分不出|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参数 參數|参考 參考|双 雙|双向 雙向|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只回 只回|只在 只在|只打 只打|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|复选 複選|复选框 核取方塊|够 夠|夹 夾|委托 委託|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|弹 彈|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录下 錄下|录到 錄到|录的 錄的|录音 錄音|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|托 託|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折扣 折扣|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|方向 方向|无 無|日历 日曆|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栏 欄|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|汇 匯|汇总 彙總|沉淀 沉澱|没 沒|注记 註記|流向 流向|浅 淺|测 測|润 潤|淀 澱|渐 漸|满 滿|灯 燈|点 點|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|获取 獲取|虚 虛|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记录 記錄|记录为 記錄爲|记录到 記錄到|许 許|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|购 購|贴 貼|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|重折 重摺|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸭 鴨|麦 麥|麦克 麥克|麦克风 麥克風","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|參數 引數|品質 品質|啓 啟|在線 線上|字段 欄位|字符 字元|字符串 字串|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|核取方塊 核取方塊|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
+const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"f2d42686f1fdba3e","s":"一只 一隻|一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不出 不出|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|严 嚴|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|买 買|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出人 出人|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分不出 分不出|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参数 參數|参考 參考|双 雙|双向 雙向|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只回 只回|只在 只在|只打 只打|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|复选 複選|复选框 核取方塊|多云 多雲|够 夠|夹 夾|妈 媽|委托 委託|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|弹 彈|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录下 錄下|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|托 託|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折扣 折扣|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|方向 方向|无 無|日历 日曆|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|沉淀 沉澱|没 沒|注记 註記|流向 流向|浅 淺|测 測|润 潤|淀 澱|渐 漸|湖面 湖面|满 滿|灯 燈|点 點|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|获取 獲取|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记录 記錄|记录为 記錄爲|记录到 記錄到|许 許|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|购 購|贴 貼|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|重折 重摺|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|麦 麥|麦克 麥克|麦克风 麥克風","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|參數 引數|品質 品質|啓 啟|在線 線上|字段 欄位|字符 字元|字符串 字串|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|核取方塊 核取方塊|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
 let pulseHantStages = null;
 function pulseHant(text) {
   if (typeof text !== "string" || !/\p{Script=Han}/u.test(text)) return text;
@@ -530,6 +530,7 @@ const DEFAULT_SETTINGS = {
   showFooterLandscape: true,
   memoPomodoroPrompt: true, // during a Crisp Focus pomodoro break, the memo composer asks what the round produced // pixel horizon at the bottom of the Pulse view; the ridge is recent daily contribution
   headerBannerImage: "", // vault path of a custom banner image; empty uses the generated sky
+  celebratedOn: "", // "YYYY-MM-DD"：这一天达标的流星/彩虹已经在页脚放过，不再重复
 
   // --- 1.1 Credible Analytics Settings ---
   trackingStartDate: null, // "YYYY-MM-DD" or null
@@ -2187,6 +2188,7 @@ class CrispPulsePlugin extends Plugin {
   updateStatusBar() {
     const today = this.todayState();
     this.emitPulseState("today", today);
+    this.checkMilestone();
     if (!this.statusBarEl) return;
     const todayRecord = today.record;
     const score = today.score;
@@ -2302,6 +2304,45 @@ class CrispPulsePlugin extends Plugin {
       this.focusRefreshTimer = null;
       if (!this.stopped) this.refreshViews();
     }, 0);
+  }
+
+  /** 今天达标了吗：番茄数到了 Crisp Focus 的每日目标，或者贡献分进了最近 30 天（有分的日子，至少 7 天）的前四分之一。
+      返回原因，没达标返回 null。 */
+  todayMilestone() {
+    const date = getTodayKey();
+    const record = this.store?.daily?.[date];
+    if (!record) return null;
+    const done = dayPomodoros(record).done;
+    let goal = 0;
+    try {
+      const focus = this.settings.enableCrispFocusSync ? this.focusAdapter?.getFocusPlugin?.() : null;
+      if (focus && Number(focus.focusApiVersion) >= 1 && typeof focus.getPomodoroSnapshot === "function") goal = Number(focus.getPomodoroSnapshot()?.goal) || 0;
+    } catch (_) { /* Focus 重载中：只看贡献分 */ }
+    if (goal > 0 && done >= goal) return { date, reason: "pomodoro", done, goal };
+    const score = Number(record.contribution?.score) || 0;
+    if (score <= 0) return null;
+    const day = reviewDayNumber(date);
+    const past = [];
+    for (let i = 1; i <= 30; i++) {
+      const v = Number(this.store.daily[reviewDayKey(day - i)]?.contribution?.score) || 0;
+      if (v > 0) past.push(v);
+    }
+    if (past.length < 7) return null;
+    past.sort((a, b) => a - b);
+    return score >= past[Math.floor(0.75 * (past.length - 1))] ? { date, reason: "score", score } : null;
+  }
+
+  /** 今天达标了、但页脚还没放过流星/彩虹。 */
+  pendingMilestone() {
+    if (this.settings.celebratedOn === getTodayKey()) return null;
+    return this.todayMilestone();
+  }
+
+  /** 分数或番茄变化后看一眼：刚达标就让看板在页脚露出来时放一次。 */
+  checkMilestone() {
+    const milestone = this.pendingMilestone();
+    if (!milestone) return;
+    for (const leaf of this.app?.workspace?.getLeavesOfType?.(VIEW_TYPE_PULSE) || []) leaf.view?.queueCelebration?.(milestone);
   }
 
   /** 速记面板的状态行跟着番茄钟的休息变化。 */
@@ -4514,9 +4555,62 @@ function pixelQuantize(img, o, c, x, y) {
   img.data[o + 3] = 255;
 }
 
-function paintPulseSky(canvas, mode = "night", seed = 7) {
+/* 天气跟最近 7 天写了几天走：一直在写就晴，断了几天就多云、起雾，恢复以后一档档放晴。
+   cover 加在云量上（越大云越多），haze 是整片天地蒙上的一层灰。 */
+const PULSE_WEATHER = {
+  clear: { cover: -0.26, haze: 0, light: 1 },
+  fair: { cover: 0, haze: 0, light: 1 },
+  cloudy: { cover: 0.16, haze: 0.2, light: 0.8 },
+  fog: { cover: 0.3, haze: 0.45, light: 0.55 },
+};
+const PULSE_WEATHER_LABELS = { clear: ["晴", "clear"], fair: ["少云", "a few clouds"], cloudy: ["多云", "cloudy"], fog: ["起雾", "foggy"] };
+
+/** 最近 7 天有几天在写 → 天气档位。今天还没写就从昨天往前数（和连续天数同一口径），免得早上一开就阴天。 */
+function pulseWeatherFor(activeOn, todayNumber) {
+  const end = activeOn(todayNumber) ? todayNumber : todayNumber - 1;
+  let active = 0;
+  for (let k = end - 6; k <= end; k++) if (activeOn(k)) active++;
+  const level = active >= 6 ? "clear" : active >= 4 ? "fair" : active >= 2 ? "cloudy" : "fog";
+  return { level, active };
+}
+
+/* 树跟着真实月份换季（北半球）：春天嫩绿带几点花，夏天是原来的深绿，秋天一棵棵红橙黄，冬天树梢积雪。
+   leaves 是几组「背光、受光」，每棵树（或树林的一片）按位置挑一组。 */
+const PULSE_SEASON_TREES = {
+  spring: { leaves: [[[84, 140, 66], [146, 194, 96]], [[96, 150, 72], [168, 204, 110]]], blossom: [242, 172, 192] },
+  summer: null,
+  autumn: { leaves: [[[148, 50, 38], [204, 86, 54]], [[172, 90, 34], [226, 146, 58]], [[176, 136, 40], [234, 196, 82]]] },
+  winter: { leaves: [[[38, 66, 56], [64, 96, 80]]], snow: [244, 248, 252] },
+};
+const PULSE_SEASON_LABELS = { spring: ["春天", "spring"], summer: ["夏天", "summer"], autumn: ["秋天", "autumn"], winter: ["冬天", "winter"] };
+
+function pulseSeason(date = new Date()) {
+  const m = date.getMonth() + 1;
+  return m >= 3 && m <= 5 ? "spring" : m >= 6 && m <= 8 ? "summer" : m >= 9 && m <= 11 ? "autumn" : "winter";
+}
+
+/** 这个季节的一组树色 [背光, 受光]；pick 是 0–1 的位置随机数。夜里往原来的夜色靠，免得太亮。 */
+function pulseTreeColors(p, mode, season, pick = 0.5) {
+  const s = PULSE_SEASON_TREES[season];
+  if (!s) return [p.tree, p.treeLit];
+  const [dark, lit] = s.leaves[Math.min(s.leaves.length - 1, Math.floor(pixelClamp01(pick) * s.leaves.length))];
+  return mode === "night" ? [pixelMix(dark, p.tree, 0.6), pixelMix(lit, p.treeLit, 0.6)] : [dark, lit];
+}
+
+/** 季节的点缀色：冬天的雪、春天的花；夜里暗一些。没有返回 null。 */
+function pulseSeasonAccent(p, mode, season) {
+  const s = PULSE_SEASON_TREES[season];
+  const c = s?.snow || s?.blossom;
+  if (!c) return null;
+  return mode === "night" ? pixelMix(c, p.cloudShadow, 0.45) : c;
+}
+
+function paintPulseSky(canvas, mode = "night", seed = 7, weather = "fair", season = "summer") {
   const w = canvas.width, h = canvas.height;
-  const p = PULSE_SKY_PALETTES[mode] || PULSE_SKY_PALETTES.night;
+  const base = PULSE_SKY_PALETTES[mode] || PULSE_SKY_PALETTES.night;
+  const sky = PULSE_WEATHER[weather] || PULSE_WEATHER.fair;
+  const p = { ...base, cover: base.cover + sky.cover };
+  const haze = sky.haze, hazeColor = pixelMix(base.cloudShadow, base.skyHorizon, 0.55);
   const { hash, noise, fbm } = pulsePixelNoise(seed);
   const mix = pixelMix, clamp01 = pixelClamp01;
 
@@ -4569,7 +4663,12 @@ function paintPulseSky(canvas, mode = "night", seed = 7) {
         if (p.beam && Math.abs(x - towerX) < 3 + t * 12 && ripple > 0.5) c = mix(c, p.lamp, 0.45 * (1 - t));
       }
       if (y >= canopy[x] && y < land[x]) {
-        c = mix(p.tree, p.treeLit, clamp01((fbm(x / 2, y / 2, 2) - 0.45) * 3));
+        const [td, tl] = pulseTreeColors(p, mode, season, fbm(x / 9, 3.7, 2) * 1.6 - 0.3);
+        c = mix(td, tl, clamp01((fbm(x / 2, y / 2, 2) - 0.45) * 3));
+        const accent = pulseSeasonAccent(p, mode, season);
+        // 冬天树冠顶上两行积雪；春天零星几点花
+        if (accent && season === "winter" && y < canopy[x] + 2) c = mix(c, accent, 0.75);
+        else if (accent && season === "spring" && hash(x * 3 + 1, y * 7 + 2) > 0.93) c = accent;
       } else if (y >= land[x] && y < shore) {
         const depth = clamp01((y - land[x]) / (h * 0.16));
         const strata = fbm(x / 1.6, y / 7, 3), face = clamp01((land[x + 1] ?? land[x]) - land[x]) * 0.5;
@@ -4602,6 +4701,8 @@ function paintPulseSky(canvas, mode = "night", seed = 7) {
         c = mix(c, p.lamp, clamp01(1 - dist / 9) * 0.6);
         if (dx > 2 && Math.abs(dy) < dx * 0.045 + 1) c = mix(c, p.lamp, p.beam * (1 - Math.abs(dy) / (dx * 0.045 + 1)) * Math.pow(clamp01(1 - dx / (w * 0.42)), 2));
       }
+      // 阴天、起雾：越靠近地平线越灰，海面也蒙一层
+      if (haze) c = mix(c, hazeColor, haze * (y < horizon ? 0.55 + 0.45 * (y / horizon) : 0.6));
       pixelQuantize(img, (y * w + x) * 4, c, x, y);
     }
   }
@@ -4728,7 +4829,8 @@ function groundLakeTop(height) {
   return height - Math.max(6, Math.round(height * 0.12));
 }
 
-/* 番茄钟进行时湖面上的小东西：专注是一艘帆船，休息是一只小鸭子，都朝右。
+/* 番茄钟进行时湖面上的小东西：专注是一艘帆船，短休是一只小鸭子，长休是鸭妈妈带着这一轮的小鸭，都朝右。
+   今天完成的番茄停在右边岸边，一个番茄一只收了帆的小船，夜里桅顶亮灯。
    每个字符一格像素；waterline 是贴着湖面第一行往下几行的那一行，船身和鸭身一半在水里。 */
 const PULSE_VOYAGERS = {
   boat: {
@@ -4766,17 +4868,85 @@ const PULSE_VOYAGERS = {
       "ww   www   ww ",
     ],
   },
+  duckling: {
+    waterline: 3, depth: 2,
+    rows: [
+      "  yy  ",
+      " ykyeb",
+      "y yyy ",
+      "yyYyy ",
+      "OOOOO ",
+      "w  w  ",
+    ],
+  },
+  moored: {
+    waterline: 7, depth: 2,
+    rows: [
+      "    g    ",
+      "   glg   ",
+      "    m    ",
+      "    m    ",
+      " Sffffm  ",
+      "    m    ",
+      "dddddddd ",
+      " hhhhhh  ",
+      "w hhhh  w",
+    ],
+  },
 };
+// 长休最多画几只小鸭、岸边最多停几只船（再多就挤了，说明文字里写实际数）
+const PULSE_DUCKLINGS_MAX = 8, PULSE_HARBOR_MAX = 12;
+// 今天还没处理的速记：左边岸边的纸船
+PULSE_VOYAGERS.paper = {
+  waterline: 3, depth: 2,
+  rows: [
+    "   P   ",
+    "  PPp  ",
+    "PPPPPPP",
+    " PPPPp ",
+    "w     w",
+  ],
+};
+const PULSE_PAPER_MAX = 10;
+// 记下速记时飞起的小鸟：两帧（翅膀上、翅膀下）左右并排，CSS 来回切；夜里是萤火虫
+const PULSE_BIRD_FRAMES = [
+  ["G     G", " G   G ", "  GGG  "],
+  ["       ", "  GGG  ", " G   G "],
+];
 const PULSE_VOYAGER_COLORS = {
   day: { s: [250, 248, 240], S: [212, 212, 204], j: [236, 232, 220], m: [92, 74, 60], l: [92, 74, 60], d: [236, 230, 214], h: [176, 76, 56],
-    y: [246, 212, 92], Y: [214, 168, 58], k: [255, 242, 186], O: [176, 124, 40], e: [30, 28, 36], b: [236, 128, 48], B: [190, 88, 34], w: [236, 244, 252] },
+    y: [246, 212, 92], Y: [214, 168, 58], k: [255, 242, 186], O: [176, 124, 40], e: [30, 28, 36], b: [236, 128, 48], B: [190, 88, 34], w: [236, 244, 252],
+    f: [240, 236, 226], P: [248, 246, 238], p: [206, 204, 196], G: [58, 64, 78] },
   night: { s: [190, 198, 220], S: [130, 140, 166], j: [168, 178, 204], m: [52, 52, 64], l: [255, 212, 136], d: [140, 142, 156], h: [84, 46, 46],
-    y: [176, 160, 104], Y: [138, 120, 76], k: [204, 192, 146], O: [104, 88, 58], e: [16, 18, 26], b: [168, 102, 60], B: [128, 74, 44], w: [150, 172, 214] },
+    y: [176, 160, 104], Y: [138, 120, 76], k: [204, 192, 146], O: [104, 88, 58], e: [16, 18, 26], b: [168, 102, 60], B: [128, 74, 44], w: [150, 172, 214],
+    f: [150, 156, 176], g: [255, 212, 136], P: [178, 184, 204], p: [124, 130, 152], G: [190, 198, 220] },
 };
 
-/** 把帆船或小鸭子画进一张小画布（一格一像素），返回尺寸和吃水线；页脚用 CSS 放大到和地平线一样的像素。 */
-function paintPulseVoyager(canvas, kind, mode) {
-  const sprite = PULSE_VOYAGERS[kind] || PULSE_VOYAGERS.boat;
+/** 把几个精灵从左到右排成一张（吃水线对齐），中间隔 gap 列。 */
+function pulseSpriteRow(sprites, gap = 1) {
+  const waterline = Math.max(...sprites.map((s) => s.waterline));
+  const below = Math.max(...sprites.map((s) => s.rows.length - s.waterline));
+  const width = sprites.reduce((sum, s) => sum + s.rows[0].length, 0) + gap * (sprites.length - 1);
+  const grid = Array.from({ length: waterline + below }, () => Array(width).fill(" "));
+  let left = 0;
+  for (const s of sprites) {
+    const top = waterline - s.waterline;
+    s.rows.forEach((row, y) => [...row].forEach((ch, x) => { if (ch !== " ") grid[top + y][left + x] = ch; }));
+    left += s.rows[0].length + gap;
+  }
+  return { waterline, depth: Math.max(...sprites.map((s) => s.depth)), rows: grid.map((r) => r.join("")) };
+}
+
+/** 湖面上要画的精灵：boat、duck，family（鸭妈妈前面游，n 只小鸭跟在后面），harbor（n 只泊船）。 */
+function pulseVoyagerSprite(kind, n = 0) {
+  if (kind === "family") return pulseSpriteRow([...Array(Math.max(1, Math.min(PULSE_DUCKLINGS_MAX, n))).fill(PULSE_VOYAGERS.duckling), PULSE_VOYAGERS.duck]);
+  if (kind === "harbor") return pulseSpriteRow(Array(Math.max(1, Math.min(PULSE_HARBOR_MAX, n))).fill(PULSE_VOYAGERS.moored));
+  if (kind === "paper") return pulseSpriteRow(Array(Math.max(1, Math.min(PULSE_PAPER_MAX, n))).fill(PULSE_VOYAGERS.paper));
+  return PULSE_VOYAGERS[kind] || PULSE_VOYAGERS.boat;
+}
+
+/** 把精灵画进一张小画布（一格一像素），返回尺寸和吃水线；页脚用 CSS 放大到和地平线一样的像素。 */
+function paintPulseVoyager(canvas, sprite, mode) {
   const colors = PULSE_VOYAGER_COLORS[mode] || PULSE_VOYAGER_COLORS.night;
   const w = sprite.rows[0].length, h = sprite.rows.length;
   canvas.width = w;
@@ -4788,27 +4958,166 @@ function paintPulseVoyager(canvas, kind, mode) {
     if (!c) return;
     const o = (y * w + x) * 4;
     img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2];
-    // 水痕半透明，像水面上的一点反光
-    img.data[o + 3] = ch === "w" ? 150 : 255;
+    // 水痕半透明，像水面上的一点反光；g 是夜里桅灯的光晕
+    img.data[o + 3] = ch === "w" ? 150 : ch === "g" ? 110 : 255;
   }));
   ctx.putImageData(img, 0, 0);
   return { w, h, waterline: sprite.waterline, depth: sprite.depth };
 }
 
-/** 进度 0–1 → 精灵左上角在地平线画布里的列和行（整数，贴着像素格）。两侧各留一点边，不碰面板边缘。 */
-function groundVoyagerSpot(progress, width, height, sprite) {
+/** 进度 0–1 → 精灵左上角在地平线画布里的列和行（整数，贴着像素格）。两侧各留一点边，不碰面板边缘；
+    right 是能走到的最右一列（岸边停着船时到船队前面为止，像驶进港）。 */
+/** 岸边船队：靠右停，至多占湖面四成宽；返回能停几只和左上角位置。 */
+function groundHarborSpot(count, width, height) {
+  const boat = PULSE_VOYAGERS.moored.rows[0].length + 1;
+  const fit = Math.max(0, Math.min(count, PULSE_HARBOR_MAX, Math.floor((width * 0.4) / boat)));
+  if (!fit) return null;
+  const sprite = pulseVoyagerSprite("harbor", fit);
+  const w = sprite.rows[0].length;
+  return { fit, sprite, x: width - 4 - w, y: groundLakeTop(height) + sprite.depth - sprite.waterline };
+}
+
+/** 左边岸边的纸船：靠左停，至多占湖面三成宽。 */
+function groundPaperSpot(count, width, height) {
+  const boat = PULSE_VOYAGERS.paper.rows[0].length + 1;
+  const fit = Math.max(0, Math.min(count, PULSE_PAPER_MAX, Math.floor((width * 0.3) / boat)));
+  if (!fit) return null;
+  const sprite = pulseVoyagerSprite("paper", fit);
+  return { fit, sprite, x: 4, y: groundLakeTop(height) + sprite.depth - sprite.waterline };
+}
+
+function groundVoyagerSpot(progress, width, height, sprite, right = width - 4, left = 4) {
   const margin = 4;
-  const span = Math.max(0, width - margin * 2 - sprite.w);
-  const x = margin + Math.round(pixelClamp01(progress) * span);
+  const start = Math.max(margin, left);
+  const span = Math.max(0, Math.min(width - margin, right) - start - sprite.w);
+  const x = start + Math.round(pixelClamp01(progress) * span);
   const y = groundLakeTop(height) + sprite.depth - sprite.waterline;
   return { x, y };
 }
 
+/* 达标时页脚天空里的一次小仪式：白天一道彩虹（脚落在湖里，水里有淡淡的倒影），夜里几颗流星。 */
+const PULSE_RAINBOW = [[222, 86, 76], [238, 150, 64], [240, 212, 92], [112, 186, 106], [86, 142, 216], [148, 110, 198]];
+
+/** 彩虹画满整张页脚画布（和地平线同样的像素格），圆心在湖面上、偏右，避开左边的文字。 */
+function paintPulseRainbow(canvas, width, height) {
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(width, height);
+  const lake = groundLakeTop(height);
+  const cx = Math.round(width * 0.62), outer = Math.max(12, Math.round(Math.min(height * 0.82, width * 0.3)));
+  for (let y = 0; y < height; y++) {
+    // 湖面以下是倒影：按水面对称，隔行画、更淡，像被水波打碎
+    const under = y >= lake;
+    if (under && (y - lake) % 2) continue;
+    const my = under ? lake - (y - lake) - 1 : y;
+    for (let x = 0; x < width; x++) {
+      // 每道颜色 2 格宽，像素画里才看得清
+      const band = Math.floor((outer - Math.hypot(x - cx, lake - my)) / 2);
+      if (band < 0 || band >= PULSE_RAINBOW.length) continue;
+      const c = PULSE_RAINBOW[band];
+      const o = (y * width + x) * 4;
+      img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2];
+      img.data[o + 3] = under ? 80 : 235;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/* Tempo 里完成一个任务，湖面升起一盏孔明灯：纸灯笼、中间透亮、底下一点火苗，外面一圈暖光。 */
+const PULSE_LANTERN = [
+  " ggg ",
+  "gLLLg",
+  "gLlLg",
+  "gLlLg",
+  "gLLLg",
+  " gfg ",
+  "  g  ",
+];
+function paintPulseLantern(canvas, mode) {
+  const night = mode === "night";
+  const colors = {
+    L: night ? [250, 168, 88] : [228, 106, 58], l: night ? [255, 230, 160] : [250, 196, 110],
+    f: [255, 236, 150], g: night ? [255, 196, 110] : [255, 214, 150],
+  };
+  const w = PULSE_LANTERN[0].length, h = PULSE_LANTERN.length;
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d"), img = ctx.createImageData(w, h);
+  PULSE_LANTERN.forEach((row, y) => [...row].forEach((ch, x) => {
+    const c = colors[ch];
+    if (!c) return;
+    const o = (y * w + x) * 4;
+    img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2];
+    img.data[o + 3] = ch === "g" ? (night ? 120 : 80) : 255;
+  }));
+  ctx.putImageData(img, 0, 0);
+  return { w, h };
+}
+
+/** 小鸟两帧并排画进一张画布；萤火虫是一个亮点带一圈光。 */
+function paintPulseBird(canvas, mode) {
+  const colors = PULSE_VOYAGER_COLORS[mode] || PULSE_VOYAGER_COLORS.night;
+  const ctx0 = () => canvas.getContext("2d");
+  if (mode === "night") {
+    canvas.width = 3; canvas.height = 3;
+    const ctx = ctx0(), img = ctx.createImageData(3, 3);
+    for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) {
+      const o = (y * 3 + x) * 4, center = x === 1 && y === 1, cross = x === 1 || y === 1;
+      if (!cross) continue;
+      img.data[o] = 255; img.data[o + 1] = 236; img.data[o + 2] = center ? 150 : 120;
+      img.data[o + 3] = center ? 255 : 110;
+    }
+    ctx.putImageData(img, 0, 0);
+    return { w: 3, h: 3, frames: 1 };
+  }
+  const fw = PULSE_BIRD_FRAMES[0][0].length, fh = PULSE_BIRD_FRAMES[0].length;
+  canvas.width = fw * 2; canvas.height = fh;
+  const ctx = ctx0(), img = ctx.createImageData(fw * 2, fh);
+  PULSE_BIRD_FRAMES.forEach((frame, f) => frame.forEach((row, y) => [...row].forEach((ch, x) => {
+    const c = colors[ch];
+    if (!c) return;
+    const o = (y * fw * 2 + f * fw + x) * 4;
+    img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
+  })));
+  ctx.putImageData(img, 0, 0);
+  return { w: fw, h: fh, frames: 2 };
+}
+
+/** 一颗流星：头在右下、亮一圈，尾巴往左上渐淡（朝右下方划过）。 */
+const PULSE_METEOR_SIZE = [28, 14];
+function paintPulseMeteor(canvas) {
+  const [w, h] = PULSE_METEOR_SIZE;
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(w, h);
+  const put = (x, y, a, t = 0) => {
+    if (x < 0 || y < 0 || x >= w || y >= h) return;
+    const o = (y * w + x) * 4;
+    if (img.data[o + 3] >= a) return;
+    img.data[o] = 255; img.data[o + 1] = Math.round(248 - 40 * t); img.data[o + 2] = Math.round(226 - 60 * t);
+    img.data[o + 3] = a;
+  };
+  // 尾巴：每往左 2 格往上 1 格，越远越淡
+  for (let i = 0; i < w - 1; i++) {
+    const t = i / (w - 2);
+    put(w - 2 - i, h - 2 - Math.floor(i / 2), Math.round(255 * (1 - t) ** 1.3), t);
+  }
+  // 头：2×2 实心，外面一圈淡光
+  for (const [dx, dy] of [[0, 0], [-1, 0], [0, -1], [-1, -1]]) put(w - 2 + dx, h - 2 + dy, 255);
+  for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [-2, 0], [0, -2], [1, -1], [-1, 1]]) put(w - 2 + dx, h - 2 + dy, 110);
+  ctx.putImageData(img, 0, 0);
+}
+
 /** 画页脚地平线：远处一层淡山，中间是贡献山脊（光从右上来），近处一条暗色地面和几棵像素小树；todayX 处立一根小灯杆，夜里亮灯，白天挂旗。
     最下面一条湖面：reflection 给出顶部太阳/月亮所在的列，水里画一道碎开的倒影；stones 是当前连续天数每天在山脊上的列。 */
-function paintPulseGround(canvas, mode, profile, todayX = -1, { reflection = null, stones = [] } = {}, seed = 11) {
+function paintPulseGround(canvas, mode, profile, todayX = -1, { reflection = null, stones = [], weather = "fair", season = "summer", snowX = -1 } = {}, seed = 11) {
   const w = canvas.width, h = canvas.height;
   const p = PULSE_SKY_PALETTES[mode] || PULSE_SKY_PALETTES.night;
+  const haze = (PULSE_WEATHER[weather] || PULSE_WEATHER.fair).haze;
+  const fogColor = pixelMix(p.cloudShadow, p.skyHorizon, 0.55);
+  const accent = pulseSeasonAccent(p, mode, season), groundLeaf = pulseTreeColors(p, mode, season, 0.5)[1];
+  const snowColor = mode === "night" ? [196, 206, 228] : [250, 252, 255];
   const { hash, noise, fbm } = pulsePixelNoise(seed);
   const mix = pixelMix, clamp01 = pixelClamp01;
   const far = new Float32Array(w), ridge = new Float32Array(w), near = new Float32Array(w), tree = new Int16Array(w).fill(-1);
@@ -4868,17 +5177,29 @@ function paintPulseGround(canvas, mode, profile, todayX = -1, { reflection = nul
         else if (slope < -0.08) c = mix(c, p.hillNear, clamp01(-slope * 1.2) * 0.45 * reach);
         if (below < 1.2) c = mix(c, p.cloudEdge, mode === "night" ? 0.22 : 0.3);
         if (noise(x / 3, y / 2.2) > 0.74) c = mix(c, p.hillNear, 0.3);
+        // 峰值那天的山顶积雪：中间厚、两边薄，边缘参差；朝左的坡背光
+        if (snowX >= 0) {
+          const off = Math.abs(x - snowX);
+          const cap = 4.6 - off * 0.4 + (hash(x, 57) - 0.5) * 1.2;
+          if (below < cap) c = mix(snowColor, p.hillNear, slopeAt[x] < -0.08 ? 0.22 : 0.05);
+        }
       }
       if (y >= near[x]) {
         c = mix(p.hillNear, p.rock, 0.45 + clamp01((y - near[x]) / (h * 0.15)) * 0.4);
-        if (fbm(x / 2, y / 2, 2) > 0.62) c = mix(c, p.treeLit, 0.3);
+        if (fbm(x / 2, y / 2, 2) > 0.62) c = mix(c, season === "winter" && accent ? accent : groundLeaf, season === "winter" ? 0.35 : 0.3);
       }
       for (let dx = -2; dx <= 2; dx++) {
         const th = tree[x + dx];
         if (th > 0) {
           const top = Math.round(near[x + dx]) - th;
           const row = y - top;
-          if (row >= 0 && row < th && Math.abs(dx) <= Math.floor(row * 0.6)) c = mix(p.tree, p.treeLit, dx > 0 ? 0.45 : 0);
+          if (row >= 0 && row < th && Math.abs(dx) <= Math.floor(row * 0.6)) {
+            const [td, tl] = pulseTreeColors(p, mode, season, hash(x + dx, 41));
+            c = mix(td, tl, dx > 0 ? 0.45 : 0);
+            // 冬天树梢两行积雪；春天偶尔一点花
+            if (accent && season === "winter" && row <= 1) c = accent;
+            else if (accent && season === "spring" && row >= 1 && hash((x + dx) * 5 + row, 7) > 0.8) c = accent;
+          }
           if (dx === 0 && row >= th && y < near[x] + 1) c = p.tree;
         }
       }
@@ -4894,6 +5215,12 @@ function paintPulseGround(canvas, mode, profile, todayX = -1, { reflection = nul
           // 一行里断成几截短横线，越往下越淡
           if (dx <= half && (dx < 1 || hash((x >> 1) + 7, r * 3 + 1) > 0.3)) c = mix(c, glow.color, glow.strength * (1 - 0.45 * dx / (half + 1)) * (1 - 0.35 * r / (h - lakeTop)));
         }
+      }
+      if (haze) {
+        // 雾：远处最浓，近处地面淡一些；近处地面上方飘一条贴地的薄雾。小石子和灯杆画在雾上面，照样看得见
+        const amount = y >= shore[x] ? 0.45 : y >= near[x] ? 0.6 : y >= ridge[x] ? 0.85 : 1;
+        c = mix(c, fogColor, haze * amount);
+        if (Math.abs(y - near[x] + 1) <= 2 && noise(x / 9, y / 2 + 4) > 0.45) c = mix(c, p.cloudEdge, haze * 0.6);
       }
       for (const sx of [x, x - 1]) {
         const top = stoneTop.get(sx);
@@ -5006,15 +5333,16 @@ function paintCelestial(canvas, mode, phase = 0.5) {
   ctx.putImageData(img, 0, 0);
 }
 const pulseSkyCache = {};
-function getPulseSky(doc, mode) {
-  if (!pulseSkyCache[mode]) {
+function getPulseSky(doc, mode, weather = "fair", season = "summer") {
+  const key = `${mode}:${weather}:${season}`;
+  if (!pulseSkyCache[key]) {
     const canvas = doc.createElement("canvas");
     canvas.width = PULSE_SKY_WIDTH;
     canvas.height = PULSE_SKY_HEIGHT;
-    paintPulseSky(canvas, mode);
-    pulseSkyCache[mode] = canvas;
+    paintPulseSky(canvas, mode, 7, weather, season);
+    pulseSkyCache[key] = canvas;
   }
-  return pulseSkyCache[mode];
+  return pulseSkyCache[key];
 }
 
 class CrispPulseView extends ItemView {
@@ -5050,11 +5378,16 @@ class CrispPulseView extends ItemView {
     // 回到前台：天体校正位置；湖面上的船在后台画的时候没开每秒更新，这里补上
     this.registerDomEvent(win, 'focus', () => { this.updateCelestial(true); this.startVoyage(); });
     this.registerDomEvent(container.ownerDocument, 'visibilitychange', () => {
-      if (!container.ownerDocument.hidden) { this.updateCelestial(true); this.startVoyage(); }
+      if (!container.ownerDocument.hidden) { this.updateCelestial(true); this.startVoyage(); this.queueCelebration(this.plugin.pendingMilestone?.()); }
     });
+    // 速记变了（记下、转化、删除）：只更新页脚的纸船和飞鸟，不重画看板
+    this.registerEvent(this.app.workspace.on("crisp-pulse:state", (event) => {
+      if (event?.reason === "memos") void this.updatePaperBoats();
+    }));
     // Tempo 启用、停用时页脚入口和明细里的任务链接跟着变；Tempo 编辑任务也会发这个事件，所以只在可用与否翻转时重绘
     this.tempoWasLinked = this.plugin.tempoLinked();
     this.registerEvent(this.app.workspace.on("crisp-tempo:state", () => {
+      void this.checkLanterns();
       win.setTimeout(() => {
         const linked = this.plugin.tempoLinked();
         if (linked === this.tempoWasLinked || !container.isConnected) return;
@@ -5089,6 +5422,7 @@ class CrispPulseView extends ItemView {
   async onClose() {
     if (this.pomodoroTicker) window.clearInterval(this.pomodoroTicker);
     if (this.voyageTicker) window.clearInterval(this.voyageTicker);
+    this.celebrationObserver?.disconnect();
     this.analyticsResizeObserver?.disconnect();
     this.footerResizeObserver?.disconnect();
     this.bannerResizeObserver?.disconnect();
@@ -6231,6 +6565,16 @@ class CrispPulseView extends ItemView {
     brand.createSpan({ cls: "crisp-pulse-footer-name", text: "Crisp Pulse" });
     if (this.plugin.manifest?.version) brand.createSpan({ cls: "crisp-pulse-footer-version", text: this.plugin.manifest.version });
     const caption = info.createDiv({ cls: "crisp-pulse-footer-caption" });
+    // 点一下（或回车、空格）展开全部图例，手机上没有悬停也能看
+    const toggleLegend = () => {
+      if (!caption.hasClass("has-legend")) return;
+      this.footerLegendOpen = !this.footerLegendOpen;
+      this.setFooterCaption();
+    };
+    caption.addEventListener("click", toggleLegend);
+    caption.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleLegend(); }
+    });
     const links = info.createDiv({ cls: "crisp-pulse-footer-links" });
     const link = (text, fn) => {
       const a = links.createEl("button", { cls: "crisp-pulse-footer-link", text, attr: { type: "button" } });
@@ -6247,8 +6591,10 @@ class CrispPulseView extends ItemView {
     const ground = footer.createDiv({ cls: "crisp-pulse-footer-ground" });
     const canvas = ground.createEl("canvas", { attr: { "aria-hidden": "true" } });
     const tip = ground.createDiv({ cls: "crisp-pulse-footer-tip", attr: { "aria-hidden": "true" } });
+    const harbor = ground.createEl("canvas", { cls: "crisp-pulse-voyager crisp-pulse-harbor", attr: { "aria-hidden": "true" } });
+    const paper = ground.createEl("canvas", { cls: "crisp-pulse-voyager crisp-pulse-harbor is-paper", attr: { "aria-hidden": "true" } });
     const voyager = ground.createEl("canvas", { cls: "crisp-pulse-voyager", attr: { "aria-hidden": "true" } });
-    this.footerEls = { footer, ground, canvas, tip, caption, locked, voyager };
+    this.footerEls = { footer, ground, canvas, tip, caption, locked, voyager, harbor, paper };
     this.observeFooterSize(ground);
     this.paintFooter();
     this.startVoyage();
@@ -6312,6 +6658,8 @@ class CrispPulseView extends ItemView {
     const today = getTodayKey();
     const todayNumber = reviewDayNumber(today);
     let dates = [], values = [], statuses = [], streak = [], streakLength = 0;
+    const weather = els.locked ? null : this.currentWeather();
+    const season = this.currentSeason();
     if (!els.locked) {
       // 和看板一样按当前数据范围取分；天数也从这个范围里最早的一条算起
       const daily = this.plugin.store?.daily || {};
@@ -6331,6 +6679,9 @@ class CrispPulseView extends ItemView {
       dates.forEach((d, i) => { const k = reviewDayNumber(d); if (k > cursor && k <= last) streak.push(i); });
     }
     const profile = buildGroundProfile(values, width);
+    // 贡献最高的那天，山顶积雪
+    let snowPeak = -1;
+    values.forEach((v, i) => { if (v > 0 && (snowPeak < 0 || v > values[snowPeak])) snowPeak = i; });
     this.footerMode = this.currentBannerMode();
     els.canvas.width = width;
     els.canvas.height = height;
@@ -6339,22 +6690,47 @@ class CrispPulseView extends ItemView {
     const reflection = sky && Number.isFinite(sky.x) ? sky : null;
     this.footerReflectionKey = pulseReflectionKey(reflection, width);
     paintPulseGround(els.canvas, this.footerMode, profile, dates.length ? groundDayX(dates.length - 1, dates.length, width) : -1,
-      { reflection, stones: streak.map((i) => groundDayX(i, dates.length, width)) });
+      { reflection, stones: streak.map((i) => groundDayX(i, dates.length, width)), weather: weather?.level, season, snowX: snowPeak >= 0 ? groundDayX(snowPeak, dates.length, width) : -1 });
     this.footerData = { dates, values, statuses, profile, width, height, streak, streakLength };
     this.footerPaintedWidth = cssWidth;
     this.footerPaintedHeight = rect.height;
     let peak = -1;
     values.forEach((v, i) => { if (v > 0 && (peak < 0 || v > values[peak])) peak = i; });
+    // 说明只留一句（山脊），其余元素的含义进图例：悬停看提示，点一下展开
     const caption = els.locked ? "" : peak < 0 ? tr("开始写作后，这里会长出你的贡献山脊", "Start writing and your contribution ridge will grow here")
-      : tr(`山脊是最近 ${dates.length} 天的贡献 · 峰值 ${Number(dates[peak].slice(5, 7))}月${Number(dates[peak].slice(8))}日 · ${this.footerMode === "night" ? "小灯" : "小旗"}是今天`,
-        `The ridge shows the last ${dates.length} days of contributions · peak ${pulseMonthDay(Number(dates[peak].slice(5, 7)), Number(dates[peak].slice(8)))} · the ${this.footerMode === "night" ? "lamp" : "flag"} is today`);
-    const streakNote = caption && streakLength >= 2 ? tr(` · 小石子是连续 ${streakLength} 天`, ` · pebbles mark a ${streakLength}-day streak`) : "";
-    els.captionText = caption + streakNote;
-    els.caption.setText(els.captionText);
+      : tr(`山脊是最近 ${dates.length} 天的贡献`, `The ridge shows the last ${dates.length} days of contributions`);
+    const legend = [];
+    if (peak >= 0) {
+      legend.push(tr(`峰值 ${Number(dates[peak].slice(5, 7))}月${Number(dates[peak].slice(8))}日，山顶积雪的地方`, `Peak ${pulseMonthDay(Number(dates[peak].slice(5, 7)), Number(dates[peak].slice(8)))}, where the snow cap is`));
+      legend.push(this.footerMode === "night" ? tr("小灯是今天", "The lamp is today") : tr("小旗是今天", "The flag is today"));
+    }
+    if (caption && streakLength >= 2) legend.push(tr(`小石子是连续 ${streakLength} 天`, `Pebbles mark a ${streakLength}-day streak`));
+    // 今天完成的番茄停在右边岸边；数量取 Pulse 自己的专注记录，未激活时不读
+    const moored = els.locked ? 0 : dayPomodoros(this.plugin.store?.daily?.[today]).done;
+    const harbor = groundHarborSpot(moored, width, height);
+    this.footerHarborX = harbor ? harbor.x : width - 4;
+    if (els.harbor) {
+      els.harbor.toggleClass("is-visible", !!harbor);
+      if (harbor) {
+        const size = paintPulseVoyager(els.harbor, harbor.sprite, this.footerMode);
+        els.harbor.style.width = `${size.w / width * 100}%`;
+        els.harbor.style.left = `${harbor.x / width * 100}%`;
+        els.harbor.style.top = `${harbor.y / height * 100}%`;
+      }
+    }
+    if (caption && moored > 0) legend.push(tr(`右边岸边的小船是今天完成的 ${moored} 个番茄`, `Boats at the right shore are today’s ${moored} finished pomodoros`));
+    if (caption) legend.push(tr(`树的颜色是现在的季节：${PULSE_SEASON_LABELS[season][0]}`, `Tree colors follow the season: ${PULSE_SEASON_LABELS[season][1]}`));
+    if (caption && weather) legend.push(tr(`天气是最近 7 天写了 ${weather.active} 天：${PULSE_WEATHER_LABELS[weather.level][0]}`, `The weather is the last 7 days: ${weather.active} active, ${PULSE_WEATHER_LABELS[weather.level][1]}`));
+    els.captionText = caption;
+    els.legend = legend;
+    this.celebrationNote = "";
+    this.setFooterCaption();
     // 尺寸变了，船要按新的像素格重新定位；说明文字刚重置，船的那句也要重新接上
     this.voyageKey = null;
     this.voyageNote = "";
     this.updateVoyage();
+    if (!els.locked) this.queueCelebration(this.plugin.pendingMilestone?.());
+    if (!els.locked) { void this.updatePaperBoats(); void this.checkLanterns(); }
   }
 
   /* 番茄钟进行时湖面上的帆船（专注）或小鸭子（休息）：从左往右，位置就是这一段的进度。
@@ -6382,26 +6758,251 @@ class CrispPulseView extends ItemView {
     const active = !!snap && snap.status !== "idle" && snap.plannedMs > 0 && (snap.kind === "focus" || snap.kind === "break");
     el.toggleClass("is-visible", active);
     if (!active) {
-      if (this.voyageNote) { this.voyageNote = ""; els.caption.setText(els.captionText || ""); }
+      if (this.voyageNote) { this.voyageNote = ""; this.setFooterCaption(); }
       return snap;
     }
-    const kind = snap.kind === "break" ? "duck" : "boat";
+    // 长休前刚完成了一整轮（every 个番茄），鸭妈妈带着这一轮的小鸭
+    const kind = snap.kind !== "break" ? "boat" : snap.phase === "long-break" ? "family" : "duck";
+    const ducklings = kind === "family" ? Math.max(1, Math.round(Number(snap.every) || 4)) : 0;
     const { width, height } = this.footerData;
-    const key = `${kind}:${this.footerMode}:${width}x${height}`;
+    const key = `${kind}:${ducklings}:${this.footerMode}:${width}x${height}`;
     if (key !== this.voyageKey) {
-      this.voyageSprite = paintPulseVoyager(el, kind, this.footerMode);
+      this.voyageSprite = paintPulseVoyager(el, pulseVoyagerSprite(kind, ducklings), this.footerMode);
       this.voyageKey = key;
       el.style.width = `${this.voyageSprite.w / width * 100}%`;
       el.style.setProperty("--pulse-voyager-rows", String(this.voyageSprite.h));
     }
     const progress = 1 - snap.remainingMs / snap.plannedMs;
-    const { x, y } = groundVoyagerSpot(progress, width, height, this.voyageSprite);
+    const { x, y } = groundVoyagerSpot(progress, width, height, this.voyageSprite, kind === "boat" ? (this.footerHarborX ?? width - 4) - 2 : width - 4, (this.footerPaperRight ?? 2) + 2);
     el.style.left = `${x / width * 100}%`;
     el.style.top = `${y / height * 100}%`;
     el.toggleClass("is-paused", snap.status === "paused");
-    const note = kind === "boat" ? tr(" · 帆船是这一段专注的进度", " · the boat sails with this focus session") : tr(" · 小鸭子在陪你休息", " · the duck keeps you company on the break");
-    if (note !== this.voyageNote && els.captionText) { this.voyageNote = note; els.caption.setText(els.captionText + note); }
+    const note = kind === "boat" ? tr(" · 帆船是这一段专注的进度", " · the boat sails with this focus session")
+      : kind === "family" ? tr(` · 鸭妈妈带着这一轮的 ${ducklings} 只小鸭在长休`, ` · the mother duck leads this set’s ${ducklings} ducklings on the long break`)
+      : tr(" · 小鸭子在陪你休息", " · the duck keeps you company on the break");
+    if (note !== this.voyageNote && els.captionText) { this.voyageNote = note; this.setFooterCaption(); }
     return snap;
+  }
+
+  /* 速记在湖上：今天还没处理（没转成任务、笔记或 Now 行动）的速记停在左边岸边，一条一只纸船；
+     今天的条数变多了（刚记了一条），湖面飞起一只小鸟，夜里是萤火虫。读速记要扫库，所以异步，回来时页脚换了就作废。 */
+  async updatePaperBoats() {
+    const els = this.footerEls;
+    if (!els?.paper || els.locked) return;
+    const token = (this.paperToken = (this.paperToken || 0) + 1);
+    let memos = null;
+    try { memos = (await this.plugin.getTodaySnapshot?.())?.memos ?? null; } catch (_) { memos = null; }
+    if (token !== this.paperToken || els !== this.footerEls || !els.paper.isConnected || !this.footerData) return;
+    const { width, height } = this.footerData;
+    const pending = memos?.pending || 0;
+    const spot = groundPaperSpot(pending, width, height);
+    this.footerPaperRight = spot ? spot.x + spot.sprite.rows[0].length : null;
+    els.paper.toggleClass("is-visible", !!spot);
+    if (spot) {
+      const size = paintPulseVoyager(els.paper, spot.sprite, this.footerMode);
+      els.paper.style.width = `${size.w / width * 100}%`;
+      els.paper.style.left = `${spot.x / width * 100}%`;
+      els.paper.style.top = `${spot.y / height * 100}%`;
+    }
+    const night = this.footerMode === "night";
+    els.legendExtra = memos ? [
+      ...(pending ? [tr(`左边岸边的纸船是今天还没处理的 ${pending} 条速记`, `Paper boats at the left shore are today’s ${pending} unprocessed memos`)] : []),
+      night ? tr("记一条速记，湖上会飞起一只萤火虫", "Each new memo sends a firefly up from the lake") : tr("记一条速记，湖上会飞起一只小鸟", "Each new memo sends a bird up from the lake"),
+    ] : [];
+    this.setFooterCaption();
+    // 今天的条数比上次多：飞几只鸟（一次最多 3 只）。第一次读、换了一天都只记下数字不飞
+    const day = getTodayKey();
+    const before = this.memoSeen?.date === day ? this.memoSeen.today : null;
+    if (memos) this.memoSeen = { date: day, today: memos.today };
+    if (memos && before !== null && memos.today > before) this.releaseBirds(Math.min(3, memos.today - before), spot);
+    // 船从纸船队后面出发：纸船数变了，正在走的船也要按新的起点摆
+    this.voyageKey = null;
+    this.updateVoyage();
+  }
+
+  /* Tempo 今天完成的任务数（Crisp Tempo 0.6.0 起的 getCompletedToday）：比上次多了就升起孔明灯，一次最多 3 盏。
+     第一次读、换了一天都只记下数字；旧版 Tempo 没这个接口就什么都不做。 */
+  async checkLanterns() {
+    const els = this.footerEls;
+    if (!els?.ground || els.locked) return;
+    const tempo = this.app?.plugins?.plugins?.["crisp-tempo"];
+    const token = (this.lanternToken = (this.lanternToken || 0) + 1);
+    let done = null;
+    try { done = tempo && !tempo.unloaded && typeof tempo.getCompletedToday === "function" ? await tempo.getCompletedToday() : null; } catch (_) { done = null; }
+    if (token !== this.lanternToken || els !== this.footerEls) return;
+    const count = Number.isFinite(done?.count) ? done.count : null;
+    els.legendTempo = count === null ? []
+      : [count ? tr(`今天在 Tempo 完成了 ${count} 个任务，每完成一个湖面升起一盏孔明灯`, `${count} Tempo tasks done today; each one sends a lantern up from the lake`)
+        : tr("在 Tempo 完成一个任务，湖面会升起一盏孔明灯", "Finish a Tempo task and a lantern rises from the lake")];
+    this.setFooterCaption();
+    if (count === null) return;
+    const before = this.tempoSeen?.date === done.date ? this.tempoSeen.count : null;
+    this.tempoSeen = { date: done.date, count };
+    if (before !== null && count > before) this.releaseLanterns(Math.min(3, count - before));
+  }
+
+  releaseLanterns(count) {
+    const els = this.footerEls, d = this.footerData;
+    if (!els?.ground?.isConnected || !d) return;
+    const doc = els.ground.ownerDocument, win = doc.defaultView;
+    const rect = els.ground.getBoundingClientRect();
+    if (doc.hidden || rect.bottom < 0 || rect.top > win.innerHeight || !rect.width || win.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const px = rect.width / d.width, lake = groundLakeTop(d.height);
+    for (let i = 0; i < count; i++) {
+      const el = els.ground.createEl("canvas", { cls: "crisp-pulse-sky-event is-lantern", attr: { "aria-hidden": "true" } });
+      const size = paintPulseLantern(el, this.footerMode);
+      el.style.width = `${size.w * px}px`;
+      // 从湖面中段升起，几盏错开位置和时间
+      const x = Math.round(d.width * (0.38 + 0.12 * i)), rise = (lake - 18) * px, sway = 3 * px;
+      el.style.left = `${x * px}px`;
+      el.style.top = `${(lake - 2) * px}px`;
+      const flight = el.animate?.([
+        { transform: "translate(0, 0)", opacity: 0 },
+        { transform: `translate(${sway}px, ${-rise * 0.25}px)`, opacity: 1, offset: 0.15 },
+        { transform: `translate(${-sway}px, ${-rise * 0.6}px)`, opacity: 1, offset: 0.55 },
+        { transform: `translate(${sway}px, ${-rise}px)`, opacity: 0 },
+      ], { duration: 6500, delay: i * 700, easing: "ease-in-out", fill: "both" });
+      if (flight) flight.onfinish = () => el.remove();
+      else el.remove();
+    }
+  }
+
+  releaseBirds(count, paperSpot) {
+    const els = this.footerEls, d = this.footerData;
+    if (!els?.ground?.isConnected || !d) return;
+    const doc = els.ground.ownerDocument, win = doc.defaultView;
+    const rect = els.ground.getBoundingClientRect();
+    // 看不见（页脚不在视口里、窗口在后台）或者用户关了动画，就不飞
+    if (doc.hidden || rect.bottom < 0 || rect.top > win.innerHeight || !rect.width || win.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const px = rect.width / d.width;
+    const mode = this.footerMode;
+    const lake = groundLakeTop(d.height);
+    // 从最新那只纸船附近起飞（没有纸船就从左边湖面）
+    const fromX = paperSpot ? paperSpot.x + paperSpot.sprite.rows[0].length - 4 : 8;
+    for (let i = 0; i < count; i++) {
+      const box = els.ground.createDiv({ cls: `crisp-pulse-bird${mode === "night" ? " is-firefly" : ""}`, attr: { "aria-hidden": "true" } });
+      const art = box.createEl("canvas");
+      const size = paintPulseBird(art, mode);
+      box.style.width = `${size.w * px}px`;
+      box.style.height = `${size.h * px}px`;
+      box.style.left = `${(fromX + i * 3) * px}px`;
+      box.style.top = `${(lake - 2) * px}px`;
+      // 飞到页脚说明下面就消失，不穿过文字
+      const dx = (40 + i * 12) * px, dy = Math.max(10, lake - 30 - i * 3) * px;
+      const frames = mode === "night"
+        ? [{ transform: "translate(0, 0)", opacity: 0 }, { transform: `translate(${dx * 0.3}px, ${-dy * 0.35}px)`, opacity: 1, offset: 0.3 },
+          { transform: `translate(${dx * 0.55}px, ${-dy * 0.55}px)`, opacity: 0.4, offset: 0.55 }, { transform: `translate(${dx * 0.8}px, ${-dy * 0.8}px)`, opacity: 1, offset: 0.8 },
+          { transform: `translate(${dx}px, ${-dy}px)`, opacity: 0 }]
+        : [{ transform: "translate(0, 0)", opacity: 0 }, { opacity: 1, offset: 0.12 }, { transform: `translate(${dx * 0.5}px, ${-dy * 0.7}px)`, offset: 0.6 },
+          { transform: `translate(${dx}px, ${-dy}px)`, opacity: 0 }];
+      const flight = box.animate?.(frames, { duration: mode === "night" ? 3200 : 2600, delay: i * 350, easing: "ease-out", fill: "both" });
+      if (flight) flight.onfinish = () => box.remove();
+      else box.remove();
+    }
+  }
+
+  currentSeason() {
+    return pulseSeason(new Date());
+  }
+
+  /** 最近 7 天的天气（按当前数据范围，和看板「当前连续」同一口径）。调用方负责未激活时不调。 */
+  currentWeather() {
+    const daily = this.plugin.store?.daily || {};
+    const active = (k) => {
+      const d = reviewDayKey(k);
+      return !!daily[d] && this.plugin.recordMatchesScope(daily[d], d, this.currentScope) && isRecordActive(daily[d]);
+    };
+    return pulseWeatherFor(active, reviewDayNumber(getTodayKey()));
+  }
+
+  /** 页脚说明：固定部分 + 湖上正在走的船 + 正在放的流星/彩虹。 */
+  setFooterCaption() {
+    const els = this.footerEls;
+    if (!els?.caption) return;
+    const main = els.captionText ? els.captionText + (this.voyageNote || "") + (this.celebrationNote || "") : "";
+    const legend = els.captionText ? [...(els.legend || []), ...(els.legendExtra || []), ...(els.legendTempo || [])] : [];
+    const open = !!this.footerLegendOpen && legend.length > 0;
+    els.caption.setText(open ? [main, ...legend].join(" · ") : main);
+    els.caption.toggleClass("has-legend", legend.length > 0);
+    els.caption.toggleClass("is-expanded", open);
+    if (legend.length) {
+      // 悬停提示一行一条；读屏读完整内容
+      els.caption.setAttr("aria-label", [main, ...legend].join("\n"));
+      els.caption.setAttr("data-tooltip-position", "top");
+      els.caption.setAttr("role", "button");
+      els.caption.setAttr("tabindex", "0");
+      els.caption.setAttr("aria-expanded", String(open));
+    } else {
+      for (const a of ["aria-label", "data-tooltip-position", "role", "tabindex", "aria-expanded"]) els.caption.removeAttribute?.(a);
+    }
+  }
+
+  /* 达标的小仪式：页脚真的露出来（滚到底、窗口在前台）才放，放了就记下今天，一天一次。 */
+  queueCelebration(milestone) {
+    const els = this.footerEls;
+    if (!milestone || !els?.ground?.isConnected || els.locked || this.celebrating) return;
+    this.celebrationPending = milestone;
+    const win = els.ground.ownerDocument.defaultView;
+    if (!win?.IntersectionObserver) return;
+    this.celebrationObserver?.disconnect();
+    const ground = els.ground;
+    this.celebrationObserver = new win.IntersectionObserver((entries) => {
+      const seen = entries.some((e) => e.isIntersecting && e.intersectionRatio >= 0.6);
+      if (!seen || ground !== this.footerEls?.ground || !ground.isConnected || ground.ownerDocument.hidden || !this.celebrationPending) return;
+      this.celebrationObserver?.disconnect();
+      this.celebrationObserver = null;
+      const m = this.celebrationPending;
+      this.celebrationPending = null;
+      this.playCelebration(m);
+    }, { threshold: [0.6] });
+    this.celebrationObserver.observe(ground);
+  }
+
+  playCelebration(milestone) {
+    const els = this.footerEls, d = this.footerData;
+    if (!els?.ground?.isConnected || !d) return;
+    // 先记下今天放过：中途重画、关掉面板都不再重放
+    this.plugin.settings.celebratedOn = milestone.date;
+    void this.plugin.savePluginData();
+    const win = els.ground.ownerDocument.defaultView;
+    const still = !!win.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const night = this.footerMode === "night";
+    const what = night ? tr("流星", "Shooting stars") : tr("彩虹", "Rainbow");
+    this.celebrationNote = milestone.reason === "pomodoro"
+      ? tr(` · ${what}：今天的 ${milestone.goal} 个番茄目标达成了`, ` · ${what}: today’s goal of ${milestone.goal} pomodoros is done`)
+      : tr(` · ${what}：今天的贡献分进了最近 30 天的前四分之一`, ` · ${what}: today’s score is in the top quarter of the last 30 days`);
+    this.setFooterCaption();
+    this.celebrating = true;
+    const pieces = [];
+    let duration;
+    if (night) {
+      // 三颗流星错开划过页脚的天空（山脊上方、说明文字下方）
+      const paths = [[0.12, 0.24, 0], [0.42, 0.18, 900], [0.7, 0.3, 2000]];
+      for (const [fx, fy, delay] of paths) {
+        const el = els.ground.createEl("canvas", { cls: "crisp-pulse-sky-event is-meteor", attr: { "aria-hidden": "true" } });
+        paintPulseMeteor(el);
+        el.style.width = `${PULSE_METEOR_SIZE[0] / d.width * 100}%`;
+        el.style.left = `${fx * 100}%`;
+        el.style.top = `${fy * 100}%`;
+        const frames = still
+          ? [{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }]
+          : [{ transform: "translate(0, 0)", opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 1, offset: 0.7 }, { transform: "translate(250%, 250%)", opacity: 0 }];
+        el.animate?.(frames, { duration: 1400, delay, easing: "ease-in", fill: "both" });
+        pieces.push(el);
+      }
+      duration = 3600;
+    } else {
+      const el = els.ground.createEl("canvas", { cls: "crisp-pulse-sky-event is-rainbow", attr: { "aria-hidden": "true" } });
+      paintPulseRainbow(el, d.width, d.height);
+      el.animate?.([{ opacity: 0 }, { opacity: 0.8, offset: 0.12 }, { opacity: 0.8, offset: 0.75 }, { opacity: 0 }], { duration: 10000, easing: "ease-in-out", fill: "both" });
+      pieces.push(el);
+      duration = 10000;
+    }
+    win.setTimeout(() => {
+      for (const el of pieces) el.remove();
+      this.celebrating = false;
+      if (this.footerEls === els && this.celebrationNote) { this.celebrationNote = ""; this.setFooterCaption(); }
+    }, duration + 200);
   }
 
   // Banner above the header: the user's image, else a sky matching the selected base-theme rule.
@@ -6418,7 +7019,12 @@ class CrispPulseView extends ItemView {
       return;
     }
     const canvas = banner.createEl("canvas", { attr: { width: PULSE_SKY_WIDTH, height: PULSE_SKY_HEIGHT } });
-    canvas.getContext("2d").drawImage(getPulseSky(parent.ownerDocument, this.bannerMode), 0, 0);
+    // 天气跟最近 7 天走；未激活时不读统计，保持默认的少云
+    let entitled = false;
+    try { entitled = pulseEntitled(this.plugin); } catch (_) { /* 授权状态读不到就当未激活 */ }
+    this.bannerWeather = (entitled && this.currentWeather()?.level) || "fair";
+    this.bannerSeason = this.currentSeason();
+    canvas.getContext("2d").drawImage(getPulseSky(parent.ownerDocument, this.bannerMode, this.bannerWeather, this.bannerSeason), 0, 0);
     this.celestialEl = banner.createEl("canvas", { cls: "crisp-pulse-celestial", attr: { width: PULSE_CELESTIAL_SIZE, height: PULSE_CELESTIAL_SIZE } });
     this.updateCelestial(true);
     const win = parent.ownerDocument.defaultView;
@@ -6441,10 +7047,13 @@ class CrispPulseView extends ItemView {
     if (mode !== this.bannerMode) {
       this.bannerMode = mode;
       const sky = banner.querySelector('canvas:not(.crisp-pulse-celestial)');
-      sky?.getContext('2d').drawImage(getPulseSky(doc, mode), 0, 0);
+      sky?.getContext('2d').drawImage(getPulseSky(doc, mode, this.bannerWeather, this.bannerSeason), 0, 0);
     }
     paintCelestial(el, mode, lunarPhase(now));
-    const { x, y, t, opacity } = celestialPlacement(now, mode, rect.width, rect.height);
+    const placed = celestialPlacement(now, mode, rect.width, rect.height);
+    const { x, y, t } = placed;
+    // 多云、起雾时太阳和月亮暗一些，湖里的倒影也跟着淡
+    const opacity = placed.opacity * (PULSE_WEATHER[this.bannerWeather]?.light ?? 1);
     const transform = `translate(${rect.width * x / 100}px, ${rect.height * y / 100}px) translate(-50%, -50%)`;
     const previous = this.celestialPosition;
     const reset = previous && (previous.mode !== mode || (previous.t === null) !== (t === null) || (t !== null && previous.t !== null && Math.abs(t - previous.t) > 0.05));

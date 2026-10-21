@@ -2715,6 +2715,9 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
   overflow-wrap: anywhere;
 }
 .crisp-pulse-view .crisp-pulse-footer-links { display: flex; gap: 14px; pointer-events: auto; }
+/* 说明可悬停看图例、点一下展开 */
+.crisp-pulse-view .crisp-pulse-footer-caption.has-legend { pointer-events: auto; cursor: help; }
+.crisp-pulse-view .crisp-pulse-footer-caption.has-legend:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; border-radius: 2px; }
 .crisp-pulse-view button.crisp-pulse-footer-link {
   height: auto;
   padding: 0;
@@ -2768,6 +2771,42 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 }
 .crisp-pulse-view .crisp-pulse-footer-ground canvas.crisp-pulse-voyager.is-visible { display: block; }
 .crisp-pulse-view .crisp-pulse-footer-ground canvas.crisp-pulse-voyager.is-paused { animation: none; }
+/* 达标时的彩虹（整幅，和地平线一样上沿渐隐）和流星（小精灵，不渐隐） */
+.crisp-pulse-view .crisp-pulse-footer-ground canvas.crisp-pulse-sky-event {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+.crisp-pulse-view .crisp-pulse-footer-ground canvas.crisp-pulse-sky-event.is-meteor,
+.crisp-pulse-view .crisp-pulse-footer-ground canvas.crisp-pulse-sky-event.is-lantern {
+  height: auto;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+/* 记下速记时飞起的小鸟：外框按一帧大小裁，里面两帧并排、来回切出扇翅膀；萤火虫只有一帧 */
+.crisp-pulse-view .crisp-pulse-bird {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
+}
+.crisp-pulse-view .crisp-pulse-footer-ground .crisp-pulse-bird canvas {
+  display: block;
+  width: 200%;
+  height: 100%;
+  image-rendering: pixelated;
+  -webkit-mask-image: none;
+  mask-image: none;
+  animation: crisp-pulse-bird-flap 0.32s steps(1, end) infinite;
+}
+.crisp-pulse-view .crisp-pulse-footer-ground .crisp-pulse-bird.is-firefly canvas { width: 100%; animation: none; }
+@keyframes crisp-pulse-bird-flap {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-50%); }
+}
+/* 岸边泊着的船不晃，免得页脚一直在动 */
+.crisp-pulse-view .crisp-pulse-footer-ground canvas.crisp-pulse-harbor { animation: none; }
 @keyframes crisp-pulse-voyager-bob {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(calc(100% / var(--pulse-voyager-rows, 11))); }

@@ -17,7 +17,7 @@ const context = {
   module: { exports: {} }, console, Date, window: { setTimeout, clearTimeout }, document: {}, setTimeout, clearTimeout, structuredClone, crypto: globalThis.crypto, TextEncoder, TextDecoder, Buffer, atob,
 };
 vm.runInNewContext(`${fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8')}
-module.exports.F = { celestialPlacement, lunarPhase, paintCelestial, buildGroundProfile, groundDayCount, groundDayX, paintPulseGround, getTodayKey, reviewDayKey, reviewDayNumber, PULSE_GROUND_MARGIN, CrispPulseView, groundVoyagerSpot, groundLakeTop, PULSE_VOYAGERS };`, context);
+module.exports.F = { celestialPlacement, lunarPhase, paintCelestial, buildGroundProfile, groundDayCount, groundDayX, paintPulseGround, getTodayKey, reviewDayKey, reviewDayNumber, PULSE_GROUND_MARGIN, CrispPulseView, groundVoyagerSpot, groundLakeTop, PULSE_VOYAGERS, pulseVoyagerSprite, groundHarborSpot, paintPulseRainbow, pulseWeatherFor, groundPaperSpot, pulseSeason };`, context);
 const F = context.module.exports.F;
 
 test('one huge day does not flatten the rest; no data stays flat', () => {
@@ -51,7 +51,7 @@ function footerView({ daily, locked = false, scope = 'reliable', celestial = nul
   const store = {};
   Object.defineProperty(store, 'daily', { get() { if (locked) throw new Error('未激活时读了统计'); return daily; } });
   v.plugin = { store, recordMatchesScope: (record, key, s) => s === 'all' || record.quality === 'recorded' };
-  v.footerEls = { canvas, ground: { getBoundingClientRect: () => ({ width: 600, height: 120 }) }, caption: { text: null, setText(t) { this.text = t; } }, locked };
+  v.footerEls = { canvas, ground: { getBoundingClientRect: () => ({ width: 600, height: 120 }) }, caption: { text: null, attrs: {}, classes: new Set(), setText(t) { this.text = t; }, setAttr(k, v) { this.attrs[k] = v; }, removeAttribute(k) { delete this.attrs[k]; }, toggleClass(c, on) { if (on) this.classes.add(c); else this.classes.delete(c); }, hasClass(c) { return this.classes.has(c); }, get full() { return this.attrs['aria-label'] ?? this.text; } }, locked };
   v.paintFooter();
   return { v, painted: () => painted };
 }
@@ -75,8 +75,8 @@ test('days outside the selected data scope do not raise the ridge', () => {
   const { dates, values } = v.footerData;
   assert.equal(dates.at(-1), today);
   assert.equal(values[dates.indexOf(ago(1))], 0, '可靠记录范围外的那天不算');
-  assert.match(v.footerEls.caption.text, new RegExp(`峰值 ${Number(ago(2).slice(5, 7))}月${Number(ago(2).slice(8))}日`));
-  assert.match(v.footerEls.caption.text, /小旗是今天/, '浅色主题下是小旗');
+  assert.match(v.footerEls.caption.full, new RegExp(`峰值 ${Number(ago(2).slice(5, 7))}月${Number(ago(2).slice(8))}日`));
+  assert.match(v.footerEls.caption.full, /小旗是今天/, '浅色主题下是小旗');
   assert.equal(v.footerEls.canvas.height * 2, 120, '画布高度跟显示高度走，像素保持方形');
 });
 
@@ -94,10 +94,10 @@ test('pebbles mark the current streak with the same rules as the streak tile', (
   const { v } = footerView({ daily });
   const { dates, streak } = v.footerData;
   assert.deepEqual([...streak.map((i) => dates[i])], [ago(4), ago(3), ago(2), ago(1)], '今天还没写不清零；范围外的那天打断连续；有效编辑也算活跃');
-  assert.match(v.footerEls.caption.text, /连续 4 天/);
+  assert.match(v.footerEls.caption.full, /连续 4 天/);
   const broken = footerView({ daily: { [ago(2)]: { quality: 'recorded', contribution: { score: 5 } } } }).v;
   assert.equal(broken.footerData.streak.length, 0, '昨天和今天都没写，连续已经断了');
-  assert.doesNotMatch(broken.footerEls.caption.text, /连续/);
+  assert.doesNotMatch(broken.footerEls.caption.full, /连续/);
 });
 
 function lakeLuminance({ celestial, bannerMode = 'day', at }) {
@@ -191,4 +191,189 @@ test('the boat note stays in the caption after the footer is repainted', () => {
   assert.match(v.footerEls.caption.text, /小鸭子/);
   v.paintFooter();
   assert.match(v.footerEls.caption.text, /小鸭子/, '重画后还在');
+});
+
+/* 长休的鸭妈妈和岸边的船队。失败模式：
+   - 小鸭数量和这一轮的番茄数对不上，或者小鸭和妈妈不在同一条吃水线上（有的飘在空中）；
+   - 船队伸出画布、占满湖面，窄面板里把整片湖都停满；
+   - 专注的帆船开进停着的船队里，叠在一起看不清。 */
+test('the long-break family has one duckling per pomodoro, all on one waterline', () => {
+  const fam = F.pulseVoyagerSprite('family', 4);
+  const duck = F.PULSE_VOYAGERS.duck, chick = F.PULSE_VOYAGERS.duckling;
+  assert.equal(fam.rows[0].length, 4 * (chick.rows[0].length + 1) + duck.rows[0].length);
+  assert.ok(fam.rows.every((r) => r.length === fam.rows[0].length));
+  const eyes = fam.rows.join('\n').split('e').length - 1;
+  assert.equal(eyes, 5, '4 只小鸭 + 鸭妈妈');
+  const row = fam.rows[fam.waterline];
+  assert.match(row.slice(0, chick.rows[0].length), /\S/, '小鸭的吃水线和妈妈对齐');
+  assert.equal(F.pulseVoyagerSprite('family', 30).rows[0].length, F.pulseVoyagerSprite('family', 8).rows[0].length, '小鸭有上限');
+});
+
+test('moored boats sit at the right shore inside the canvas, and the sailing boat stops before them', () => {
+  for (const [w, h] of [[800, 92], [180, 84]]) {
+    const harbor = F.groundHarborSpot(20, w, h);
+    const sw = harbor.sprite.rows[0].length;
+    assert.ok(harbor.x >= 0 && harbor.x + sw <= w, '船队不出画布');
+    assert.ok(sw <= w * 0.4 + 1, `船队不超过湖面四成：${sw}/${w}`);
+    assert.ok(harbor.y + harbor.sprite.waterline > F.groundLakeTop(h), '泊船在水里');
+    const boat = { w: F.PULSE_VOYAGERS.boat.rows[0].length, h: 11, waterline: 9, depth: 3 };
+    const end = F.groundVoyagerSpot(1, w, h, boat, harbor.x - 2);
+    assert.ok(end.x + boat.w <= harbor.x, '帆船停在船队前面');
+  }
+  assert.equal(F.groundHarborSpot(0, 800, 92), null, '没完成番茄就不停船');
+});
+
+/* 彩虹：脚落在湖面上、不伸出画布；倒影比天上的淡。 */
+test('the rainbow stands on the lake inside the canvas, its reflection fainter', () => {
+  let img = null;
+  const canvas = { width: 0, height: 0, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData: (i) => { img = i; } }) };
+  const w = 300, h = 92;
+  F.paintPulseRainbow(canvas, w, h);
+  const lake = F.groundLakeTop(h);
+  const alpha = (x, y) => img.data[(y * w + x) * 4 + 3];
+  let sky = 0, water = 0, maxSky = 0, maxWater = 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const a = alpha(x, y);
+    if (!a) continue;
+    if (y < lake) { sky++; maxSky = Math.max(maxSky, a); } else { water++; maxWater = Math.max(maxWater, a); }
+  }
+  assert.ok(sky > 0 && water > 0, '天上有彩虹，湖里有倒影');
+  assert.ok(maxWater < maxSky, '倒影更淡');
+  assert.ok([...Array(w).keys()].some((x) => alpha(x, lake - 1)), '彩虹的脚落到湖面');
+});
+
+/* 天气跟最近 7 天写了几天。失败模式：
+   - 今天还没开始写，一早打开就因为「今天没写」掉一档；
+   - 档位边界算错（7 天写了 6 天却不是晴）；
+   - 起雾的地平线和平常一样，看不出来。 */
+test('the weather follows how many of the last 7 days were active', () => {
+  const T = 1000;
+  const days = (set) => (k) => set.has(k);
+  const last = (n, end = T) => new Set(Array.from({ length: n }, (_, i) => end - i));
+  assert.deepEqual({ ...F.pulseWeatherFor(days(last(7)), T) }, { level: 'clear', active: 7 });
+  assert.equal(F.pulseWeatherFor(days(last(6, T - 1)), T).level, 'clear', '今天还没写：从昨天往前数，不掉档');
+  assert.equal(F.pulseWeatherFor(days(last(5)), T).level, 'fair');
+  assert.equal(F.pulseWeatherFor(days(last(4)), T).level, 'fair');
+  assert.equal(F.pulseWeatherFor(days(last(3)), T).level, 'cloudy');
+  assert.equal(F.pulseWeatherFor(days(last(2)), T).level, 'cloudy');
+  assert.equal(F.pulseWeatherFor(days(last(1)), T).level, 'fog');
+  assert.equal(F.pulseWeatherFor(days(new Set([T - 20])), T).level, 'fog', '7 天以前的不算');
+});
+
+test('a foggy horizon looks different from a fair one', () => {
+  const paint = (weather) => {
+    let img = null;
+    const canvas = { width: 200, height: 92, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData: (i) => { img = i; } }) };
+    F.paintPulseGround(canvas, 'day', new Float32Array(200).fill(0.4), 180, { weather });
+    return img.data;
+  };
+  const fair = paint('fair'), fog = paint('fog');
+  let changed = 0;
+  for (let i = 0; i < fair.length; i += 4) if (fair[i] !== fog[i] || fair[i + 1] !== fog[i + 1] || fair[i + 2] !== fog[i + 2]) changed++;
+  assert.ok(changed > fair.length / 4 * 0.3, `起雾要明显：只变了 ${changed} 个像素`);
+  assert.deepEqual([...paint('clear')], [...fair], '晴和少云的地平线一样，区别只在天上的云');
+});
+
+/* 说明太长会挤成两三行。失败模式：图例又塞回说明；悬停提示里漏了内容；展开后收不回去。 */
+test('the caption keeps one sentence; the rest is in the hover legend and expands on click', () => {
+  const today = F.getTodayKey();
+  const n = F.reviewDayNumber(today);
+  const daily = {};
+  for (let i = 0; i < 5; i++) daily[F.reviewDayKey(n - i)] = { quality: 'recorded', contribution: { score: 10 + i, notesCreated: 1 }, activity: {} };
+  const { v } = footerView({ daily });
+  const c = v.footerEls.caption;
+  assert.match(c.text, /^山脊是最近 \d+ 天的贡献$/, `说明只留一句：${c.text}`);
+  assert.match(c.attrs['aria-label'], /峰值/);
+  assert.match(c.attrs['aria-label'], /天气是最近 7 天/);
+  assert.equal(c.attrs['data-tooltip-position'], 'top');
+  v.footerLegendOpen = true; v.setFooterCaption();
+  assert.match(c.text, /峰值/, '点开后全部显示');
+  assert.equal(c.attrs['aria-expanded'], 'true');
+  v.footerLegendOpen = false; v.setFooterCaption();
+  assert.doesNotMatch(c.text, /峰值/, '再点收起');
+});
+
+/* 速记的纸船和飞鸟。失败模式：
+   - 纸船挤满湖面、伸出画布，或者帆船从纸船身上开过去；
+   - 打开看板、重载插件时把今天已有的速记当成「刚记的」，一下飞起一群鸟；
+   - 条数变少（转化、删除）也飞鸟；换了一天把昨天的条数当基准。 */
+test('paper boats stay at the left shore, and the sailing boat starts after them', () => {
+  for (const [w, h] of [[800, 92], [180, 84]]) {
+    const spot = F.groundPaperSpot(30, w, h);
+    const sw = spot.sprite.rows[0].length;
+    assert.ok(spot.x >= 0 && sw <= w * 0.3 + 1, `纸船不超过湖面三成：${sw}/${w}`);
+    assert.ok(spot.y + spot.sprite.waterline > F.groundLakeTop(h), '纸船在水里');
+    const boat = { w: 14, h: 11, waterline: 9, depth: 3 };
+    assert.ok(F.groundVoyagerSpot(0, w, h, boat, w - 4, spot.x + sw + 2).x >= spot.x + sw, '帆船从纸船后面出发');
+  }
+  assert.equal(F.groundPaperSpot(0, 800, 92), null);
+});
+
+test('birds fly only when today’s memo count grows', async () => {
+  const { v } = footerView({ daily: {} });
+  const flown = [];
+  v.releaseBirds = (n) => flown.push(n);
+  v.footerEls.paper = { isConnected: true, style: {}, toggleClass() {}, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} }) };
+  let memos = { today: 4, pending: 2 };
+  v.plugin.getTodaySnapshot = async () => ({ memos });
+  await v.updatePaperBoats();
+  assert.deepEqual(flown, [], '第一次读只记下条数');
+  memos = { today: 5, pending: 3 };
+  await v.updatePaperBoats();
+  assert.deepEqual(flown, [1], '记了一条，飞一只');
+  memos = { today: 4, pending: 2 };
+  await v.updatePaperBoats();
+  memos = { today: 12, pending: 2 };
+  await v.updatePaperBoats();
+  assert.deepEqual(flown, [1, 3], '删了不飞；一次多条最多 3 只');
+  v.memoSeen = { date: '2000-01-01', today: 0 };
+  await v.updatePaperBoats();
+  assert.deepEqual(flown, [1, 3], '换了一天不拿昨天比');
+  assert.match(v.footerEls.caption.attrs['aria-label'], /纸船是今天还没处理的 2 条速记/);
+});
+
+/* 季节和峰值积雪。失败模式：季节边界错一个月；积雪没落在峰值那天的列上，或者没有峰值时也画雪；换季后树色没变。 */
+test('seasons follow the month, and the snow cap sits on the peak day', () => {
+  const months = [1, 2, 3, 5, 6, 8, 9, 11, 12].map((m) => F.pulseSeason(new Date(2026, m - 1, 15)));
+  assert.deepEqual(months, ['winter', 'winter', 'spring', 'spring', 'summer', 'summer', 'autumn', 'autumn', 'winter']);
+  const paint = (opts) => {
+    let img = null;
+    const canvas = { width: 200, height: 92, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData: (i) => { img = i; } }) };
+    const profile = new Float32Array(200).fill(0.3);
+    for (let x = 90; x < 110; x++) profile[x] = 0.9;
+    F.paintPulseGround(canvas, 'day', profile, 180, opts);
+    return img.data;
+  };
+  const white = (d, x0, x1) => { let n = 0; for (let y = 0; y < 92; y++) for (let x = x0; x < x1; x++) { const o = (y * 200 + x) * 4; if (d[o] > 235 && d[o + 1] > 235 && d[o + 2] > 235) n++; } return n; };
+  const snowy = paint({ snowX: 100 }), plain = paint({});
+  assert.ok(white(snowy, 92, 108) > white(plain, 92, 108) + 10, '峰值那几列山顶有雪');
+  assert.equal(white(snowy, 0, 60), white(plain, 0, 60), '别处不画雪');
+  const autumn = paint({ season: 'autumn' }), summer = paint({});
+  assert.notDeepEqual([...autumn], [...summer], '秋天的树色和夏天不一样');
+});
+
+/* Tempo 完成任务的孔明灯。失败模式：打开看板就把今天已完成的任务全放一遍；取消、撤销完成（数字变小）也放；
+   换了一天拿昨天比；旧版 Tempo 没有接口时报错或乱放。 */
+test('lanterns rise only when Tempo’s done-today count grows', async () => {
+  const { v } = footerView({ daily: {} });
+  const released = [];
+  v.releaseLanterns = (n) => released.push(n);
+  let done = { date: '2026-10-21', count: 10 };
+  v.app = { plugins: { plugins: { 'crisp-tempo': { getCompletedToday: async () => done } } } };
+  await v.checkLanterns();
+  assert.deepEqual(released, [], '第一次读只记下数字');
+  done = { date: '2026-10-21', count: 11 };
+  await v.checkLanterns();
+  done = { date: '2026-10-21', count: 10 };
+  await v.checkLanterns();
+  done = { date: '2026-10-21', count: 20 };
+  await v.checkLanterns();
+  assert.deepEqual(released, [1, 3], '完成一个放一盏；撤销不放；一次最多 3 盏');
+  done = { date: '2026-10-22', count: 25 };
+  await v.checkLanterns();
+  assert.deepEqual(released, [1, 3], '换了一天不拿昨天比');
+  assert.match(v.footerEls.caption.attrs['aria-label'], /完成了 25 个任务/);
+  v.app.plugins.plugins['crisp-tempo'] = { activateView() {} };
+  await v.checkLanterns();
+  assert.doesNotMatch(v.footerEls.caption.attrs['aria-label'] || '', /孔明灯/, '旧版 Tempo：不显示也不报错');
 });

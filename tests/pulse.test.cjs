@@ -3105,6 +3105,35 @@ test('an idle Pulse moves to the new day at midnight and announces it', async ()
   assert.equal(states().length, before + 1, '同一天不重复发');
 });
 
+/* 达标的流星/彩虹。失败模式：
+   - 没达到番茄目标、分数也平平却放了（太容易就不稀罕）；数据太少（刚开始用）就拿几天的分数比；
+   - 一天放好几次，或者重开 Obsidian 又放一次；
+   - 中断的番茄也算进目标。 */
+test('the milestone fires on the pomodoro goal or a top-quarter score, once a day', async () => {
+  const { p, helpers } = pulseStateFixture();
+  await p.loadPluginData();
+  p.settings.enableCrispFocusSync = true;
+  p.focusAdapter = { getFocusPlugin: () => ({ focusApiVersion: 2, getPomodoroSnapshot: () => ({ goal: 2 }) }), isFocusRunning: () => false };
+  const day = (key, score) => { const r = helpers.createEmptyDailyRecord(key); r.contribution.score = score; p.store.daily[key] = r; return r; };
+  const today = day('2026-09-08', 0);
+  assert.equal(p.pendingMilestone(), null, '什么都没做不放');
+  today.activity.focusSessions = [{ pomodoro: true, completed: true }, { pomodoro: true, completed: false }];
+  assert.equal(p.pendingMilestone(), null, '中断的番茄不算');
+  today.activity.focusSessions.push({ pomodoro: true, completed: true });
+  assert.equal(p.pendingMilestone()?.reason, 'pomodoro');
+  p.settings.celebratedOn = '2026-09-08';
+  assert.equal(p.pendingMilestone(), null, '今天放过就不再放');
+  p.settings.celebratedOn = '';
+  today.activity.focusSessions = [];
+  for (let i = 1; i <= 6; i++) day(`2026-09-0${i}`, 10 * i);
+  today.contribution.score = 1000;
+  assert.equal(p.pendingMilestone(), null, '有分的日子不到 7 天，不拿分数比');
+  day('2026-08-31', 70);
+  assert.equal(p.pendingMilestone()?.reason, 'score');
+  today.contribution.score = 45;
+  assert.equal(p.pendingMilestone(), null, '比中位数高但没进前四分之一，不放');
+});
+
 test('memo changes announce themselves so other plugins can re-read the counts', async () => {
   const { p, fired } = pulseStateFixture();
   await p.loadPluginData();
