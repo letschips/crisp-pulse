@@ -24,6 +24,9 @@ const OVERRIDES = {
   后台: '後台',
   像素: '像素', // twp 转成「畫素」，台湾也常用像素
   周: '週', // 单独的「周」在这里都指星期（自然周、周起始日），OpenCC 不转
+  未通过: '未通過', // 「通过」在这几处是通过核对，不是 twp 的「透過」（经由）
+  验签: '驗簽', // OpenCC 转成「驗籤」
+  验签通过: '驗簽通過',
 };
 
 /** 去掉注释和生成的表，剩下代码里的汉字串。注释里的中文不显示给用户，不进表。 */
@@ -63,7 +66,8 @@ function parseDicts(group) {
     不改字的词也要留（如「一克」），它们挡住更短的匹配；不改字的单字没用，丢掉。 */
 function pick(entries, corpus) {
   const map = {};
-  for (const [k, v] of entries) if ((k !== v || k.length > 1) && /^\p{Script=Han}+$/u.test(k) && corpus.includes(k)) map[k] = v;
+  for (const [k, v] of entries) if (/^\p{Script=Han}+$/u.test(k) && corpus.includes(k)) map[k] = v;
+  for (const [k, v] of Object.entries(map)) if (k === v && k.length === 1) delete map[k];
   return map;
 }
 

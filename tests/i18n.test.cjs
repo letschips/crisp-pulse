@@ -60,6 +60,9 @@ test('繁体中文界面：界面和报告显示繁体，用台湾用语', () =>
   assert.equal(state.label, '排隊中');
   assert.equal(pulse.i18nProbe.tr('默认设置', 'Default settings'), '預設設定');
   assert.equal(pulse.i18nProbe.tr('工作复盘', 'Review'), '工作復盤');
+  assert.equal(pulse.i18nProbe.tr('本地验签通过', 'x'), '本地驗簽通過');
+  assert.equal(pulse.i18nProbe.tr('速记未通过写回核对，请重试', 'x'), '速記未通過寫回核對，請重試');
+  assert.equal(pulse.i18nProbe.tr('通过 Crisp ASR 转写', 'x'), '透過 Crisp ASR 轉寫');
   // tr 里常嵌套 tr：已经转过的繁体再转一次不能变
   const once = pulse.i18nProbe.tr('基于有效编辑算法的番茄钟复盘', 'x');
   assert.equal(pulse.i18nProbe.tr(once, 'x'), once);
