@@ -5,7 +5,7 @@
 
 const { Plugin, ItemView, Setting, PluginSettingTab, Notice, TFile, Modal, MarkdownRenderer = null, Component = null, AbstractInputSuggest = null, Platform = {}, addIcon = (() => {}), setIcon = (() => {}), Menu = null, moment = null, getLanguage = null } = require("obsidian");
 
-/* 界面语言跟随 Obsidian：中文界面（含繁体）显示中文，其他语言显示英文。Obsidian 改语言要重启，加载时读一次即可。
+/* 界面语言跟随 Obsidian：简体中文、繁体中文显示对应的中文，其他语言显示英文。Obsidian 改语言要重启，加载时读一次即可。
    旧版（1.8.7 前）没有 getLanguage：读 localStorage 的 language；没存表示跟随系统，和 Obsidian 一样回退 navigator.language。
    只翻译界面和报告；写进库里的东西（速记块、ANKS 采集件、番茄标签、录音和周报文件名）不随语言变化，切换语言后不会分裂成两套。 */
 function detectPulseLanguage() {
@@ -18,9 +18,38 @@ function detectPulseLanguage() {
   try { if (typeof navigator !== "undefined" && navigator.language) return String(navigator.language); } catch (_) { /* 取不到系统语言 */ }
   return "zh"; // 真实环境总有 navigator.language，走到这里只会是测试环境
 }
-const PULSE_ZH = /^zh\b/i.test(detectPulseLanguage());
-const tr = (zh, en) => (PULSE_ZH ? zh : en);
-const PULSE_NUMBER_LOCALE = PULSE_ZH ? "zh-CN" : "en-US";
+const PULSE_LANGUAGE = detectPulseLanguage();
+const PULSE_ZH = /^zh\b/i.test(PULSE_LANGUAGE);
+// 繁体：Obsidian 的繁體中文是 zh-TW；系统语言回退时还可能是 zh-HK / zh-Hant-*
+const PULSE_HANT = PULSE_ZH && /^zh[-_](tw|hk|mo|hant)\b/i.test(PULSE_LANGUAGE);
+/* 繁体文案由简体文案转出来（OpenCC s2twp：台湾正体 + 台湾用语），表由 scripts/gen-hant.cjs 生成，只收源码里用到的字词。
+   分两段按最长匹配替换：s 简→繁，t 台湾用语。插值进来的内容（文件名、标签）也会被转，只影响显示。 */
+const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"eb5f8bc5be75f8fe","s":"一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不出 不出|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|严 嚴|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|买 買|了话 了話|于 於|于今 於今|于此 於此|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写回 寫回|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出人 出人|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分不出 分不出|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参数 參數|参考 參考|双 雙|双向 雙向|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只回 只回|只在 只在|只打 只打|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|复选 複選|复选框 核取方塊|够 夠|夹 夾|委托 委託|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|弹 彈|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录下 錄下|录到 錄到|录的 錄的|录音 錄音|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|托 託|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折扣 折扣|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|方向 方向|无 無|日历 日曆|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栏 欄|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|汇 匯|汇总 彙總|沉淀 沉澱|没 沒|注记 註記|流向 流向|浅 淺|测 測|润 潤|淀 澱|渐 漸|满 滿|灯 燈|点 點|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|获取 獲取|虚 虛|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记录 記錄|记录为 記錄爲|记录到 記錄到|许 許|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|购 購|贴 貼|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|重折 重摺|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|馈 饋|验 驗|高于 高於|麦 麥|麦克 麥克|麦克风 麥克風","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|參數 引數|品質 品質|啓 啟|在線 線上|字段 欄位|字符 字元|字符串 字串|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|查看 檢視|核取方塊 核取方塊|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
+let pulseHantStages = null;
+function pulseHant(text) {
+  if (typeof text !== "string" || !/\p{Script=Han}/u.test(text)) return text;
+  if (!pulseHantStages) {
+    pulseHantStages = [PULSE_HANT_TABLE.s, PULSE_HANT_TABLE.t].map((packed) => {
+      const map = new Map();
+      for (const entry of String(packed || "").split("|")) { const [k, v] = entry.split(" "); if (k && v) map.set(k, v); }
+      return { map, max: Math.max(1, ...[...map.keys()].map((k) => k.length)) };
+    });
+  }
+  for (const { map, max } of pulseHantStages) {
+    let out = "";
+    for (let i = 0; i < text.length;) {
+      let n = Math.min(max, text.length - i);
+      for (; n > 0 && !map.has(text.substr(i, n)); n--);
+      if (n) { out += map.get(text.substr(i, n)); i += n; } else { out += text[i]; i++; }
+    }
+    text = out;
+  }
+  return text;
+}
+/** 简体文案按界面语言出简体或繁体：不经过 tr 的中文（如 PULSE_ZH 分支里的列表）用它包一下。 */
+const zhText = (zh) => (PULSE_HANT ? pulseHant(zh) : zh);
+const tr = (zh, en) => (PULSE_ZH ? zhText(zh) : en);
+const PULSE_NUMBER_LOCALE = PULSE_ZH ? (PULSE_HANT ? "zh-TW" : "zh-CN") : "en-US";
 const PULSE_MONTHS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 /** 月份标签：中文「10月」，英文「Oct」。month 从 1 开始。 */
 const pulseMonthLabel = (month) => (PULSE_ZH ? `${month}月` : PULSE_MONTHS_EN[(month - 1 + 12) % 12]);
@@ -963,13 +992,13 @@ function getReviewInsight(review) {
 }
 function generateReviewReport(model) {
   const { period, current, previous, comparison, scope, draft } = model;
-  const lines = PULSE_ZH ? [generateWeeklyMarkdown(current, `知识工作复盘 (${period.start} ~ ${period.end})`), '', '## 数据口径',
+  const lines = PULSE_ZH ? [generateWeeklyMarkdown(current, zhText(`知识工作复盘 (${period.start} ~ ${period.end})`)), ...['', '## 数据口径',
     `- 筛选：${REVIEW_SCOPE_LABELS[scope]}`,
     `- 当前区间：${period.start} ~ ${period.end}；纳入 ${current.coverage.recorded}/${period.days} 天，未记录 ${current.coverage.missing} 天，筛除 ${current.coverage.filtered} 天。`,
     `- 对比区间：${period.previousStart} ~ ${period.previousEnd}；纳入 ${previous.coverage.recorded}/${period.days} 天，未记录 ${previous.coverage.missing} 天，筛除 ${previous.coverage.filtered} 天。`,
     '- 未记录不等于零；覆盖不足时，变化只代表已纳入的记录。改写量为估算，贡献分不代表知识质量。',
     '- 目录占比按文件×日期记录数计算，不是编辑次数或工时。', '', '## 前后周期对比',
-    '| 指标 | 当前 | 前期 | 变化 |', '| --- | ---: | ---: | --- |'] : [generateWeeklyMarkdown(current, `Knowledge Work Review (${period.start} ~ ${period.end})`), '', '## Data scope',
+    '| 指标 | 当前 | 前期 | 变化 |', '| --- | ---: | ---: | --- |'].map(zhText)] : [generateWeeklyMarkdown(current, `Knowledge Work Review (${period.start} ~ ${period.end})`), '', '## Data scope',
     `- Filter: ${REVIEW_SCOPE_LABELS[scope]}`,
     `- Current period: ${period.start} ~ ${period.end}; included ${current.coverage.recorded}/${period.days} days, ${current.coverage.missing} not recorded, ${current.coverage.filtered} filtered out.`,
     `- Comparison period: ${period.previousStart} ~ ${period.previousEnd}; included ${previous.coverage.recorded}/${period.days} days, ${previous.coverage.missing} not recorded, ${previous.coverage.filtered} filtered out.`,
@@ -3122,7 +3151,7 @@ class CrispPulsePlugin extends Plugin {
       return { ...review, coverage };
     };
     const current = summarize(start, end), previous = summarize(period.previousStart, period.previousEnd);
-    const fields = PULSE_ZH ? [['totalScore', '贡献得分', '分'], ['wordsAdded', '新增词数', '词'], ['rewrittenWords', '改写估算', '词'], ['notesCreated', '新建笔记', '篇'], ['tasksCompleted', '完成任务', '项'], ['focusMinutes', '专注记录', '分钟']]
+    const fields = PULSE_ZH ? [['totalScore', '贡献得分', '分'], ['wordsAdded', '新增词数', '词'], ['rewrittenWords', '改写估算', '词'], ['notesCreated', '新建笔记', '篇'], ['tasksCompleted', '完成任务', '项'], ['focusMinutes', '专注记录', '分钟']].map(([key, label, unit]) => [key, zhText(label), zhText(unit)])
       : [['totalScore', 'Contribution score', 'pts'], ['wordsAdded', 'Words added', 'words'], ['rewrittenWords', 'Rewrites (est.)', 'words'], ['notesCreated', 'Notes created', 'notes'], ['tasksCompleted', 'Tasks completed', 'tasks'], ['focusMinutes', 'Focus logged', 'min']];
     const comparison = fields.map(([key, label, unit]) => {
       const now = current[key], before = previous[key];
@@ -4389,7 +4418,7 @@ function drawFingerprint(draw, profile, width, height, palette) {
     draw('text', { x: x0 + (tick.index + 0.5) * step, y: y1 + fs * 1.5, fill: palette.tick, 'font-family': mono, 'font-size': fs * 0.75, 'text-anchor': 'middle' }, tick.label);
   }
   const number = value => Number(value).toLocaleString(PULSE_NUMBER_LOCALE, { maximumFractionDigits: 1 });
-  const stats = PULSE_ZH ? [`${profile.activeDays} 天`, `${number(profile.totals.words)} 词`, `${number(profile.totals.active / 60)} 小时`]
+  const stats = PULSE_ZH ? [`${profile.activeDays} 天`, `${number(profile.totals.words)} 词`, `${number(profile.totals.active / 60)} 小时`].map(zhText)
     : [plural(profile.activeDays, 'day'), `${number(profile.totals.words)} words`, `${number(profile.totals.active / 60)} h`];
   if (!compact) stats.push(tr(`${number(profile.totals.notes)} 篇新建`, `${number(profile.totals.notes)} new notes`));
   draw('text', { x: x0, y: height - pad, fill: palette.text, 'font-family': mono, 'font-size': fs }, stats.join(' · '));
