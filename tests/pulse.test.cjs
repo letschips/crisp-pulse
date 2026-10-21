@@ -24,6 +24,8 @@ function setup() {
   const events = new EventTarget();
   events.setInterval = (fn, ms) => { const t = setInterval(fn, ms); t.unref?.(); return t; };
   events.clearInterval = clearInterval;
+  events.setTimeout = setTimeout;
+  events.clearTimeout = clearTimeout;
   const cleanup = [];
   const registeredIcons = new Map();
   function addIcon(id, svg) { registeredIcons.set(id, svg); }
@@ -2628,6 +2630,23 @@ test('break events never score and drive the memo prompt', async () => {
   assert.equal(p.getOrCreateTodayRecord().activity.focusSessions, undefined);
 });
 
+/* Focus 先发 stop / skip 事件再清空会话：失败模式是 Pulse 当场重画读到旧状态，或者不到 1 分钟的专注结束后根本不重画，
+   番茄卡片停在「已暂停」、湖面上的船不消失。 */
+test('ending or skipping a Focus session redraws Pulse after Focus has cleared its state', async () => {
+  const { p } = setup();await p.loadPluginData();
+  p.settings.enableCrispFocusSync = true;
+  let focusState = 'paused';
+  const seen = [];
+  p.refreshViews = () => seen.push(focusState);
+  const end = async (event) => { const pending = p.handleFocusSessionEvent(event); focusState = 'idle'; await pending; await new Promise((r) => setTimeout(r, 5)); };
+  await end(focusEvent('stop', { id: 'short', completed: false, elapsedMs: 30000 }));
+  assert.deepEqual(seen, ['idle'], '不到 1 分钟的专注结束也要重画，而且读到的是结束后的状态');
+  focusState = 'running'; seen.length = 0;
+  await end(focusEvent('skip', { id: 'b2', kind: 'break', phase: 'short-break' }));
+  await end(focusEvent('stop', { id: 'b3', kind: 'break', phase: 'short-break' }));
+  assert.ok(seen.length && seen.every((s) => s === 'idle'), `跳过、结束休息后重画读到的不是旧状态：${seen}`);
+});
+
 test('a Focus with the session event API is not wrapped, so nothing is counted twice', () => {
   const { p, helpers } = setup();
   p.settings = { enableCrispFocusSync: true };
@@ -3066,6 +3085,24 @@ test('state event fires once per change, also without a status bar', async () =>
   assert.equal(states().length, 2);
   assert.equal(states()[1].payload.score, 2);
   assert.equal(states()[1].payload.active, true);
+});
+
+/* 失败模式：空闲时跨过零点（没输入、没待保存数据、没在专注），状态栏和 crisp-pulse:state 订阅者一直停在昨天。 */
+test('an idle Pulse moves to the new day at midnight and announces it', async () => {
+  const { p, fired, advance } = pulseStateFixture();
+  await p.loadPluginData();
+  p.statusBarEl = null;
+  advance(new Date(2026, 8, 8, 23, 59, 50).getTime() - new Date(2026, 8, 8, 12).getTime());
+  p.updateStatusBar();
+  p.maintenanceTick();
+  const states = () => fired.filter(e => e.name === 'crisp-pulse:state' && e.payload.reason === 'today');
+  const before = states().length;
+  advance(30000);
+  p.maintenanceTick();
+  assert.equal(states().length, before + 1, '过了零点要发一次新的今日状态');
+  assert.equal(states().at(-1).payload.date, '2026-09-09');
+  p.maintenanceTick();
+  assert.equal(states().length, before + 1, '同一天不重复发');
 });
 
 test('memo changes announce themselves so other plugins can re-read the counts', async () => {

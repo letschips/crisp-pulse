@@ -488,3 +488,75 @@ test('a recording retry that finishes after a reload clears the new instance\'s 
   assert.deepEqual(JSON.parse(adapter.files.get('plugin/memo-drafts.json')).recordings, []);
   assert.match(second.drafts['leaf-a'].text, /!\[\[录音 1\.webm\]\]/);
 });
+
+/* 速记附件的相对链接在发送时重算。失败模式：
+   - 两份草稿各在不同目录存过附件，提交其中一份时套错了另一个目录（链接指到不存在的文件）；
+   - 用户手写的 ./ 相对链接被附件历史改写；
+   - 插件重载后草稿恢复了，但附件来源丢了，换目录提交后断链；
+   - 不同目录里有同名附件，猜一个改过去指向别人的文件（应保持原样）。 */
+function attachmentVault() {
+  class F { constructor(p, content = '') { this.path = p; this.content = content; this.extension = p.split('.').pop(); this.stat = { mtime: 0 }; } }
+  const store = new Map();
+  const norm = (p) => { const out = []; for (const s of p.split('/')) { if (s === '..') out.pop(); else if (s && s !== '.') out.push(s); } return out.join('/'); };
+  const app = {
+    vault: {
+      getAbstractFileByPath: (p) => store.get(p) || null,
+      getMarkdownFiles: () => [],
+      create: async (p, c) => { const f = new F(p, c); store.set(p, f); return f; },
+      createFolder: async () => {},
+      createBinary: async (p) => { const f = new F(p); store.set(p, f); return f; },
+      process: async (f, fn) => { f.content = fn(f.content); return f.content; },
+    },
+    metadataCache: { getFileCache: () => null, getFirstLinkpathDest: (lp, from) => { const p = norm(`${from.slice(0, from.lastIndexOf('/'))}/${lp}`); return store.has(p) ? { path: p } : null; } },
+    internalPlugins: { getPluginById: (id) => (id === 'daily-notes' ? { enabled: true, instance: { options: { folder: 'Daily', format: 'YYYY/MM/DD' } } } : null) },
+    fileManager: {
+      getAvailablePathForAttachment: async (name, source) => `${source.slice(0, source.lastIndexOf('/'))}/assets/${name}`,
+      generateMarkdownLink: (file, source) => `[](./${file.path.slice(source.lastIndexOf('/') + 1)})`,
+    },
+  };
+  const resolve = (link, from) => norm(`${from.slice(0, from.lastIndexOf('/'))}/${link}`);
+  const linkIn = (path) => [...store.get(path).content.matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1]);
+  return { app, store, resolve, linkIn };
+}
+const at = (y, m, d) => new Date(y, m - 1, d, 12, 0);
+const fmt = (d, f) => f.replace('YYYY', d.getFullYear()).replace('MM', String(d.getMonth() + 1).padStart(2, '0')).replace('DD', String(d.getDate()).padStart(2, '0'));
+const moment = (d) => ({ format: (f) => fmt(d, f), isValid: () => true });
+
+test('attachments from two drafts in different folders each keep pointing at their own file; hand-written links stay', async () => {
+  const { app, resolve, linkIn } = attachmentVault();
+  const s = new MemoStore(app, () => ({ memoMode: 'general', memoHeading: '' }), moment);
+  const a = await s.saveAttachment('a.png', new Uint8Array([1]).buffer, at(2026, 9, 30));
+  await s.saveAttachment('b.png', new Uint8Array([2]).buffer, at(2026, 10, 31));
+  const { path } = await s.capture(`图 ${a} 和 [文档](./docs/reference.md)`, at(2026, 11, 1));
+  assert.equal(path, 'Daily/2026/11/01.md');
+  const [img, doc] = linkIn(path);
+  assert.equal(resolve(img, path), 'Daily/2026/09/assets/a.png', `附件链接 ${img} 要指到 A 目录的原图`);
+  assert.equal(doc, './docs/reference.md', '手写的相对链接不改');
+});
+
+test('a recovered draft still relinks its attachment after a reload', async () => {
+  const { app, resolve, linkIn } = attachmentVault();
+  const adapter = fakeAdapter();
+  const before = new MemoDraftStore(adapter, 'plugin');
+  const s1 = new MemoStore(app, () => ({ memoMode: 'general', memoHeading: '' }), moment);
+  s1.attachmentLog = before;
+  const link = await s1.saveAttachment('r.png', new Uint8Array([1]).buffer, at(2026, 9, 30));
+  before.setDraft('leaf-a', `恢复 ${link}`);
+  await before.retire();
+  const after = new MemoDraftStore(adapter, 'plugin');
+  const s2 = new MemoStore(app, () => ({ memoMode: 'general', memoHeading: '' }), moment);
+  s2.attachmentLog = after;
+  await after.load();
+  const text = after.claimDraft('leaf-b');
+  const { path } = await s2.capture(text, at(2026, 11, 1));
+  assert.equal(resolve(linkIn(path)[0], path), 'Daily/2026/09/assets/r.png');
+});
+
+test('same-named attachments in two folders are ambiguous, so the link is left alone', async () => {
+  const { app, linkIn } = attachmentVault();
+  const s = new MemoStore(app, () => ({ memoMode: 'general', memoHeading: '' }), moment);
+  await s.saveAttachment('x.png', new Uint8Array([1]).buffer, at(2026, 9, 30));
+  const link = await s.saveAttachment('x.png', new Uint8Array([2]).buffer, at(2026, 10, 31));
+  const { path } = await s.capture(link, at(2026, 11, 1));
+  assert.equal(linkIn(path)[0], './assets/x.png', '分不清是哪个就不猜');
+});

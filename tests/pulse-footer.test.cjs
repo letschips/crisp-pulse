@@ -180,3 +180,15 @@ test('the pomodoro boat and duck stay on the lake and inside the canvas', () => 
     }
   }
 });
+
+/* 失败模式：看板重画后页脚说明被重置，但「帆船/小鸭子」那句没再接上。 */
+test('the boat note stays in the caption after the footer is repainted', () => {
+  const { v } = footerView({ daily: {} });
+  v.footerEls.voyager = { isConnected: true, ownerDocument: { hidden: false }, style: { setProperty() {} }, toggleClass() {}, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} }) };
+  v.plugin.settings = { enableCrispFocusSync: true };
+  v.pomodoroFocus = () => ({ getPomodoroSnapshot: () => ({ status: 'running', kind: 'break', remainingMs: 60000, plannedMs: 300000 }) });
+  v.paintFooter();
+  assert.match(v.footerEls.caption.text, /小鸭子/);
+  v.paintFooter();
+  assert.match(v.footerEls.caption.text, /小鸭子/, '重画后还在');
+});

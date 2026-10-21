@@ -24,7 +24,7 @@ function load({ language, storedLanguage, systemLanguage } = {}) {
     document: { hidden: false }, navigator: { clipboard: { writeText: async () => {} }, ...(systemLanguage ? { language: systemLanguage } : {}) },
     setTimeout, clearTimeout, structuredClone, crypto: globalThis.crypto, atob, TextDecoder, TextEncoder, Buffer,
   };
-  vm.runInNewContext(SOURCE + '\nmodule.exports.i18nProbe = { formatDateDisplay, DEFAULT_SETTINGS, tr };', context);
+  vm.runInNewContext(SOURCE + '\nmodule.exports.i18nProbe = { formatDateDisplay, DEFAULT_SETTINGS, tr };\nmodule.exports.generateReviewReport = generateReviewReport;', context);
   return context.module.exports;
 }
 
@@ -48,6 +48,23 @@ test('中文界面：保持原来的中文', () => {
   assert.equal(state.label, '排队中');
   assert.equal(pulse.i18nProbe.formatDateDisplay('2026-10-18'), '2026年10月18日');
   assert.match(pulse.memoHelpers.memoRecordingName('audio/webm', new Date(2026, 9, 18, 9, 5, 7)), /^录音 /);
+});
+
+/* 繁体只转界面文案：报告里的笔记路径、目录名是库里的真实名字，转成繁体链接就指不到了。 */
+test('繁体中文界面：报告里的路径、链接和目录名保持库里的原样', () => {
+  const pulse = load({ language: 'zh-TW' });
+  const weekly = pulse.generateWeeklyMarkdown({ ...review, dirBreakdown: [{ dir: '知识/开发记录', percent: 60, count: 3, words: 120 }], topFiles: [{ path: '知识/开发记录.md', words: 120 }] });
+  assert.match(weekly, /`知识\/开发记录`/, weekly);
+  assert.match(weekly, /\[\[知识\/开发记录\.md\]\]/, weekly);
+  assert.match(weekly, /檔案×日期記錄/, '界面文案照样是繁体');
+  const actions = [{ title: '整理', status: 'done', outcomePath: '知识/开发记录.md' }];
+  const evidence = [{ path: '知识/开发记录.md', originalPath: '旧目录/开发记录.md', capturedAt: '2026-10-21', quote: '' }];
+  const line = (report, re) => report.split('\n').find((l) => re.test(l)) || '';
+  const coverage = { recorded: 7, missing: 0, filtered: 0 };
+  const period = { start: '2026-10-15', end: '2026-10-21', previousStart: '2026-10-08', previousEnd: '2026-10-14', days: 7 };
+  const report = pulse.generateReviewReport({ period, current: { ...review, coverage, sourceWords: {} }, previous: { ...review, coverage }, comparison: [], scope: 'all', draft: {}, actions, evidence });
+  assert.match(line(report, /結果筆記/), /\[\[知识\/开发记录\.md\]\]/, report);
+  assert.match(line(report, /摘錄時路徑/), /旧目录\/开发记录\.md/, report);
 });
 
 test('繁体中文界面：界面和报告显示繁体，用台湾用语', () => {

@@ -1014,7 +1014,8 @@ function generateReviewReport(model) {
   for (const action of model.actions || []) {
     lines.push(`- ${action.status === 'done' ? '[x]' : '[ ]'} ${action.title || tr('（待填写行动）', '(action to be filled in)')} · ${REVIEW_ACTION_STATES[action.status] || REVIEW_ACTION_STATES.pending}`);
     if (action.sourcePeriod) lines.push(tr(`  - 继承自：${action.sourcePeriod}`, `  - Carried over from: ${action.sourcePeriod}`));
-    if (action.outcomePath) lines.push(tr(`  - 结果笔记：${reportNoteLink(action.outcomePath)}`, `  - Outcome note: ${reportNoteLink(action.outcomePath)}`));
+    // 路径和链接不经过 tr：繁体界面会把整串转成繁体，链接就指不到简体名字的笔记了
+    if (action.outcomePath) lines.push(tr('  - 结果笔记：', '  - Outcome note: ') + reportNoteLink(action.outcomePath));
   }
   if (!model.actions?.length) lines.push(tr('（暂无结构化行动）', '(No structured actions yet)'));
   if (model.memos) {
@@ -1031,7 +1032,7 @@ function generateReviewReport(model) {
   lines.push('', tr('## 洞见证据', '## Evidence for insights'));
   for (const evidence of model.evidence || []) {
     lines.push('', `- ${reportNoteLink(evidence.path)} · ${tr('摘录时间', 'Captured at')} ${typeof evidence.capturedAt === 'string' ? evidence.capturedAt : ''}`);
-    if (evidence.originalPath !== evidence.path) lines.push(tr(`  - 摘录时路径：${evidence.originalPath}`, `  - Path when captured: ${evidence.originalPath}`));
+    if (evidence.originalPath !== evidence.path) lines.push(tr('  - 摘录时路径：', '  - Path when captured: ') + evidence.originalPath);
     if (typeof evidence.quote === 'string' && evidence.quote) lines.push(...evidence.quote.split('\n').map(line => `> ${line}`));
   }
   if (!model.evidence?.length) lines.push(tr('（暂无关联证据）', '(No linked evidence yet)'));
@@ -1098,7 +1099,8 @@ function generateWeeklyMarkdown(reviewData, weekTitle = tr("知识工作周报 (
     lines.push(tr("- *区间内没有文件记录*", "- *No file records in this period*"));
   } else {
     for (const d of dirBreakdown) {
-      lines.push(tr(`- \`${d.dir}\`: ${d.percent}% (文件×日期记录 ${d.count} 条 / +${d.words} 词)`, `- \`${d.dir}\`: ${d.percent}% (${d.count} file × day records / +${d.words} words)`));
+      // 目录名不经过 tr，繁体界面也按库里的原名写
+      lines.push(`- \`${d.dir}\`: ${d.percent}% ` + tr(`(文件×日期记录 ${d.count} 条 / +${d.words} 词)`, `(${d.count} file × day records / +${d.words} words)`));
     }
   }
 
@@ -1639,6 +1641,7 @@ class CrispPulsePlugin extends Plugin {
       trashPath: `${this.manifest?.dir || `${this.app.vault?.configDir || ".obsidian"}/plugins/crisp-pulse`}/memo-trash.json`
     });
     this.memoDrafts = new MemoDraftStore(this.app.vault?.adapter, this.manifest?.dir || `${this.app.vault?.configDir || ".obsidian"}/plugins/crisp-pulse`);
+    this.memoStore.attachmentLog = this.memoDrafts;
     this.registerView(VIEW_TYPE_MEMO, (leaf) => new CrispPulseMemoView(leaf, this));
     this.addRibbonIcon(CRISP_PULSE_MEMO_ICON_ID, tr("打开 Crisp Pulse 速记", "Open Crisp Pulse memos"), () => this.activateMemoView());
     this.addCommand({ id: "open-memo-view", name: tr("打开速记", "Open memos"), callback: () => this.activateMemoView() });
@@ -1784,12 +1787,7 @@ class CrispPulsePlugin extends Plugin {
     this.registerActivityListeners();
 
     this.registerInterval(
-      window.setInterval(() => {
-        this.checkIdleSessions();
-        if (this.focusAdapter?.isFocusRunning()) {
-          this.updateStatusBar();
-        }
-      }, 30000)
+      window.setInterval(() => this.maintenanceTick(), 30000)
     );
 
     this.app.workspace.onLayoutReady(async () => {
@@ -2279,11 +2277,31 @@ class CrispPulsePlugin extends Plugin {
         this.dirty = true;
         if (completed) await this.handleFocusSessionCompleted(Math.min(240, minutes), { quiet: !!event.pomodoro });
         else { await this.savePluginData(); this.refreshViews(); }
-      }
+      } else this.refreshViewsAfterFocus();
+    } else if (event.type === "stop" || event.type === "skip" || event.type === "complete") {
+      this.refreshViewsAfterFocus();
     } else {
       this.refreshViews();
     }
     this.updateStatusBar();
+  }
+
+  /** 每 30 秒：结算闲置的编辑会话；过了零点时没有输入、没有待保存数据也要换到新的一天（状态栏、看板、crisp-pulse:state）。 */
+  maintenanceTick() {
+    void this.checkIdleSessions();
+    const day = getTodayKey();
+    if (this.maintenanceDay && day !== this.maintenanceDay) this.refreshViews();
+    else if (this.focusAdapter?.isFocusRunning()) this.updateStatusBar();
+    this.maintenanceDay = day;
+  }
+
+  /** Crisp Focus 先发结束、跳过事件，再清空自己的会话状态：等它改完再重画，否则看板（番茄卡片、湖面上的船）读到的还是旧状态。 */
+  refreshViewsAfterFocus() {
+    if (this.focusRefreshTimer) return;
+    this.focusRefreshTimer = window.setTimeout(() => {
+      this.focusRefreshTimer = null;
+      if (!this.stopped) this.refreshViews();
+    }, 0);
   }
 
   /** 速记面板的状态行跟着番茄钟的休息变化。 */
@@ -4730,23 +4748,30 @@ const PULSE_VOYAGERS = {
     ],
   },
   duck: {
-    waterline: 4, depth: 2,
+    waterline: 10, depth: 2,
     rows: [
-      "     yy   ",
-      "    yyey  ",
-      "     yybb ",
-      "y   yyy   ",
-      "yyyyyyyy  ",
-      " yyYYYyy  ",
-      "ww  w     ",
+      "       yyy    ",
+      "      yykky   ",
+      "      yyykyy  ",
+      "      yyyyeybb",
+      "      yyyyyyBB",
+      "y      yyyy   ",
+      "yy    yyyyy   ",
+      "yyy yyyyyyyy  ",
+      "yyyykkkyyyyyy ",
+      "yyyYYYYYyyyyy ",
+      "OyyyYYYyyyyyO ",
+      " OOyyyyyyyOO  ",
+      "   OOOOOOO    ",
+      "ww   www   ww ",
     ],
   },
 };
 const PULSE_VOYAGER_COLORS = {
   day: { s: [250, 248, 240], S: [212, 212, 204], j: [236, 232, 220], m: [92, 74, 60], l: [92, 74, 60], d: [236, 230, 214], h: [176, 76, 56],
-    y: [242, 208, 98], Y: [206, 166, 68], e: [34, 34, 40], b: [228, 128, 56], w: [236, 244, 252] },
+    y: [246, 212, 92], Y: [214, 168, 58], k: [255, 242, 186], O: [176, 124, 40], e: [30, 28, 36], b: [236, 128, 48], B: [190, 88, 34], w: [236, 244, 252] },
   night: { s: [190, 198, 220], S: [130, 140, 166], j: [168, 178, 204], m: [52, 52, 64], l: [255, 212, 136], d: [140, 142, 156], h: [84, 46, 46],
-    y: [176, 160, 104], Y: [136, 120, 78], e: [16, 18, 26], b: [168, 102, 60], w: [150, 172, 214] },
+    y: [176, 160, 104], Y: [138, 120, 76], k: [204, 192, 146], O: [104, 88, 58], e: [16, 18, 26], b: [168, 102, 60], B: [128, 74, 44], w: [150, 172, 214] },
 };
 
 /** 把帆船或小鸭子画进一张小画布（一格一像素），返回尺寸和吃水线；页脚用 CSS 放大到和地平线一样的像素。 */
@@ -5022,9 +5047,10 @@ class CrispPulseView extends ItemView {
     const container = this.containerEl.children[1];
     const win = container.ownerDocument.defaultView;
     this.registerInterval(win.setInterval(() => this.updateCelestial(), 60 * 1000));
-    this.registerDomEvent(win, 'focus', () => this.updateCelestial(true));
+    // 回到前台：天体校正位置；湖面上的船在后台画的时候没开每秒更新，这里补上
+    this.registerDomEvent(win, 'focus', () => { this.updateCelestial(true); this.startVoyage(); });
     this.registerDomEvent(container.ownerDocument, 'visibilitychange', () => {
-      if (!container.ownerDocument.hidden) this.updateCelestial(true);
+      if (!container.ownerDocument.hidden) { this.updateCelestial(true); this.startVoyage(); }
     });
     // Tempo 启用、停用时页脚入口和明细里的任务链接跟着变；Tempo 编辑任务也会发这个事件，所以只在可用与否翻转时重绘
     this.tempoWasLinked = this.plugin.tempoLinked();
@@ -6325,8 +6351,9 @@ class CrispPulseView extends ItemView {
     const streakNote = caption && streakLength >= 2 ? tr(` · 小石子是连续 ${streakLength} 天`, ` · pebbles mark a ${streakLength}-day streak`) : "";
     els.captionText = caption + streakNote;
     els.caption.setText(els.captionText);
-    // 尺寸变了，船要按新的像素格重新定位
+    // 尺寸变了，船要按新的像素格重新定位；说明文字刚重置，船的那句也要重新接上
     this.voyageKey = null;
+    this.voyageNote = "";
     this.updateVoyage();
   }
 
@@ -9030,6 +9057,9 @@ const MEMO_TRASH_WRITES = Symbol.for("crisp-pulse.memo-trash.writes");
 // 插件重载后，新面板仍知道旧面板的附件没存好，提交照样要等
 const MEMO_DRAFT_SHARED = Symbol.for("crisp-pulse.memo-drafts.shared");
 
+// 速记附件登记最多留多少条（每条是附件路径和它的链接相对的速记文件）
+const MEMO_ATTACHMENT_LOG_MAX = 50;
+
 class MemoDraftStore {
   constructor(adapter, dir) {
     this.adapter = adapter;
@@ -9037,6 +9067,7 @@ class MemoDraftStore {
     this.pendingDir = dir ? `${dir}/memo-pending` : null;
     this.drafts = {};
     this.recordings = [];
+    this.attachments = [];
     this.listeners = new Set();
     this.broken = false;
     this.timer = null;
@@ -9117,6 +9148,11 @@ class MemoDraftStore {
           // 读完之前内存里已经有的草稿（比文件里的新）保留，不被旧内容盖掉
           if (typeof entry?.text === "string" && entry.text.trim() && !((this.drafts[key]?.updatedAt || 0) > updatedAt)) this.drafts[key] = { text: entry.text, updatedAt };
         }
+        for (const a of Array.isArray(data.attachments) ? data.attachments : []) {
+          if (typeof a?.path !== "string" || typeof a?.source !== "string" || !a.path || !a.source || this.attachments.some((b) => b.path === a.path)) continue;
+          this.attachments.push({ path: a.path, source: a.source });
+        }
+        this.attachments = this.attachments.slice(0, MEMO_ATTACHMENT_LOG_MAX);
         for (const r of data.recordings) {
           if (this.recordings.some((x) => x.id === r?.id)) continue;
           if (!r || !/^[a-zA-Z0-9-]+$/.test(r.id || "") || typeof r.name !== "string" || r.name.includes("/") || typeof r.stash !== "string" || !r.stash.startsWith(`${this.pendingDir}/`)) continue;
@@ -9157,6 +9193,13 @@ class MemoDraftStore {
     return orphan[1].text;
   }
 
+  /** 速记附件存进库后登记一笔（库内路径 + 链接相对的速记文件），重载后提交草稿时据此改对相对链接。 */
+  recordAttachment(entry) {
+    if (!this.loaded) return void this.load().then(() => this.recordAttachment(entry));
+    this.attachments = [entry, ...this.attachments.filter((a) => a.path !== entry.path)].slice(0, MEMO_ATTACHMENT_LOG_MAX);
+    this.schedule();
+  }
+
   setDraft(key, text) {
     if (!key) return;
     if (String(text || "").trim()) this.drafts[key] = { text, updatedAt: Date.now() };
@@ -9192,6 +9235,7 @@ class MemoDraftStore {
       version: 1,
       drafts: this.drafts,
       recordings: this.recordings.filter((r) => r.stash).map(({ id, name, type, startedAt, stash, error }) => ({ id, name, type, startedAt, stash, error })),
+      ...(this.attachments.length ? { attachments: this.attachments } : {}),
     }, null, 2);
     if (payload === this.lastPayload) return this.writing;
     this.lastPayload = payload;
@@ -9349,13 +9393,31 @@ class MemoStore {
 
   async capture(text, now = new Date()) {
     if (!String(text ?? "").trim()) throw new Error(tr("速记内容为空", "The memo is empty"));
-    return this.writeBlock(null, now, (path) => this.onOwnWrite?.(path), (path) => buildMemoBlock(this.relinkAttachments(text, path), now));
+    const known = await this.knownAttachments();
+    return this.writeBlock(null, now, (path) => this.onOwnWrite?.(path), (path) => buildMemoBlock(this.relinkAttachments(text, path, known), now));
   }
 
-  /** 附件链接是按粘贴那一刻的速记文件算的；发送时写进了别的文件（换了 Topic、过了零点），把解析不到的相对链接改过来。 */
-  relinkAttachments(text, targetPath) {
-    let out = String(text ?? "");
-    for (const source of this.attachmentSources || []) if (source !== targetPath) out = this.relinkFor(out, source, targetPath);
+  /** 附件链接是按粘贴那一刻的速记文件算的；发送时写进了别的文件（换了 Topic、过了零点），把解析不到的相对链接改过来。
+      只改登记过的附件：链接从它当时的速记文件解析出来正好是那个附件才算；几个附件都对得上（不同目录里的同名附件）就不猜，保持原样。
+      用户自己写的链接、别的草稿的附件都不动。 */
+  relinkAttachments(text, targetPath, known = this.attachments || []) {
+    if (!known.length) return String(text ?? "");
+    const ORIGIN = "\0crisp-pulse-attachment";
+    const resolve = (linkpath, from) => {
+      if (from !== ORIGIN) return this.resolveLink(linkpath, from);
+      const hits = new Set();
+      for (const a of known) if (this.resolveLink(linkpath, a.source) === a.path) hits.add(a.path);
+      return hits.size === 1 ? [...hits][0] : null;
+    };
+    return memoRelinkText(text, ORIGIN, targetPath, resolve);
+  }
+
+  /** 登记过的附件（库内路径 + 链接当时相对的速记文件）：本实例存的加上草稿恢复文件里的，重载后也认得。 */
+  async knownAttachments() {
+    const log = this.attachmentLog;
+    if (log?.load) { try { await log.load(); } catch (_) { /* 恢复文件读不了就只用内存里的 */ } }
+    const out = [...(this.attachments || [])];
+    for (const a of log?.attachments || []) if (!out.some((b) => b.path === a.path)) out.push(a);
     return out;
   }
 
@@ -9408,13 +9470,15 @@ class MemoStore {
   /** 图片存进库里（跟随 Obsidian 的附件位置设置），返回可插入速记的嵌入链接。 */
   async saveAttachment(name, data, now = new Date()) {
     const source = await this.memoFilePath(now);
-    // 记下链接是相对哪个文件算的，发送时目标文件变了要重算（只留最近几个）
-    this.attachmentSources = [source, ...(this.attachmentSources || []).filter((p) => p !== source)].slice(0, 20);
     const fm = this.app.fileManager;
     const path = await fm.getAvailablePathForAttachment(name, source);
     const folder = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
     if (folder) await this.ensureFolder(folder);
     const file = await this.app.vault.createBinary(path, data);
+    // 记下这个附件和链接当时相对的文件，发送时目标文件变了要重算；也存进草稿恢复文件，重载后的草稿照样能改对
+    const entry = { path: file.path, source };
+    this.attachments = [entry, ...(this.attachments || []).filter((a) => a.path !== entry.path)].slice(0, MEMO_ATTACHMENT_LOG_MAX);
+    this.attachmentLog?.recordAttachment?.(entry);
     return `!${fm.generateMarkdownLink(file, source)}`;
   }
 
@@ -9454,12 +9518,14 @@ class MemoStore {
   /** 速记正文放进 targetPath 前，把从那里解析不到的相对链接改好。
       ./、../ 开头的明确相对路径按路径计算：原笔记已经删掉、附件暂时不在时也保持指向原来那个位置；其余交给 Obsidian 解析。 */
   relinkFor(text, sourcePath, targetPath) {
+    return memoRelinkText(text, sourcePath, targetPath, (linkpath, from) => this.resolveLink(linkpath, from));
+  }
+
+  /** 链接从 from 这个文件解析到的库内路径；解析不到返回 null。./ ../ 开头的按路径算。 */
+  resolveLink(linkpath, from) {
+    if (/^\.{1,2}\//.test(linkpath)) return memoResolveRelative(from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : "", linkpath);
     const cache = this.app.metadataCache;
-    const resolve = (linkpath, from) => {
-      if (/^\.{1,2}\//.test(linkpath)) return memoResolveRelative(from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : "", linkpath);
-      return typeof cache?.getFirstLinkpathDest === "function" ? cache.getFirstLinkpathDest(linkpath, from)?.path || null : null;
-    };
-    return memoRelinkText(text, sourcePath, targetPath, resolve);
+    return typeof cache?.getFirstLinkpathDest === "function" ? cache.getFirstLinkpathDest(linkpath, from)?.path || null : null;
   }
 
   /** 文件被改、删或改名时丢掉它的解析缓存（修改时间精度不够时的保险）。返回它原来是否有速记。 */
