@@ -2994,3 +2994,86 @@ test('a reset whose save fails puts the statistics back in memory', async () => 
   assert.equal(ok.fileName, 'b.json');
   assert.deepEqual(JSON.parse(JSON.stringify(p.store.daily)), {});
 });
+
+/* Today's state for other plugins (Crisp Pets). Failure modes:
+ * The snapshot must agree with the status bar (score, streak, active) and work before anything is recorded today.
+ * Memo counts must come from today's memos only, count only those not yet turned into a task, note or Now action,
+ * and a failed memo read must be null, never zero.
+ * The event must fire once per change, not on every status bar refresh, and also when there is no status bar. */
+function pulseStateFixture() {
+  const s = setup();
+  const fired = [];
+  s.p.app.workspace.trigger = (name, payload) => fired.push({ name, payload });
+  s.context.window.setTimeout = setTimeout;
+  s.context.window.clearTimeout = clearTimeout;
+  return { ...s, fired };
+}
+
+test('today snapshot matches the status bar numbers and works on an empty day', async () => {
+  const { p, helpers } = pulseStateFixture();
+  await p.loadPluginData();
+  p.memoStore = { list: async () => [] };
+  assert.equal(p.pulseStateApiVersion, 1);
+  const empty = await p.getTodaySnapshot();
+  assert.equal(empty.date, '2026-09-08');
+  assert.equal(empty.score, 0);
+  assert.equal(empty.active, false);
+  assert.equal(empty.streak, 0);
+  for (const d of ['2026-09-06', '2026-09-07', '2026-09-08']) {
+    const r = helpers.createEmptyDailyRecord(d);
+    r.contribution.score = d === '2026-09-08' ? 12.5 : 3;
+    r.contribution.wordsAdded = 40;
+    p.store.daily[d] = r;
+  }
+  const snap = await p.getTodaySnapshot();
+  assert.equal(snap.apiVersion, 1);
+  assert.equal(snap.score, 12.5);
+  assert.equal(snap.active, true);
+  assert.equal(snap.streak, p.calcStats(p.settings.dataQualityScope, 'year').currentStreak);
+  assert.equal(snap.streak, 3);
+  assert.equal(snap.wordsAdded, 40);
+});
+
+test('today snapshot counts today\'s memos and those still without a destination; a failed read is null', async () => {
+  const { p } = pulseStateFixture();
+  await p.loadPluginData();
+  p.memoStore = { list: async () => [
+    { id: 'a', date: '2026-09-08', time: '09:00', links: [] },
+    { id: 'b', date: '2026-09-08', time: '10:00', links: ['Notes/x'] },
+    { id: 'c', date: '2026-09-08', time: '11:00', tempoTasks: ['t1'] },
+    { id: 'd', date: '2026-09-07', time: '11:00', links: [] },
+  ] };
+  assert.deepEqual({ ...(await p.getTodaySnapshot()).memos }, { today: 3, pending: 1 });
+  p.memoStore = { list: async () => { throw new Error('read failed'); } };
+  assert.equal((await p.getTodaySnapshot()).memos, null);
+});
+
+test('state event fires once per change, also without a status bar', async () => {
+  const { p, helpers, fired } = pulseStateFixture();
+  await p.loadPluginData();
+  p.statusBarEl = null;
+  p.updateStatusBar();
+  p.updateStatusBar();
+  const states = () => fired.filter(e => e.name === 'crisp-pulse:state');
+  assert.equal(states().length, 1);
+  assert.equal(states()[0].payload.reason, 'today');
+  assert.equal(states()[0].payload.score, 0);
+  const r = helpers.createEmptyDailyRecord('2026-09-08');
+  r.contribution.score = 2;
+  p.store.daily['2026-09-08'] = r;
+  p.updateStatusBar();
+  p.updateStatusBar();
+  assert.equal(states().length, 2);
+  assert.equal(states()[1].payload.score, 2);
+  assert.equal(states()[1].payload.active, true);
+});
+
+test('memo changes announce themselves so other plugins can re-read the counts', async () => {
+  const { p, fired } = pulseStateFixture();
+  await p.loadPluginData();
+  p.refreshMemoViews();
+  await new Promise(resolve => setTimeout(resolve, 450));
+  const memoEvents = fired.filter(e => e.name === 'crisp-pulse:state' && e.payload.reason === 'memos');
+  assert.equal(memoEvents.length, 1);
+  assert.equal(memoEvents[0].payload.apiVersion, 1);
+});

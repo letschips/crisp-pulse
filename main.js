@@ -2106,12 +2106,64 @@ class CrispPulsePlugin extends Plugin {
     this.updateStatusBar();
   }
 
+  /** 今天的分数、连续天数和是否活跃；状态栏和对外接口共用同一套口径。 */
+  todayState() {
+    const date = getTodayKey();
+    const record = this.store.daily[date] || createEmptyDailyRecord(date);
+    const c = record.contribution || {};
+    return {
+      apiVersion: PULSE_STATE_API_VERSION,
+      date,
+      score: c.score || 0,
+      streak: this.calcStats(this.settings.dataQualityScope, "year").currentStreak || 0,
+      active: isRecordActive(record),
+      notesCreated: c.notesCreated || 0,
+      wordsAdded: c.wordsAdded || 0,
+      tasksCompleted: c.tasksCompleted || 0,
+      record,
+    };
+  }
+
+  /** 其他插件读这个版本号判断能否调用 getTodaySnapshot、监听 crisp-pulse:state。 */
+  get pulseStateApiVersion() { return PULSE_STATE_API_VERSION; }
+
+  /** 给其他插件（如 Crisp Pets）读的今日状态，只读。速记是今天记的条数和其中还没转成任务、笔记或 Now 行动的条数；
+      读不到速记时 memos 为 null，不当成零。 */
+  async getTodaySnapshot() {
+    const { record, ...state } = this.todayState();
+    let memos = null;
+    try {
+      const summary = memoConversionReview(await this.memoStore.list(), state.date, state.date);
+      memos = { today: summary.total, pending: summary.pending.length };
+    } catch (error) {
+      console.warn("[Crisp Pulse] 今日状态读取速记失败", error);
+    }
+    return { ...state, memos };
+  }
+
+  /** 今天的分数、连续天数或活跃状态变了才发事件；速记有变化时 reason 为 memos，条数要再调 getTodaySnapshot 读。 */
+  emitPulseState(reason, state = null) {
+    const payload = { apiVersion: PULSE_STATE_API_VERSION, reason };
+    if (state) {
+      const key = `${state.date}|${state.score}|${state.streak}|${state.active}`;
+      if (key === this.lastPulseStateKey) return;
+      this.lastPulseStateKey = key;
+      Object.assign(payload, { date: state.date, score: state.score, streak: state.streak, active: state.active });
+    }
+    try {
+      this.app?.workspace?.trigger?.("crisp-pulse:state", payload);
+    } catch (error) {
+      console.error("[Crisp Pulse] state event listener failed", error);
+    }
+  }
+
   updateStatusBar() {
+    const today = this.todayState();
+    this.emitPulseState("today", today);
     if (!this.statusBarEl) return;
-    const todayRecord = this.store.daily[getTodayKey()] || createEmptyDailyRecord(getTodayKey());
-    const score = todayRecord.contribution.score || 0;
-    const stats = this.calcStats(this.settings.dataQualityScope, "year");
-    const streak = stats.currentStreak || 0;
+    const todayRecord = today.record;
+    const score = today.score;
+    const streak = today.streak;
 
     this.statusBarEl.empty();
 
@@ -3578,6 +3630,7 @@ class CrispPulsePlugin extends Plugin {
   refreshMemoViews() {
     window.clearTimeout(this.memoRefreshTimer);
     this.memoRefreshTimer = window.setTimeout(() => {
+      this.emitPulseState("memos");
       for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MEMO)) {
         const root = leaf.view?.containerEl?.children?.[1];
         // 正在输入（输入框有内容）时不重建，避免打断；刚提交完输入框是空的，照常刷新
@@ -7848,6 +7901,8 @@ const MEMO_TEMPO_RE = /^<!-- crisp-pulse-tempo: ([A-Za-z0-9_-]+) -->$/;
 const MEMO_SOURCE_RE = /^<!-- crisp-pulse-source: ([a-z][a-z0-9-]*:[A-Za-z0-9_-]{1,128})(?: rev: ([A-Za-z0-9_-]{1,64}))? -->$/;
 // 其他插件把内容记成速记的接口版本；不兼容的改动才加一
 const MEMO_CAPTURE_API_VERSION = 1;
+/** 今日状态接口（getTodaySnapshot / crisp-pulse:state）的版本，Crisp Pets 等插件据此判断能否调用。 */
+const PULSE_STATE_API_VERSION = 1;
 const ANKS_CAPTURE_CONTRACT_PATH = "Sidecar/tools/capture-metadata/contract.json";
 const ANKS_ROUTE_CONTRACT_PATH = ".runtime/snapshot/route-contract.json";
 const ANKS_NOW_FILE = "Now/行动.md";
