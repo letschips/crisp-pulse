@@ -2755,6 +2755,24 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
   transition: opacity 120ms ease;
 }
 .crisp-pulse-view .crisp-pulse-footer-tip.is-visible { opacity: 1; }
+/* 番茄钟进行时湖面上的帆船/小鸭子：和地平线同样放大，随水面上下晃一格像素 */
+.crisp-pulse-view .crisp-pulse-footer-ground canvas.crisp-pulse-voyager {
+  position: absolute;
+  display: none;
+  height: auto;
+  -webkit-mask-image: none;
+  mask-image: none;
+  image-rendering: pixelated;
+  pointer-events: none;
+  animation: crisp-pulse-voyager-bob 2.4s steps(1, end) infinite;
+}
+.crisp-pulse-view .crisp-pulse-footer-ground canvas.crisp-pulse-voyager.is-visible { display: block; }
+.crisp-pulse-view .crisp-pulse-footer-ground canvas.crisp-pulse-voyager.is-paused { animation: none; }
+@keyframes crisp-pulse-voyager-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(calc(100% / var(--pulse-voyager-rows, 11))); }
+}
+@media (prefers-reduced-motion: reduce) { .crisp-pulse-view .crisp-pulse-footer-ground canvas.crisp-pulse-voyager { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .crisp-pulse-view .crisp-pulse-footer-tip { transition: none; } }
 @container (max-width: 600px) {
   .crisp-pulse-view .crisp-pulse-footer-info { grid-template-columns: auto auto; justify-content: space-between; }

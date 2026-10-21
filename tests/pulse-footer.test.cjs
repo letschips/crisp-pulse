@@ -17,7 +17,7 @@ const context = {
   module: { exports: {} }, console, Date, window: { setTimeout, clearTimeout }, document: {}, setTimeout, clearTimeout, structuredClone, crypto: globalThis.crypto, TextEncoder, TextDecoder, Buffer, atob,
 };
 vm.runInNewContext(`${fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8')}
-module.exports.F = { celestialPlacement, lunarPhase, paintCelestial, buildGroundProfile, groundDayCount, groundDayX, paintPulseGround, getTodayKey, reviewDayKey, reviewDayNumber, PULSE_GROUND_MARGIN, CrispPulseView };`, context);
+module.exports.F = { celestialPlacement, lunarPhase, paintCelestial, buildGroundProfile, groundDayCount, groundDayX, paintPulseGround, getTodayKey, reviewDayKey, reviewDayNumber, PULSE_GROUND_MARGIN, CrispPulseView, groundVoyagerSpot, groundLakeTop, PULSE_VOYAGERS };`, context);
 const F = context.module.exports.F;
 
 test('one huge day does not flatten the rest; no data stays flat', () => {
@@ -162,4 +162,21 @@ test('pixel moon lights the correct side and a new moon shows only a faint disc'
   assert.ok(waning.left > waning.right + 150, '下弦：左边亮');
   assert.ok(full.left > 400 && full.right > 400, '满月两边都亮');
   assert.ok(fresh.left < 300 && fresh.right < 300, '新月只有暗盘');
+});
+
+/* 番茄钟帆船/小鸭子。失败模式：
+   - 进度 0 或 1 时船伸出画布两侧被切掉；船漂在半空或沉到画布外。
+   - 两个精灵行宽不一致，画出来是歪的。 */
+test('the pomodoro boat and duck stay on the lake and inside the canvas', () => {
+  for (const [kind, sprite] of Object.entries(F.PULSE_VOYAGERS)) {
+    assert.ok(sprite.rows.every((r) => r.length === sprite.rows[0].length), `${kind} 每行一样宽`);
+    const s = { w: sprite.rows[0].length, h: sprite.rows.length, waterline: sprite.waterline, depth: sprite.depth };
+    for (const [w, h] of [[300, 92], [900, 92], [160, 84]]) {
+      const a = F.groundVoyagerSpot(0, w, h, s), b = F.groundVoyagerSpot(1, w, h, s), mid = F.groundVoyagerSpot(0.5, w, h, s);
+      assert.ok(a.x >= 0 && b.x + s.w <= w, `${kind} 两端不出画布`);
+      assert.ok(a.x < mid.x && mid.x < b.x, `${kind} 随进度往右走`);
+      assert.ok(a.y + s.h <= h, `${kind} 不沉到画布外`);
+      assert.ok(a.y + s.waterline > F.groundLakeTop(h), `${kind} 吃水线在湖面里`);
+    }
+  }
 });
