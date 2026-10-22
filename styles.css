@@ -90,13 +90,6 @@
   display: block;
 }
 
-.crisp-pulse-title {
-  margin: 0;
-  font-size: var(--font-ui-large);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
 .crisp-pulse-actions {
   display: flex;
   align-items: center;
@@ -111,11 +104,6 @@
   color: var(--text-normal);
   font-size: var(--font-ui-small);
   cursor: pointer;
-}
-
-.crisp-pulse-kpi-sub {
-  font-size: 11px;
-  color: var(--text-faint);
 }
 
 .crisp-pulse-tab-btn {
@@ -526,7 +514,6 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
 .crisp-pulse-heatmap-footer { flex-wrap: wrap; gap: 10px; }
 @container (max-width: 500px) {
   .crisp-pulse-heatmap-card, .crisp-pulse-detail-card { padding: 12px; }
-  .crisp-pulse-title { font-size: var(--font-ui-medium); }
   .crisp-pulse-file-item { flex-wrap: wrap; gap: 4px; }
   .crisp-pulse-file-meta { margin-left: 0; }
 }
@@ -2073,7 +2060,6 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
 .crisp-pulse-view .crisp-pulse-wrapper { max-width: 1160px; gap: 24px; }
 .crisp-pulse-view .crisp-pulse-header { gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--pulse-ui-border); }
 .crisp-pulse-view .crisp-pulse-title-group { gap: 14px; flex-wrap: wrap; min-width: 0; }
-.crisp-pulse-view .crisp-pulse-title { font-size: 21px; font-weight: 600; letter-spacing: -.025em; line-height: 1.35; }
 .crisp-pulse-view .crisp-pulse-title-icon { width: 32px; height: 32px; border-radius: 10px; background: var(--pulse-ui-surface); border: 1px solid var(--pulse-ui-border); color: var(--text-normal); }
 .crisp-pulse-view .crisp-pulse-actions { gap: 6px; flex-wrap: wrap; }
 .crisp-pulse-view button.crisp-pulse-tab-btn {
@@ -2099,7 +2085,6 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
   background: var(--pulse-ui-surface); border: 1px solid var(--pulse-ui-border); border-radius: 16px;
   box-shadow: none !important;
 }
-.crisp-pulse-view .crisp-pulse-kpi-sub { font-size: 10px; color: var(--text-faint); font-weight: 400; }
 .crisp-pulse-view :is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card) { padding: 24px; }
 .crisp-pulse-view :is(.crisp-pulse-heatmap-title,.crisp-pulse-detail-date) { font-size: 15px; font-weight: 600; }
 .crisp-pulse-view .crisp-pulse-heatmap-footer { color: var(--text-muted); font-size: 11px; line-height: 1.6; }
@@ -2123,7 +2108,6 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
 .crisp-pulse-view :is(button,select):focus-visible { outline: 2px solid var(--pulse-ui-accent) !important; outline-offset: 3px; }
 @container (max-width: 550px) {
   .crisp-pulse-view :is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-analytics-card) { padding: 16px 12px; border-radius: 12px; }
-  .crisp-pulse-view .crisp-pulse-title { font-size: 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .crisp-pulse-view button.crisp-pulse-tab-btn { transition: none; }

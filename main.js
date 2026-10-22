@@ -24,7 +24,7 @@ const PULSE_ZH = /^zh\b/i.test(PULSE_LANGUAGE);
 const PULSE_HANT = PULSE_ZH && /^zh[-_](tw|hk|mo|hant)\b/i.test(PULSE_LANGUAGE);
 /* 繁体文案由简体文案转出来（OpenCC s2twp：台湾正体 + 台湾用语），表由 scripts/gen-hant.cjs 生成，只收源码里用到的字词。
    分两段按最长匹配替换：s 简→繁，t 台湾用语。插值进来的内容（文件名、标签）也会被转，只影响显示。 */
-const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"aff56bd1dc0a94d7","s":"一只 一隻|一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不出 不出|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|严 嚴|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|买 買|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出人 出人|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分不出 分不出|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参数 參數|参考 參考|双 雙|双向 雙向|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只回 只回|只在 只在|只打 只打|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|复选 複選|复选框 核取方塊|多云 多雲|够 夠|夹 夾|妈 媽|委托 委託|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|弹 彈|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录下 錄下|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|托 託|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折扣 折扣|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|方向 方向|无 無|日历 日曆|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|沉淀 沉澱|没 沒|注记 註記|流向 流向|浅 淺|测 測|润 潤|淀 澱|渐 漸|湖面 湖面|满 滿|灯 燈|点 點|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|获取 獲取|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记录 記錄|记录为 記錄爲|记录到 記錄到|许 許|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|购 購|贴 貼|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|重折 重摺|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|麦 麥|麦克 麥克|麦克风 麥克風","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|參數 引數|品質 品質|啓 啟|在線 線上|字段 欄位|字符 字元|字符串 字串|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|核取方塊 核取方塊|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
+const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"fa72235175a6dffd","s":"一只 一隻|一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|方向 方向|无 無|日历 日曆|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|沉淀 沉澱|没 沒|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|湖面 湖面|满 滿|灯 燈|点 點|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|麦 麥|麦克 麥克|麦克风 麥克風","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
 let pulseHantStages = null;
 function pulseHant(text) {
   if (typeof text !== "string" || !/\p{Script=Han}/u.test(text)) return text;
@@ -7125,7 +7125,6 @@ class CrispPulseView extends ItemView {
     const titleGroup = header.createDiv({ cls: "crisp-pulse-title-group" });
     const icon = titleGroup.createDiv({ cls: "crisp-pulse-title-icon" });
     icon.innerHTML = ICON_BLOCKS_WAVE_SVG;
-    titleGroup.createEl("h2", { cls: "crisp-pulse-title", text: tr("Crisp Pulse 知识脉冲看板", "Crisp Pulse Dashboard") });
 
     // View Switcher (Dashboard vs Retrospective)
     const viewSwitch = titleGroup.createDiv({ cls: "crisp-pulse-actions" });
@@ -7244,7 +7243,7 @@ class CrispPulseView extends ItemView {
     const entitled = pulseEntitled(this.plugin);
     if (!entitled) this.selectedMetric = 'contribution';
     const metricLabel = this.getMetricLabel(this.selectedMetric);
-    const heat = this.trayCard(wrapper, { icon: 'calendar-days', title: tr('年度知识活跃脉冲', 'Yearly activity'), subtitle: tr(`${metricLabel} · 强度按个人近期分位数`, `${metricLabel} · intensity by your recent percentiles`), pill: tr(`${stats.activeDays} 天活跃`, `${plural(stats.activeDays, 'active day')}`), pillMuted: true, cls: 'pulse-v2-heat' });
+    const heat = this.trayCard(wrapper, { icon: 'calendar-days', title: tr('年度知识活跃脉冲', 'Yearly activity'), pill: tr(`${stats.activeDays} 天活跃`, `${plural(stats.activeDays, 'active day')}`), pillMuted: true, cls: 'pulse-v2-heat' });
     const seg = heat.createDiv({ cls: 'pulse-v2-seg' });
     seg.setAttr('role', 'tablist');
     // 「番茄」只在装了带番茄钟的 Crisp Focus、或者已经有番茄记录时出现
@@ -7523,7 +7522,6 @@ class CrispPulseView extends ItemView {
     const today = dayPomodoros(this.plugin.store.daily[getTodayKey()]);
     const card = this.trayCard(wrapper, {
       icon: "timer", title: tr("今天的番茄", "Today’s pomodoros"), cls: "pulse-v2-pomodoro",
-      subtitle: tr(`专注 ${snap.focusMinutes} 分钟 · 短休 ${snap.shortBreakMinutes} · 每 ${snap.every} 个长休 ${snap.longBreakMinutes}`, `Focus ${snap.focusMinutes} min · short break ${snap.shortBreakMinutes} · long break ${snap.longBreakMinutes} every ${snap.every}`),
       pill: `${today.done} / ${snap.goal}`, pillMuted: today.done === 0,
     });
     const locked = (title, text, action, run) => {
@@ -7907,7 +7905,6 @@ class CrispPulseView extends ItemView {
       const bIcon = bTitleLeft.createSpan({ cls: "crisp-pulse-breakdown-icon-wrap" });
       bIcon.innerHTML = ICON_COMPUTER_SVG;
       bTitleLeft.createSpan({ text: tr("贡献得分构成拆解", "Score breakdown") });
-      bTitle.createSpan({ text: tr("分项相加严格等于总分", "The items add up exactly to the total"), cls: "crisp-pulse-kpi-sub" });
 
       const list = bCard.createDiv({ cls: "crisp-pulse-breakdown-list" });
 
@@ -8066,7 +8063,7 @@ class CrispPulseView extends ItemView {
     const today = getTodayKey();
     const weekStartsOn = this.plugin.settings.weekStartsOn;
     const written = reviewDraftSize(model);
-    const card = this.trayCard(parent, { icon: 'notebook-pen', title: tr('知识复盘', 'Knowledge review'), subtitle: tr('从线索找到材料，写下认识和下一步。草稿按周期保存，下次打开还在。', 'Follow a clue to the material, then write down what you learned and what comes next. Drafts are saved per period and are there next time.'), wrap: true, pill: written ? tr(`已写 ${written} 项`, `${plural(written, 'item')} written`) : tr('还没开始', 'Not started'), pillMuted: !written, insetCls: 'crisp-pulse-review-period' });
+    const card = this.trayCard(parent, { icon: 'notebook-pen', title: tr('知识复盘', 'Knowledge review'), wrap: true, pill: written ? tr(`已写 ${written} 项`, `${plural(written, 'item')} written`) : tr('还没开始', 'Not started'), pillMuted: !written, insetCls: 'crisp-pulse-review-period' });
     const bar = card.createDiv({ cls: 'crisp-pulse-review-period-bar' });
 
     // 自然周用整周翻页（本周进行中时，往前翻得到完整的上一周）；其他区间按等长平移。
@@ -8150,7 +8147,7 @@ class CrispPulseView extends ItemView {
   }
 
   renderReviewClues(parent, model, memoSummary, live) {
-    const card = this.trayCard(parent, { icon: 'lightbulb', title: tr('值得回看的线索', 'Worth a second look'), subtitle: tr('从本期记录里挑出最多三条，每条都能点进原始内容。只是线索，判断留给你。', 'Up to three picks from this period’s records, each linking to the original material. They are pointers; the judgement is yours.'), wrap: true, insetCls: 'crisp-pulse-review-clue-inset' });
+    const card = this.trayCard(parent, { icon: 'lightbulb', title: tr('值得回看的线索', 'Worth a second look'), wrap: true, insetCls: 'crisp-pulse-review-clue-inset' });
     const row = card.createDiv({ cls: 'crisp-pulse-review-clues' });
     const { start, end } = model.period;
     const carry = this.plugin.previousActionCandidates(start, end, model.scope).length;
@@ -8185,7 +8182,7 @@ class CrispPulseView extends ItemView {
 
   renderReviewChanges(parent, model) {
     const { period, previous } = model;
-    const section = this.reviewSection(parent, 'git-compare', tr('和上一期比', 'Compared with last period'), tr(`上一期 ${period.previousStart} — ${period.previousEnd}，${previous.coverage.recorded}/${period.days} 天有记录。点词数、笔记、任务可给下方材料排序。`, `Last period ${period.previousStart} — ${period.previousEnd}, ${previous.coverage.recorded}/${period.days} days recorded. Click words, notes or tasks to sort the materials below.`));
+    const section = this.reviewSection(parent, 'git-compare', tr('和上一期比', 'Compared with last period'), tr(`上一期 ${period.previousStart} — ${period.previousEnd}，${previous.coverage.recorded}/${period.days} 天有记录`, `Last period ${period.previousStart} — ${period.previousEnd}, ${previous.coverage.recorded}/${period.days} days recorded`));
     const colors = { wordsAdded: 'purple', rewrittenWords: 'green', notesCreated: 'rose', tasksCompleted: 'teal', focusMinutes: 'orange', totalScore: 'blue' };
     const modes = { wordsAdded: 'words', rewrittenWords: 'rewrittenWords', notesCreated: 'created', tasksCompleted: 'tasks' };
     const order = ['wordsAdded', 'rewrittenWords', 'notesCreated', 'tasksCompleted', 'focusMinutes', 'totalScore'];
@@ -8222,7 +8219,7 @@ class CrispPulseView extends ItemView {
   }
 
   renderReviewMaterials(parent, model) {
-    const section = this.reviewSection(parent, 'folder-tree', tr('本期材料', 'Material from this period'), tr('精力落在哪些目录。点「引用」把笔记记为复盘依据。', 'Which folders took your attention. Click Cite to keep a note as evidence.'));
+    const section = this.reviewSection(parent, 'folder-tree', tr('本期材料', 'Material from this period'));
     section.addClass?.('crisp-pulse-review-materials');
     const { start, end } = model.period;
     const files = model.current.allFiles || [];
@@ -8355,7 +8352,7 @@ class CrispPulseView extends ItemView {
 
   /** 速记走向：本期记下的速记，现在去了任务、笔记还是 Now；一条可以去几处，已转化按速记去重。 */
   renderReviewMemos(parent, model, memoSummary, live) {
-    const section = this.reviewSection(parent, CRISP_PULSE_MEMO_ICON_ID, tr('速记走到了哪里', 'Where your memos went'), tr('本期速记现在转成了什么，状态截至现在。', 'What this period’s memos have turned into, as of now.'));
+    const section = this.reviewSection(parent, CRISP_PULSE_MEMO_ICON_ID, tr('速记走到了哪里', 'Where your memos went'));
     section.addClass?.('crisp-pulse-review-memo-card');
     const body = section.createDiv({ cls: 'crisp-pulse-review-memos' });
     body.createDiv({ cls: 'crisp-pulse-review-note', text: tr('正在读取速记…', 'Loading memos…') });
@@ -8423,7 +8420,7 @@ class CrispPulseView extends ItemView {
   }
 
   renderReviewSources(parent, model) {
-    const section = this.reviewSection(parent, 'pen-line', tr('新增内容从哪里来', 'Where new words came from'), tr('大段捕获是估算，分不出人工和 AI 写作。点大段捕获看对应笔记。', 'Large captures are estimates and cannot tell human from AI writing. Click them to see the notes.'));
+    const section = this.reviewSection(parent, 'pen-line', tr('新增内容从哪里来', 'Where new words came from'), tr('大段捕获是估算。', 'Large captures are estimates.'));
     const words = model.current.sourceWords;
     const total = Object.values(words).reduce((sum, value) => sum + (value || 0), 0);
     const parts = [['capture', 'orange'], ['unattributed', 'blue'], ['system', 'gray'], ['historical', 'faint']];
@@ -12014,7 +12011,6 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("输入授权码", "License code"))
-      .setDesc(tr("粘贴购买获取的 Crisp Suite 授权字符串进行离线/在线激活。", "Paste the Crisp Suite license string you received after purchase to activate offline or online."))
       .addText((text) => {
         text
           .setPlaceholder(tr("粘贴 Crisp 授权码...", "Paste your Crisp license code..."))
@@ -12046,7 +12042,6 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("默认数据质量范围", "Default data scope"))
-      .setDesc(tr("控制统计时包含的数据类型", "Which kinds of data the stats include"))
       .addDropdown((drop) =>
         drop
           .addOption("reliable", tr("可靠记录 (排除旧版异常数据与估算打卡)", "Reliable records (excludes abnormal legacy data and estimated days)"))
@@ -12061,7 +12056,6 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("默认看板时间跨度", "Default dashboard time range"))
-      .setDesc(tr("打开 Pulse View 时默认统计的日期范围", "The date range shown when Pulse View opens"))
       .addDropdown((drop) =>
         drop
           .addOption("year", tr("近 53 周 (全年)", "Last 53 weeks (full year)"))
@@ -12106,7 +12100,6 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("知识库预设模式", "Vault preset"))
-      .setDesc(tr("一键快速配置目标目录范围", "Set up the folders to track in one click"))
       .addDropdown((drop) =>
         drop
           .addOption("all", tr("全库统计 (默认)", "Whole vault (default)"))
@@ -12129,8 +12122,8 @@ class CrispPulseSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName(tr("排除目录 (Excluded Folders)", "Excluded folders"))
-      .setDesc(tr("这些目录下的笔记变动不会计入统计（逗号分隔）", "Changes to notes in these folders are not counted (comma-separated)"))
+      .setName(tr("排除目录", "Excluded folders"))
+      .setDesc(tr("逗号分隔", "Comma-separated"))
       .addText((text) =>
         text
           .setValue((this.plugin.settings.excludedFolders || []).join(", "))
@@ -12143,8 +12136,8 @@ class CrispPulseSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName(tr("仅包含目录 (Included Folders)", "Included folders"))
-      .setDesc(tr("若指定，则仅这些目录下的笔记计入统计；留空表示全库（逗号分隔）", "If set, only notes in these folders are counted; leave empty for the whole vault (comma-separated)"))
+      .setName(tr("仅包含目录", "Included folders"))
+      .setDesc(tr("留空为全库，逗号分隔", "Empty means the whole vault; comma-separated"))
       .addText((text) =>
         text
           .setValue((this.plugin.settings.includedFolders || []).join(", "))
@@ -12200,7 +12193,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("日笔记里的速记段落", "Memo section in daily notes"))
-      .setDesc(tr("通用模式下速记追加到这个标题下面；没有这个标题时会在文末补上。留空则直接追加到文末。只认顶层标题，写在引用块或 Callout 里的不算。", "In general mode, memos are appended under this heading; if it is missing, it is added at the end. Leave empty to append to the end. Only top-level headings count, not ones inside quotes or callouts."))
+      .setDesc(tr("留空则追加到文末", "Leave empty to append to the end"))
       .addText((text) => text
         .setPlaceholder(MEMO_DEFAULT_HEADING)
         .setValue(this.plugin.settings.memoHeading ?? MEMO_DEFAULT_HEADING)
@@ -12211,7 +12204,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("日笔记文件夹与日期格式", "Daily note folder and date format"))
-      .setDesc(tr("留空跟随 Obsidian 核心「日记」插件。格式用 moment 语法，例如 YYYY-MM-DD 或 YYYY/MM/YYYY-MM-DD。", "Leave empty to follow Obsidian's core Daily notes plugin. Use moment syntax for the format, e.g. YYYY-MM-DD or YYYY/MM/YYYY-MM-DD."))
+      .setDesc(tr("留空跟随核心「日记」插件，格式用 moment 语法", "Empty follows the core Daily notes plugin; moment format"))
       .addText((text) => text
         .setPlaceholder(tr("文件夹", "Folder"))
         .setValue(this.plugin.settings.memoDailyFolder || "")
@@ -12241,7 +12234,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("每日回顾条数", "Daily review count"))
-      .setDesc(tr("「回顾」页每天挑出的旧速记数量，同一天内结果不变，可点「换一批」。", "How many older memos the Review tab picks each day. The set stays the same all day; click “Shuffle” for another."))
+      .setDesc(tr("同一天内不变", "Stays the same all day"))
       .addDropdown((dd) => {
         for (const n of [4, 6, 8, 12, 16, 24]) dd.addOption(String(n), tr(`${n} 条`, String(n)));
         dd.setValue(String(this.plugin.settings.memoReviewCount || 6)).onChange(async (value) => {
@@ -12253,7 +12246,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("回顾范围", "Review scope"))
-      .setDesc(tr("只回顾这些标签（含子标签），空格分隔，留空为全部；时间范围限定回顾多久以内的速记。", "Only review these tags (including nested tags), separated by spaces; leave empty for all. The time range limits how far back memos are reviewed."))
+      .setDesc(tr("留空为全部标签", "Empty means all tags"))
       .addText((text) => text
         .setPlaceholder(tr("#阅读 #工作", "#reading #work"))
         .setValue(this.plugin.settings.memoReviewTags || "")
@@ -12273,7 +12266,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("每日回顾提醒", "Daily review reminder"))
-      .setDesc(tr("到这个时间提醒一次（例如 21:30），留空不提醒。只在 Obsidian 开着时生效；允许系统通知时弹系统通知，否则在 Obsidian 内提示。", "Remind once at this time (e.g. 21:30); leave empty for no reminder. Only works while Obsidian is open; uses a system notification if allowed, otherwise an in-app notice."))
+      .setDesc(tr("只在 Obsidian 开着时提醒", "Only while Obsidian is open"))
       .addText((text) => text
         .setPlaceholder("21:30")
         .setValue(this.plugin.settings.memoReviewTime || "")
@@ -12294,8 +12287,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
     const vaultName = this.app.vault?.getName?.() || tr("你的库", "your vault");
     new Setting(containerEl)
       .setName(tr("外部快捷入口（URL）", "External shortcut (URL)"))
-      .setDesc(tr(`在 iOS 快捷指令、Raycast、Alfred、PopClip 里打开这个链接即可记一条：obsidian://crisp-pulse-memo?vault=${encodeURIComponent(vaultName)}&text=内容 。可选参数 tags=阅读,工作（自动补成 #标签）、open=1（记完打开速记）；不带 text 时只打开速记。`,
-   `Open this link from iOS Shortcuts, Raycast, Alfred or PopClip to capture a memo: obsidian://crisp-pulse-memo?vault=${encodeURIComponent(vaultName)}&text=your-text . Optional parameters: tags=reading,work (turned into #tags) and open=1 (open memos afterwards). Without text it just opens memos.`))
+      .setDesc(tr("iOS 快捷指令、Raycast、Alfred、PopClip 都能用", "Works from iOS Shortcuts, Raycast, Alfred and PopClip"))
       .addButton((button) => button.setButtonText(tr("复制示例链接", "Copy example link")).onClick(async () => {
         await navigator.clipboard.writeText(`obsidian://crisp-pulse-memo?vault=${encodeURIComponent(vaultName)}&text=${encodeURIComponent(tr("在这里写想法", "Write your idea here"))}`);
         new Notice(tr("已复制示例链接", "Example link copied"));
@@ -12305,7 +12297,6 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("显示底部状态栏指示器", "Show status bar indicator"))
-      .setDesc(tr("在 Obsidian 底部状态栏显示今日脉冲贡献分与连续天数", "Show today's score and streak in Obsidian's status bar"))
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.showStatusBarItem).onChange(async (val) => {
           this.plugin.settings.showStatusBarItem = val;
@@ -12321,7 +12312,6 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("看板顶部横幅", "Dashboard banner"))
-      .setDesc(tr("在 Pulse 视图顶部显示横幅。默认是本地绘制的像素风天空（深色主题为夜景，浅色主题为白天），也可以换成下面的自定义图片。", "Show a banner at the top of Pulse View. By default it is a locally drawn pixel-art sky (night in dark themes, day in light themes); you can replace it with a custom image below."))
       .addToggle(toggle => toggle.setValue(!!this.plugin.settings.showHeaderBanner).onChange(async value => {
         this.plugin.settings.showHeaderBanner = value;
         await this.plugin.savePluginData();
@@ -12330,7 +12320,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     const bannerImage = new Setting(containerEl)
       .setName(tr("自定义横幅图片", "Custom banner image"))
-      .setDesc(tr(`用库内的一张图片代替像素天空，留空则用像素天空。${PULSE_BANNER_IMAGE_HINT}`, `Use an image from your vault instead of the pixel sky; leave empty for the pixel sky. ${PULSE_BANNER_IMAGE_HINT}`));
+      .setDesc(tr("留空用像素天空", "Leave empty for the pixel sky"));
     const bannerStatus = bannerImage.descEl.createDiv({ cls: "crisp-pulse-banner-status" });
     const showBannerStatus = () => {
       const path = this.plugin.settings.headerBannerImage;
@@ -12356,6 +12346,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
       showBannerStatus();
     };
     bannerImage.addText(text => {
+      text.inputEl.setAttr("title", PULSE_BANNER_IMAGE_HINT);
       text.setPlaceholder(tr("例如 Assets/banner.jpg", "e.g. Assets/banner.jpg")).setValue(this.plugin.settings.headerBannerImage || "").onChange(saveBannerImage);
       createBannerImageSuggest(this.app, text.inputEl, saveBannerImage);
     });
@@ -12367,7 +12358,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("看板底部地平线", "Dashboard horizon"))
-      .setDesc(tr("在 Pulse 视图底部显示和横幅呼应的像素地平线，山脊是最近一段时间每天的贡献分，最右边的小灯（白天是小旗）是今天。鼠标移上去可以看某天的分数。", "Show a pixel horizon at the bottom of Pulse View that matches the banner. The ridge is your daily score over recent days, and the lamp on the far right (a flag in daytime) is today. Hover to see a day's score."))
+      .setDesc(tr("山脊是每天得分，最右是今天", "The ridge is your daily score; the far right is today"))
       .addToggle(toggle => toggle.setValue(this.plugin.settings.showFooterLandscape !== false).onChange(async value => {
         this.plugin.settings.showFooterLandscape = value;
         await this.plugin.savePluginData();
@@ -12376,7 +12367,6 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("周起始日", "Week starts on"))
-      .setDesc(tr("年度热力图周起始日", "First day of the week in the yearly heatmap"))
       .addDropdown((drop) =>
         drop
           .addOption("sunday", tr("周日 (Sunday)", "Sunday"))
@@ -12390,7 +12380,6 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("默认看板指标", "Default dashboard metric"))
-      .setDesc(tr("打开 Pulse View 时默认激活的指标", "The metric selected when Pulse View opens"))
       .addDropdown((drop) =>
         drop
           .addOption("contribution", tr("贡献得分 (Contribution)", "Contribution score"))
@@ -12408,7 +12397,6 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("会话空闲超时 (分钟)", "Session idle timeout (minutes)"))
-      .setDesc(tr("判定单次有效编辑会话结束的无操作时长", "How long without activity ends an edit session"))
       .addSlider((slider) =>
         slider
           .setLimits(1, 10, 1)
@@ -12423,10 +12411,9 @@ class CrispPulseSettingTab extends PluginSettingTab {
     // 4. Advanced Contribution Weights
     containerEl.createEl("h3", { text: tr("贡献得分权重配置", "Contribution score weights") });
 
-    const createWeightSetting = (name, desc, prop) => {
+    const createWeightSetting = (name, prop) => {
       new Setting(containerEl)
         .setName(name)
-        .setDesc(desc)
         .addText((text) =>
           text.setValue(String(this.plugin.settings[prop])).onChange(async (val) => {
             const num = parseFloat(val);
@@ -12438,15 +12425,14 @@ class CrispPulseSettingTab extends PluginSettingTab {
         );
     };
 
-    createWeightSetting(tr("新建笔记得分", "Points per new note"), tr("每新建一篇 Markdown 笔记的得分加成", "Points for each new Markdown note"), "weightNoteCreated");
-    createWeightSetting(tr("有意义编辑会话得分", "Points per meaningful edit session"), tr("单次产生实质变化的编辑会话得分加成", "Points for each edit session that makes a real change"), "weightMeaningfulEdit");
-    createWeightSetting(tr("完成任务得分", "Points per completed task"), tr("每勾选完成一个 Markdown 复选框任务的得分", "Points for each Markdown checkbox task you complete"), "weightTaskCompleted");
-    createWeightSetting(tr("新建内链得分", "Points per new link"), tr("每新建一个 [[双向链接]] 的得分", "Points for each new [[internal link]]"), "weightLinkCreated");
-    createWeightSetting(tr("深度专注每分钟得分", "Points per focus minute"), tr("Crisp Focus 专注计时每分钟折算的贡献分（默认 0.05 分/分钟）", "Points per minute of Crisp Focus time (default 0.05 per minute)"), "weightFocusMinute");
+    createWeightSetting(tr("新建笔记得分", "Points per new note"), "weightNoteCreated");
+    createWeightSetting(tr("有意义编辑会话得分", "Points per meaningful edit session"), "weightMeaningfulEdit");
+    createWeightSetting(tr("完成任务得分", "Points per completed task"), "weightTaskCompleted");
+    createWeightSetting(tr("新建内链得分", "Points per new link"), "weightLinkCreated");
+    createWeightSetting(tr("深度专注每分钟得分", "Points per focus minute"), "weightFocusMinute");
 
     new Setting(containerEl)
       .setName(tr("捕获/大段粘贴折算系数", "Capture / large paste multiplier"))
-      .setDesc(tr("识别为网页剪藏或瞬间大段粘贴时的字数得分折扣", "Discount on word points for web clips or large instant pastes"))
       .addSlider((slider) =>
         slider
           .setLimits(0, 1, 0.1)
@@ -12459,7 +12445,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
       );
 
     // 5. Ecosystem & Knowledge Integration
-    containerEl.createEl("h3", { text: tr("生态与知识库协同 (v1.3.0)", "Integrations") });
+    containerEl.createEl("h3", { text: tr("生态与知识库协同", "Integrations") });
 
     const focusAvailable = this.plugin.focusAdapter?.isAvailable();
     const focusStatusDesc = focusAvailable
@@ -12468,7 +12454,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("Crisp Focus 专注计时联动", "Crisp Focus integration"))
-      .setDesc(tr(`当 Crisp Focus 专注会话完成时，自动将专注时长累加至今日知识脉冲。\n${focusStatusDesc}`, `When a Crisp Focus session completes, its focus time is added to today’s Pulse.\n${focusStatusDesc}`))
+      .setDesc(focusStatusDesc)
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.enableCrispFocusSync).onChange(async (val) => {
           this.plugin.settings.enableCrispFocusSync = val;
@@ -12484,7 +12470,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("番茄钟休息时提示记速记", "Prompt for a memo during pomodoro breaks"))
-      .setDesc(tr(`Crisp Focus 1.5.0 起的番茄钟进入休息时，速记输入框下方提示「这一轮做了什么」，休息期间记下的速记自动带上 #${MEMO_POMODORO_TAG}。`, `When a Crisp Focus 1.5.0+ pomodoro goes on break, a prompt below the memo box asks what you did this round; memos captured during the break are tagged #${MEMO_POMODORO_TAG}.`))
+      .setDesc(tr(`休息时记下的速记带上 #${MEMO_POMODORO_TAG}`, `Memos captured on break are tagged #${MEMO_POMODORO_TAG}`))
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.memoPomodoroPrompt !== false).onChange(async (val) => {
           this.plugin.settings.memoPomodoroPrompt = val;
@@ -12495,7 +12481,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("专注时长计入贡献总分", "Count focus time toward the score"))
-      .setDesc(tr("开启后，完成的专注分钟数按设定权重折算为贡献得分；番茄钟中途结束的只记录，不计分。", "When on, completed focus minutes are converted to points using the weight above; pomodoros ended early are logged but not scored."))
+      .setDesc(tr("中途结束的番茄只记录不计分", "Pomodoros ended early are logged, not scored"))
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.includeFocusInContribution).onChange(async (val) => {
           this.plugin.settings.includeFocusInContribution = val;
@@ -12506,7 +12492,6 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("周报默认归档目录", "Default report archive folder"))
-      .setDesc(tr("在周复盘点击「归档至知识库」时生成 Markdown 文件的目标路径", "Where the Markdown file goes when you click “Archive to vault” in a review"))
       .addText((text) =>
         text
           .setValue(this.plugin.settings.reviewArchiveFolder || "Topics/self-media/outputs/reviews")
@@ -12519,7 +12504,6 @@ class CrispPulseSettingTab extends PluginSettingTab {
     if (focusAvailable) {
       new Setting(containerEl)
         .setName(tr("测试开启 25 分钟专注", "Test a 25-minute focus session"))
-        .setDesc(tr("立即委托 Crisp Focus 启动一个 25 分钟番茄钟会话", "Ask Crisp Focus to start a 25-minute pomodoro now"))
         .addButton((btn) =>
           btn.setButtonText(tr("立即开启专注", "Start focus now")).onClick(async () => {
             await this.plugin.focusAdapter.startFocusSession(25);
@@ -12533,7 +12517,6 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("导出统计数据", "Export stats"))
-      .setDesc(tr("下载当前全部统计记录为 CSV 或 JSON 格式", "Download all current stats as CSV or JSON"))
       .addButton((btn) =>
         btn.setButtonText(tr("导出 CSV", "Export CSV")).onClick(() => {
           this.plugin.exportCSVFile();
@@ -12547,7 +12530,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName(tr("手动创建备份快照", "Create a backup snapshot"))
-      .setDesc(tr("将当前脉冲数据完整复制到插件 backups/ 目录下", "Copy all current Pulse data into the plugin's backups/ folder"))
+      .setDesc(tr("存到插件 backups/ 目录", "Saved to the plugin's backups/ folder"))
       .addButton((btn) =>
         btn.setButtonText(tr("立即备份", "Back up now")).onClick(async () => {
           btn.setDisabled(true);
