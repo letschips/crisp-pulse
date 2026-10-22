@@ -1,8 +1,8 @@
-/* Real Obsidian acceptance: wrong manual/system theme, stale dawn/dusk after
- * focus, lighthouse collision, halo clipping, visible reset, missing motion,
+/* Real Obsidian acceptance: sky out of step with the interface appearance,
+ * stale sky after a theme flip or focus, lighthouse collision, halo clipping, visible reset, missing motion,
  * duplicate canvases, and event/observer work after the view closes.
  * Loads the selected runtime with a local Date binding; never sets the system
- * clock, user theme, plugin settings, or vault content. Writes repeatable proof.
+ * clock, user theme (appearance is stubbed on the view), plugin settings, or vault content. Writes repeatable proof.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -19,7 +19,7 @@ async function liveProbe(config) {
   const hash = f => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
   const before = hash(userData), rows = [];
   const source = fs.readFileSync(pathJoin(config.sourceDir, 'main.js'), 'utf8');
-  let now = new Date(2026, 9, 19, 12), choice = 'system';
+  let now = new Date(2026, 9, 19, 12), look = 'day';
   class LocalDate extends Date {
     constructor(...args) { super(...(args.length ? args : [now.getTime()])); }
     static now() { return now.getTime(); }
@@ -41,7 +41,7 @@ async function liveProbe(config) {
   const v = new mod.exports.CrispPulseView(leaf, p);
   v.app = Object.create(app);
   v.app.vault = Object.create(app.vault);
-  v.app.vault.getConfig = key => key === 'theme' ? choice : app.vault.getConfig(key);
+  v.currentBannerMode = () => look;
   const provider = Object.create(p);
   provider.app = v.app; provider.getBannerImageFile = () => null;
   v.plugin = provider;
@@ -63,27 +63,33 @@ async function liveProbe(config) {
   let closed = false;
   try {
     v.load(); await v.onOpen(); await tick();
-    await run('manual and system modes', async () => {
+    await run('sky follows the interface appearance at any hour', async () => {
       const evidence = [];
-      for (const [setting, hour, minute, want] of [
-        ['moonstone', 12, 0, 'day'], ['moonstone', 0, 0, 'day'],
-        ['obsidian', 12, 0, 'night'], ['obsidian', 0, 0, 'night'],
-        ['system', 5, 59, 'night'], ['system', 6, 0, 'day'],
-        ['system', 17, 59, 'day'], ['system', 18, 0, 'night'],
+      for (const [appearance, hour, minute] of [
+        ['day', 0, 0], ['day', 12, 0], ['day', 22, 0],
+        ['night', 6, 0], ['night', 14, 0], ['night', 0, 0],
       ]) {
-        choice = setting; at(hour, minute); v.updateCelestial(true); finish();
-        check(v.bannerMode === want, `${setting} ${hour}:${minute}: expected ${want}, got ${v.bannerMode}`);
+        look = appearance; at(hour, minute); v.updateCelestial(true); finish();
+        check(v.bannerMode === appearance, `${appearance} ${hour}:${minute}: got ${v.bannerMode}`);
         check(root.querySelectorAll('.crisp-pulse-celestial').length === 1, 'More than one celestial body');
-        evidence.push({ setting, hour, minute, mode: v.bannerMode });
+        evidence.push({ appearance, hour, minute, mode: v.bannerMode });
       }
       return evidence;
+    });
+    await run('theme flip repaints the sky immediately', async () => {
+      look = 'day'; at(14); v.updateCelestial(true); finish();
+      look = 'night'; app.workspace.trigger('css-change'); await tick(); finish();
+      check(v.bannerMode === 'night', 'Dark appearance left the daytime sky');
+      look = 'day'; app.workspace.trigger('css-change'); await tick(); finish();
+      check(v.bannerMode === 'day', 'Light appearance left the night sky');
+      return { mode: v.bannerMode };
     });
     await run('responsive trajectory clears lighthouse and halo', async () => {
       const evidence = [];
       for (const width of [240, 320, 390, 768, 1024]) {
         v.containerEl.style.width = `${width}px`; await tick();
-        for (const [setting, hour, minute] of [['moonstone',6,0],['moonstone',12,0],['moonstone',17,59],['obsidian',18,0],['obsidian',0,0],['obsidian',5,59]]) {
-          choice = setting; at(hour, minute); v.updateCelestial(true); finish();
+        for (const [setting, hour, minute] of [['day',6,0],['day',12,0],['day',17,59],['night',18,0],['night',0,0],['night',5,59]]) {
+          look = setting; at(hour, minute); v.updateCelestial(true); finish();
           const b = root.querySelector('.crisp-pulse-banner').getBoundingClientRect(), c = v.celestialEl.getBoundingClientRect();
           check(c.left >= b.left - .5 && c.right <= b.right + .5 && c.top >= b.top - .5 && c.bottom <= b.bottom + .5, `${width}px ${hour}:${minute}: halo outside banner`);
           if (hour === 6 || hour === 18) check(c.left - b.left >= b.height * 1.02 + 3, `${width}px: celestial body covers lighthouse`);
@@ -93,10 +99,10 @@ async function liveProbe(config) {
       return evidence;
     });
     await run('boundary reset stays invisible', async () => {
-      choice = 'system'; v.containerEl.style.width = '1024px'; await tick();
+      v.containerEl.style.width = '1024px'; await tick();
       const evidence = [];
       for (const [h,m,want] of [[5,59,'night'],[6,0,'day'],[17,59,'day'],[18,0,'night']]) {
-        at(h,m); v.updateCelestial(true); finish();
+        look = want; at(h,m); v.updateCelestial(true); finish();
         check(v.bannerMode === want, 'Boundary retained previous celestial mode');
         const opacity = Number(getComputedStyle(v.celestialEl).opacity);
         if (m === 0) check(opacity <= .01, 'Reset is visible at the day/night boundary');
@@ -105,7 +111,7 @@ async function liveProbe(config) {
       return evidence;
     });
     await run('normal movement uses a finite transition', async () => {
-      choice='system'; at(12); v.updateCelestial(true); finish();
+      look='day'; at(12); v.updateCelestial(true); finish();
       at(12,1); v.updateCelestial();
       const reduced = v.celestialEl.ownerDocument.defaultView.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const animations = v.celestialEl.getAnimations();
@@ -114,14 +120,14 @@ async function liveProbe(config) {
       finish(); return {reduced, animations:animations.length};
     });
     await run('focus refreshes the sky after sleep', async () => {
-      choice='system'; at(17,50); v.updateCelestial(true); finish();
-      at(18,10); root.ownerDocument.defaultView.dispatchEvent(new Event('focus')); await tick(); finish();
+      look='day'; at(17,50); v.updateCelestial(true); finish();
+      look='night'; at(18,10); root.ownerDocument.defaultView.dispatchEvent(new Event('focus')); await tick(); finish();
       check(v.bannerMode === 'night', 'Wake/focus left the daytime sun visible');
       return {mode:v.bannerMode};
     });
     // Native screenshots of 320px and desktop layouts, with the same runtime.
     for (const width of [320,1024]) {
-      v.containerEl.style.width=`${width}px`; choice='system'; at(6,10); v.updateCelestial(true); await tick(); finish();
+      v.containerEl.style.width=`${width}px`; look='day'; at(6,10); v.updateCelestial(true); await tick(); finish();
       const wc=require('electron').remote.getCurrentWebContents();
       fs.writeFileSync(pathJoin(config.outDir,`banner-${width}.png`),(await wc.capturePage()).toPNG());
     }

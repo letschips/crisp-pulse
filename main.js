@@ -5342,7 +5342,7 @@ function createBannerImageSuggest(app, inputEl, onPick) {
 const PULSE_SKY_WIDTH = 900, PULSE_SKY_HEIGHT = 112;
 
 /* 天体和天空分层绘制。轨迹按横幅实际尺寸避开左侧灯塔，并给完整光晕留边。
-   手动主题的非活动时段停在右上角；时段两端渐隐，重置轨迹时不横穿画面。 */
+   不在自己的时段时停在右上角；时段两端渐隐，重置轨迹时不横穿画面。 */
 const PULSE_CELESTIAL_SIZE = 25;
 function celestialPlacement(date, mode, width = PULSE_SKY_WIDTH, height = PULSE_SKY_HEIGHT) {
   const h = date.getHours() + date.getMinutes() / 60 + date.getSeconds() / 3600;
@@ -6610,18 +6610,9 @@ class CrispPulseView extends ItemView {
     return true;
   }
 
+  // 顶部天空、页脚和统计图都按界面实际的深浅色走；「跟随系统」时就是 macOS 当前的外观。
   currentBannerMode() {
     return this.containerEl.ownerDocument.body.classList.contains("theme-dark") ? "night" : "day";
-  }
-
-  // Obsidian 的基础主题值：moonstone 浅色、obsidian 深色、system 跟随系统。
-  // system 的天空按本地昼夜走；页脚和其他统计图仍按实际界面主题配色。
-  currentSkyMode(date = new Date()) {
-    const theme = this.app?.vault?.getConfig?.('theme');
-    if (theme === 'moonstone') return 'day';
-    if (theme === 'obsidian') return 'night';
-    if (theme === 'system') return date.getHours() >= 6 && date.getHours() < 18 ? 'day' : 'night';
-    return this.currentBannerMode();
   }
 
   /* 页脚：和顶部天空呼应的像素地平线。山脊是最近一段时间每天的贡献分，最右边的小灯杆是今天；
@@ -7081,7 +7072,7 @@ class CrispPulseView extends ItemView {
     this.celestialEl = null;
     this.celestialPosition = null;
     const file = this.plugin.getBannerImageFile();
-    this.bannerMode = file ? "image" : this.currentSkyMode();
+    this.bannerMode = file ? "image" : this.currentBannerMode();
     const banner = parent.createDiv({ cls: "crisp-pulse-banner", attr: { "aria-hidden": "true" } });
     if (file) {
       banner.createEl("img", { attr: { src: this.app.vault.getResourcePath(file), alt: "" } });
@@ -7112,7 +7103,7 @@ class CrispPulseView extends ItemView {
     const banner = el.parentElement, rect = banner.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     const now = new Date();
-    const mode = this.currentSkyMode(now);
+    const mode = this.currentBannerMode();
     if (mode !== this.bannerMode) {
       this.bannerMode = mode;
       const sky = banner.querySelector('canvas:not(.crisp-pulse-celestial)');
