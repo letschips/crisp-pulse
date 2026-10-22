@@ -109,7 +109,7 @@ function setup() {
 test('zero contribution weights really disable each component', async () => {
   const { p, helpers } = setup();
   await p.loadPluginData();
-  for (const k of ['weightNoteCreated', 'weightMeaningfulEdit', 'weightTaskCompleted', 'weightLinkCreated', 'weightFocusMinute', 'captureMultiplier']) p.settings[k] = 0;
+  for (const k of ['weightNoteCreated', 'weightNoteCreatedLegacy', 'weightMeaningfulEdit', 'weightTaskCompleted', 'weightLinkCreated', 'weightFocusMinute', 'captureMultiplier']) p.settings[k] = 0;
   p.settings.includeFocusInContribution = true;
   const r = helpers.createEmptyDailyRecord('2026-09-08');
   Object.assign(r.contribution, { notesCreated: 1, meaningfulEdits: 1, tasksCompleted: 1, linksCreated: 1, wordsAdded: 500, captureWords: 500 });
@@ -1905,6 +1905,65 @@ test('re-including an excluded folder does not back-count edits made while exclu
   assert.equal(p.store.daily['2026-09-08']?.contribution.wordsAdded || 0, 0);
   file.content += ' more';await p.handleFileModification(file);
   assert.equal(p.getOrCreateTodayRecord().contribution.wordsAdded, 1);
+});
+
+test('score rules 2: an empty new note earns nothing until it gets a meaningful edit, and a same-day delete takes it back', async () => {
+  const { p, handlers } = setup();await p.loadPluginData();p.registerVaultEvents();
+  const file = { path: 'notes/new.md', extension: 'md', content: '' };
+  await p.handleFileCreation(file);
+  const day = p.getOrCreateTodayRecord();
+  assert.equal(day.scoreRules, 2);
+  assert.equal(day.contribution.notesCreated, 1);
+  assert.equal(day.contribution.score, 0);
+  file.content = 'word '.repeat(20);await p.handleFileModification(file);await p.flushAllSessions();
+  assert.equal(day.contribution.meaningfulEdits, 1);
+  assert.equal(day.contribution.score, 4.1); // 1 × 2 new note + 1 × 2 session + 20 words
+  handlers.delete(file);
+  assert.equal(day.contribution.notesCreated, 0);
+  assert.equal(day.contribution.score, 0);
+});
+
+test('score rules 2: ticking or unticking a task is not an edit session', async () => {
+  const { p } = setup();await p.loadPluginData();
+  const file = { path: 'todo.md', extension: 'md', content: '- [ ] ship it' };
+  await p.initializeSnapshots([file]);
+  file.content = '- [x] ship it';await p.handleFileModification(file);
+  const day = p.getOrCreateTodayRecord();
+  assert.equal(day.contribution.tasksCompleted, 1);
+  assert.equal(day.contribution.score, 2);
+  file.content = '- [ ] ship it';await p.handleFileModification(file);await p.flushAllSessions();
+  assert.equal(day.contribution.tasksCompleted, 0);
+  assert.equal(day.contribution.meaningfulEdits, 0);
+  assert.equal(day.contribution.score, 0);
+});
+
+test('score rules 2 leave existing days alone: old weight, old session rule', async () => {
+  const { p, helpers } = setup();
+  const today = helpers.createEmptyDailyRecord('2026-09-08');today.contribution.notesCreated = 1;today.contribution.score = 5;
+  const past = helpers.createEmptyDailyRecord('2026-09-07');past.contribution.notesCreated = 2;past.contribution.score = 10;
+  p.loadData = async () => ({ settings: { weightNoteCreated: 5 }, daily: { [today.date]: today, [past.date]: past } });
+  await p.loadPluginData();
+  assert.equal(p.settings.weightNoteCreated, 2);
+  assert.equal(p.store.daily['2026-09-07'].contribution.score, 10);
+  assert.equal(p.store.daily['2026-09-08'].contribution.score, 5);
+  const file = { path: 'todo.md', extension: 'md', content: '- [ ] ship it' };
+  await p.initializeSnapshots([file]);
+  file.content = '- [x] ship it';await p.handleFileModification(file);await p.flushAllSessions();
+  const day = p.getOrCreateTodayRecord();
+  assert.equal(day.scoreRules, undefined);
+  assert.equal(day.contribution.meaningfulEdits, 1);
+  assert.equal(day.contribution.score, 9);
+  await p.saveSettings();p.loadData = async () => p.persisted;await p.loadPluginData();
+  assert.equal(p.settings.weightNoteCreated, 2);
+  assert.equal(p.store.daily['2026-09-07'].contribution.score, 10);
+});
+
+test('score rules 2 keep a customised new-note weight', async () => {
+  const { p } = setup();
+  p.loadData = async () => ({ settings: { weightNoteCreated: 3 } });
+  await p.loadPluginData();
+  assert.equal(p.settings.weightNoteCreated, 3);
+  assert.equal(p.settings.weightNoteCreatedLegacy, 3);
 });
 
 test('a large paste into an idle existing note is classified as capture', async () => {

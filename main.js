@@ -517,7 +517,8 @@ const DEFAULT_SETTINGS = {
   defaultMetric: "contribution", // "contribution" | "activity" | "words" | "notes" | "tasks" | "focus"
   sessionIdleTimeoutMinutes: 3,
   focusIdleTimeoutMinutes: 5,
-  weightNoteCreated: 5,
+  weightNoteCreated: 2, // 1.30.0: only counts notes that got a meaningful edit the day they were created
+  weightNoteCreatedLegacy: 5, // days recorded before 1.30.0 keep the weight they were scored with
   weightMeaningfulEdit: 2,
   weightTaskCompleted: 2,
   weightLinkCreated: 1,
@@ -719,6 +720,18 @@ function isPathIncluded(filePath, includedFolders = [], excludedFolders = []) {
   return true;
 }
 
+// 1.30.0 起新建的日记录：新建笔记要在当天有过有效编辑会话才计分，只勾选任务不算编辑会话
+const SCORE_RULES = 2;
+
+// 当天新建、且新建之后有过有效编辑会话的笔记数
+function countScoredNewNotes(record) {
+  let n = 0;
+  for (const rec of Object.values(record?.files || {})) {
+    if (rec?.created && (Number(rec.sessions) || 0) > (Number(rec.createdBase?.sessions) || 0)) n++;
+  }
+  return n;
+}
+
 // 1.2 Score Breakdown Pure Function
 function getScoreBreakdown(record, settings = DEFAULT_SETTINGS) {
   if (!record || !record.contribution) {
@@ -746,7 +759,9 @@ function getScoreBreakdown(record, settings = DEFAULT_SETTINGS) {
   const wordsRewrittenScore = Math.round(calcWordsContribution(rewrittenWords) * 0.5 * 10) / 10;
   const wordsTotalScore = Math.min(30, Math.round((wordsNormalScore + wordsCaptureScore + wordsRewrittenScore) * 10) / 10);
 
-  const notesCreatedScore = Math.round((c.notesCreated * (s.weightNoteCreated ?? 5)) * 10) / 10;
+  const notesCreatedScore = record.scoreRules === SCORE_RULES
+    ? Math.round((countScoredNewNotes(record) * (s.weightNoteCreated ?? 2)) * 10) / 10
+    : Math.round((c.notesCreated * (s.weightNoteCreatedLegacy ?? 5)) * 10) / 10;
   const meaningfulEditsScore = Math.round((c.meaningfulEdits * (s.weightMeaningfulEdit ?? 2)) * 10) / 10;
   const tasksCompletedScore = Math.round((c.tasksCompleted * (s.weightTaskCompleted ?? 2)) * 10) / 10;
   const linksCreatedScore = Math.round((c.linksCreated * (s.weightLinkCreated ?? 1)) * 10) / 10;
@@ -1402,6 +1417,12 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
   if (!store || typeof store !== "object" || Array.isArray(store)) store = {};
   if (!store.settings || typeof store.settings !== "object" || Array.isArray(store.settings)) store.settings = {};
   let repairedCount = 0;
+  // 1.30.0：新建笔记改成有有效编辑才计分、默认 2 分。之前记录的那些天沿用原来的权重，分数不变；
+  // 自己改过的权重保留，原样的 5 分换成新默认值
+  if (store.settings.weightNoteCreatedLegacy === undefined && Number.isFinite(store.settings.weightNoteCreated) && store.settings.weightNoteCreated >= 0) {
+    store.settings.weightNoteCreatedLegacy = store.settings.weightNoteCreated;
+    if (store.settings.weightNoteCreated === 5) store.settings.weightNoteCreated = defaultSettings.weightNoteCreated ?? 2;
+  }
   for (const [key, fallback] of Object.entries(defaultSettings)) {
     if (store.settings[key] === undefined) { store.settings[key] = Array.isArray(fallback) ? [...fallback] : fallback; repairedCount++; }
   }
@@ -1437,6 +1458,7 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
     }
 
     rec.date = dKey;
+    if (rec.scoreRules !== undefined && rec.scoreRules !== SCORE_RULES) { delete rec.scoreRules; repairedCount++; }
     if (!["recorded", "estimated", "mixed"].includes(rec.quality)) {
       rec.quality = "recorded";
       repairedCount++;
@@ -2106,6 +2128,7 @@ class CrispPulsePlugin extends Plugin {
   getOrCreateRecord(today) {
     if (!this.store.daily[today]) {
       this.store.daily[today] = createEmptyDailyRecord(today, "recorded");
+      this.store.daily[today].scoreRules = SCORE_RULES;
     }
     if (this.store.daily[today].quality === "estimated") this.store.daily[today].quality = "mixed";
     return this.store.daily[today];
@@ -2981,7 +3004,7 @@ class CrispPulsePlugin extends Plugin {
       session.lastEventTime = now;
       session.wordsDeltaTotal += wordsDelta;
 
-      if (Math.abs(session.wordsDeltaTotal) >= 15 || realTasksAdded > 0 || linksDelta > 0 || isMeaningfulRewrite) {
+      if (Math.abs(session.wordsDeltaTotal) >= 15 || (realTasksAdded > 0 && today.scoreRules !== SCORE_RULES) || linksDelta > 0 || isMeaningfulRewrite) {
         session.isMeaningful = true;
       }
 
@@ -7899,8 +7922,11 @@ class CrispPulseView extends ItemView {
 
       const list = bCard.createDiv({ cls: "crisp-pulse-breakdown-list" });
 
+      const newRules = rec.scoreRules === SCORE_RULES;
+      const notesScored = newRules ? countScoredNewNotes(rec) : (rec.contribution.notesCreated || 0);
+      const notesWeight = newRules ? this.plugin.settings.weightNoteCreated : (this.plugin.settings.weightNoteCreatedLegacy ?? 5);
       const rows = [
-        { label: tr("新建笔记", "Notes created"), formula: tr(`${rec.contribution.notesCreated || 0} 篇 × ${this.plugin.settings.weightNoteCreated}分`, `${rec.contribution.notesCreated || 0} × ${this.plugin.settings.weightNoteCreated} pts`), val: `+${breakdown.notesCreatedScore.toFixed(1)}` },
+        { label: tr("新建笔记", "Notes created"), formula: tr(`${notesScored} 篇 × ${notesWeight}分`, `${notesScored} × ${notesWeight} pts`), val: `+${breakdown.notesCreatedScore.toFixed(1)}` },
         { label: tr("有效编辑会话", "Meaningful edit sessions"), formula: tr(`${rec.contribution.meaningfulEdits || 0} 次 × ${this.plugin.settings.weightMeaningfulEdit}分`, `${rec.contribution.meaningfulEdits || 0} × ${this.plugin.settings.weightMeaningfulEdit} pts`), val: `+${breakdown.meaningfulEditsScore.toFixed(1)}` },
         { label: tr("完成任务", "Tasks completed"), formula: tr(`${rec.contribution.tasksCompleted || 0} 项 × ${this.plugin.settings.weightTaskCompleted}分`, `${rec.contribution.tasksCompleted || 0} × ${this.plugin.settings.weightTaskCompleted} pts`), val: `+${breakdown.tasksCompletedScore.toFixed(1)}` },
         { label: tr("新建内链", "Links created"), formula: tr(`${rec.contribution.linksCreated || 0} 条 × ${this.plugin.settings.weightLinkCreated}分`, `${rec.contribution.linksCreated || 0} × ${this.plugin.settings.weightLinkCreated} pts`), val: `+${breakdown.linksCreatedScore.toFixed(1)}` },
