@@ -1937,6 +1937,75 @@ test('score rules 2: ticking or unticking a task is not an edit session', async 
   assert.equal(day.contribution.score, 0);
 });
 
+test('ticking many tasks at once or one by one adds no words, rewrites or edit sessions; unticking returns to zero', async () => {
+  for (const [n, oneByOne] of [[3, false], [15, true]]) {
+    const { p } = setup();await p.loadPluginData();
+    const file = { path: 'todo.md', extension: 'md', content: Array.from({ length: n }, (_, i) => `- [ ] item ${i}`).join('\n') };
+    await p.initializeSnapshots([file]);
+    const flip = async (from, to) => {
+      if (!oneByOne) { file.content = file.content.replaceAll(from, to);await p.handleFileModification(file);return; }
+      for (let i = 0; i < n; i++) { file.content = file.content.replace(`${from} item ${i}`, `${to} item ${i}`);await p.handleFileModification(file); }
+    };
+    await flip('[ ]', '[x]');await p.flushAllSessions();
+    const day = p.getOrCreateTodayRecord();
+    assert.equal(day.contribution.tasksCompleted, n);
+    assert.equal(day.contribution.wordsAdded, 0);
+    assert.equal(day.contribution.rewrittenWords || 0, 0);
+    assert.equal(day.contribution.meaningfulEdits, 0);
+    await flip('[x]', '[ ]');await p.flushAllSessions();
+    assert.equal(day.contribution.tasksCompleted, 0);
+    assert.equal(day.contribution.meaningfulEdits, 0);
+    assert.equal(day.contribution.score, 0, `${n} tasks`);
+  }
+});
+
+test('editing a task\'s text still counts as writing', async () => {
+  const { p } = setup();await p.loadPluginData();
+  const file = { path: 'todo.md', extension: 'md', content: '- [ ] ship it' };
+  await p.initializeSnapshots([file]);
+  file.content = `- [x] ship it ${'with notes '.repeat(8)}`;await p.handleFileModification(file);await p.flushAllSessions();
+  const day = p.getOrCreateTodayRecord();
+  assert.equal(day.contribution.tasksCompleted, 1);
+  assert.equal(day.contribution.wordsAdded, 16);
+  assert.equal(day.contribution.meaningfulEdits, 1);
+});
+
+test('a new note renamed onto a deleted note\'s path, then deleted, takes back only its own work', async () => {
+  const { p, handlers, context } = setup();await p.loadPluginData();p.registerVaultEvents();
+  const old = { path: 'old.md', extension: 'md', content: 'existing' };
+  await p.initializeSnapshots([old]);
+  old.content = `existing ${'word '.repeat(20)}`;await p.handleFileModification(old);await p.flushAllSessions();
+  const before = structuredClone(p.getOrCreateTodayRecord().contribution);
+  await handlers.delete(old);
+  const fresh = { path: 'new.md', extension: 'md', content: '' };
+  p.lastUserActionAt = context.Date.now();await p.handleFileCreation(fresh);
+  fresh.content = 'new '.repeat(20);await p.handleFileModification(fresh);await p.flushAllSessions();
+  fresh.path = 'old.md';await handlers.rename(fresh, 'new.md');
+  await handlers.delete(fresh);await p.saveQueue;
+  const day = p.getOrCreateTodayRecord();
+  assert.equal(day.contribution.wordsAdded, before.wordsAdded);
+  assert.equal(day.contribution.meaningfulEdits, before.meaningfulEdits);
+  assert.equal(day.contribution.notesCreated, 0);
+  assert.equal(day.contribution.score, before.score);
+  assert.equal(day.files['old.md'].wordsAdded, 20);
+  assert.equal(day.files['old.md'].created, false);
+});
+
+test('a reset whose save fails puts back the open edit session too', async () => {
+  const { p } = setup();await p.loadPluginData();
+  const file = { path: 'old.md', extension: 'md', content: 'existing' };
+  await p.initializeSnapshots([file]);
+  file.content = `existing ${'word '.repeat(20)}`;await p.handleFileModification(file);
+  p.createBackup = async () => ({ success: true });
+  const save = p.saveData;p.saveData = async () => { throw new Error('disk full'); };
+  await assert.rejects(p.resetAllStatistics());
+  p.saveData = save;
+  file.content += ' more';await p.handleFileModification(file);await p.flushAllSessions();
+  const day = p.getOrCreateTodayRecord();
+  assert.equal(day.contribution.wordsAdded, 21);
+  assert.equal(day.contribution.meaningfulEdits, 1);
+});
+
 test('score rules 2 leave existing days alone: old weight, old session rule', async () => {
   const { p, helpers } = setup();
   const today = helpers.createEmptyDailyRecord('2026-09-08');today.contribution.notesCreated = 1;today.contribution.score = 5;

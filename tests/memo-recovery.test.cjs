@@ -468,6 +468,34 @@ test('unloading before the recovery file is read still writes a late attachment'
   assert.equal(saved.drafts['leaf-old'].text, '原有草稿\n![[迟到附件.png]]\n');
 });
 
+test('a reload while the old instance is still reading lets the new instance see the late attachment, and keep it', async () => {
+  const file = 'plugin/memo-drafts.json';
+  const files = new Map([[file, JSON.stringify({ version: 1, drafts: { 'leaf-old': { text: '原有草稿', updatedAt: 1 } }, recordings: [] })]]);
+  // 磁盘按先来后到读写（同 Obsidian adapter）；旧实例第一次读被卡住
+  let disk = Promise.resolve(), release, entered, hold = true;
+  const started = new Promise((r) => { entered = r; });
+  const serial = (fn) => { const job = disk.then(fn, fn); disk = job.catch(() => {}); return job; };
+  const adapter = {
+    async exists(p) { return files.has(p); },
+    read: (p) => serial(async () => { const text = files.get(p); if (hold) { hold = false; entered(); await new Promise((r) => { release = r; }); } return text; }),
+    write: (p, c) => serial(async () => { files.set(p, c); }),
+  };
+  const old = new MemoDraftStore(adapter, 'plugin');
+  const appended = old.appendDraft('leaf-old', '![[迟到录音.webm]]');
+  await started;
+  const retired = old.retire();
+  const fresh = new MemoDraftStore(adapter, 'plugin');
+  const loaded = fresh.load();
+  await new Promise((r) => setImmediate(r));
+  release();
+  await Promise.all([appended, retired, loaded]);
+  assert.match(fresh.drafts['leaf-old'].text, /迟到录音/, '新实例读到的是旧实例最后写下的内容');
+  fresh.setDraft('leaf-new', '新草稿');await fresh.flush();
+  const saved = JSON.parse(files.get(file));
+  assert.equal(saved.drafts['leaf-old'].text, '原有草稿\n![[迟到录音.webm]]\n');
+  assert.equal(saved.drafts['leaf-new'].text, '新草稿');
+});
+
 test('a recording retry that finishes after a reload clears the new instance\'s pending entry too', async () => {
   const adapter = fakeAdapter();
   const first = new MemoDraftStore(adapter, 'plugin');

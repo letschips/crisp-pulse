@@ -624,6 +624,36 @@ function countLinks(str) {
   return (markdownProse(str).match(/\[\[[^\]]+\]\]/g) || []).length;
 }
 
+// 写作字数和改写判断只看文字：任务勾选状态（[ ] [x] [-] …）统一成未勾选，勾选/取消只走任务计数
+function writingText(str) {
+  return (str || "").replace(/^(\s*(?:[-+*]|\d+[.)])\s+)\[[^\]\n]\](?=\s|$)/gm, "$1[ ]");
+}
+
+// 文件当天记录里不属于「当天新建」的部分：没标新建的整条都是，标了新建的取它的 createdBase
+function createdBaseOf(rec) {
+  if (rec?.created) return rec.createdBase && typeof rec.createdBase === "object" ? rec.createdBase : null;
+  return {
+    wordsAdded: rec?.wordsAdded, links: rec?.links, tasks: rec?.tasks,
+    rewrittenWords: rec?.rewrittenWords, sessions: rec?.sessions, sourceWords: rec?.sourceWords || null,
+  };
+}
+
+function mergeCreatedBase(a, b) {
+  const x = createdBaseOf(a), y = createdBaseOf(b);
+  const base = {};
+  for (const field of ["wordsAdded", "links", "tasks", "rewrittenWords", "sessions"]) {
+    base[field] = (Number(x?.[field]) || 0) + (Number(y?.[field]) || 0);
+  }
+  base.sourceWords = null;
+  if (x?.sourceWords || y?.sourceWords) {
+    base.sourceWords = {};
+    for (const field of ["system", "capture", "unattributed"]) {
+      base.sourceWords[field] = (Number(x?.sourceWords?.[field]) || 0) + (Number(y?.sourceWords?.[field]) || 0);
+    }
+  }
+  return base;
+}
+
 // 1.2 Line Hashes for Rewriting / Polish Detection
 function getLineSet(str) {
   if (!str) return new Set();
@@ -2024,7 +2054,10 @@ class CrispPulsePlugin extends Plugin {
     const backupRes = await this.createBackup("pre-reset");
     if (!backupRes.success) throw Object.assign(new Error("backup failed"), { backupFailed: true, cause: backupRes.error });
     await Promise.all([...(this.fileQueues?.values() || [])]);
-    const previous = { daily: this.store.daily, hasRunBackfill: this.settings.hasRunBackfill };
+    const previous = {
+      daily: this.store.daily, hasRunBackfill: this.settings.hasRunBackfill,
+      sessions: new Map(this.activeSessions || []), lastInteractionTime: this.lastInteractionTime,
+    };
     this.activeSessions?.clear();
     this.lastInteractionTime = null;
     this.store.daily = {};
@@ -2034,6 +2067,9 @@ class CrispPulsePlugin extends Plugin {
     } catch (error) {
       this.store.daily = previous.daily;
       this.settings.hasRunBackfill = previous.hasRunBackfill;
+      // 还没结算的编辑会话也放回去；保存期间新开的会话以新的为准
+      for (const [path, session] of previous.sessions) if (!this.activeSessions.has(path)) this.activeSessions.set(path, session);
+      this.lastInteractionTime ??= previous.lastInteractionTime;
       throw error;
     }
     return backupRes;
@@ -2501,10 +2537,10 @@ class CrispPulsePlugin extends Plugin {
           const content = await this.readTrackedFile(file);
           if (content === null) continue;
           this.fileSnapshots.set(file.path, {
-            words: countWords(content),
+            words: countWords(writingText(content)),
             tasks: countTasks(content),
             links: countLinks(content),
-            lineSet: getLineSet(content),
+            lineSet: getLineSet(writingText(content)),
             completedTaskSet: getCompletedTaskSet(content),
             lastTime: file.stat?.mtime || Date.now()
           });
@@ -2650,6 +2686,10 @@ class CrispPulsePlugin extends Plugin {
                     merged.sourceWords[field] = (target.sourceWords?.[field] || 0) + (source.sourceWords?.[field] || 0);
                   }
                 }
+                // 合并后算作当天新建的：两篇里不属于新建部分的工作记成回滚基线，
+                // 这篇再被删掉时只撤回新建的部分（同 handleFileCreation 的 createdBase）
+                delete merged.createdBase;
+                if (merged.created) merged.createdBase = mergeCreatedBase(target, source);
                 record.files[next] = merged;
               } else {
                 record.files[next] = source;
@@ -2775,13 +2815,13 @@ class CrispPulsePlugin extends Plugin {
         try {
           const content = await this.readTrackedFile(file);
           if (content === null) return;
-          const words = countWords(content);
+          const words = countWords(writingText(content));
           const external = this.isExternalWrite(file.path, at, { creation: true });
           this.fileSnapshots.set(file.path, {
             words,
             tasks: countTasks(content),
             links: countLinks(content),
-            lineSet: getLineSet(content),
+            lineSet: getLineSet(writingText(content)),
             completedTaskSet: getCompletedTaskSet(content),
             lastTime: Date.now()
           });
@@ -2881,10 +2921,10 @@ class CrispPulsePlugin extends Plugin {
     try {
       const content = await this.readTrackedFile(file);
       if (content === null) return;
-      const newWords = countWords(content);
+      const newWords = countWords(writingText(content));
       const newTasks = countTasks(content);
       const newLinks = countLinks(content);
-      const newLineSet = getLineSet(content);
+      const newLineSet = getLineSet(writingText(content));
       const newCompletedTasks = getCompletedTaskSet(content);
       const now = Date.now();
 
@@ -9901,18 +9941,35 @@ class MemoDraftStore {
     clearTimeout(this.timer);
     this.timer = null;
     if (this.broken || (this.retired && !retiring) || !this.path) return this.writing;
-    // 还没读过恢复文件（插件重载后速记面板没打开过）：先读进来再写，否则会拿空壳覆盖整份文件
-    if (!this.loaded) return this.load().then(() => this.flush({ retiring }));
+    const queue = this.writeQueue();
+    // 还没读过恢复文件（插件重载后速记面板没打开过）：先读进来再写，否则会拿空壳覆盖整份文件。
+    // 「读完再写」整段马上占住共用队列：重载后的新实例要等这次写完才读，不然读到的是写之前的旧内容。
+    // 屏障里的写入只接在屏障之前的队列后面，不能接在屏障自己后面（会互相等）
+    if (!this.loaded) {
+      const before = queue?.get(this.path) || this.writing;
+      this.writing = this.load().then(() => (this.broken || (this.retired && !retiring) ? undefined : this.save(before)));
+      queue?.set(this.path, this.writing);
+      return this.writing;
+    }
+    const write = this.save(queue?.get(this.path) || this.writing);
+    if (write) {
+      this.writing = write;
+      queue?.set(this.path, write);
+    }
+    return this.writing;
+  }
+
+  /** 内容有变化才写，接在 after 之后；没变化返回 null。 */
+  save(after) {
     const payload = JSON.stringify({
       version: 1,
       drafts: this.drafts,
       recordings: this.recordings.filter((r) => r.stash).map(({ id, name, type, startedAt, stash, error }) => ({ id, name, type, startedAt, stash, error })),
       ...(this.attachments.length ? { attachments: this.attachments } : {}),
     }, null, 2);
-    if (payload === this.lastPayload) return this.writing;
+    if (payload === this.lastPayload) return null;
     this.lastPayload = payload;
-    const queue = this.writeQueue();
-    this.writing = (queue?.get(this.path) || this.writing).then(async () => {
+    return after.then(async () => {
       await this.adapter.write(this.path, payload);
       if (await this.adapter.read(this.path) !== payload) throw new Error(tr("写入后读回不一致", "Read-back after writing did not match"));
     }).catch((error) => {
@@ -9920,8 +9977,6 @@ class MemoDraftStore {
       console.warn("[Crisp Pulse] 速记草稿保存失败", error);
       if (!this.warned) { this.warned = true; new Notice(tr(`Crisp Pulse 速记：草稿恢复文件保存失败（${error.message || error}），关闭面板前请先提交或复制草稿`, `Crisp Pulse memos: failed to save the draft recovery file (${error.message || error}). Submit or copy your draft before closing the panel`), 8000); }
     });
-    queue?.set(this.path, this.writing);
-    return this.writing;
   }
 
   /** 录音没能存进附件：留在待保存列表，并尽量在插件目录存一份，重载后也能重试。 */
