@@ -10762,7 +10762,7 @@ class CrispPulseMemoView extends ItemView {
     const docked = !!(Platform.isPhone || doc?.body?.classList?.contains("is-phone"));
     if (!docked) this.renderComposer(body, refocusComposer);
     if (this.error) body.createDiv({ cls: "crisp-pulse-memo-error", text: this.error });
-    this.renderStats(body, memoStats(this.memos, getTodayKey(), { weeks: 12, weekStartsOn: this.plugin.settings.weekStartsOn }));
+    this.renderStats(body, memoStats(this.memos, getTodayKey(), { weeks: 20, weekStartsOn: this.plugin.settings.weekStartsOn }));
     this.listEl = null;
     this.renderTabs(body, searchFocus);
     if (docked) {
@@ -11245,12 +11245,16 @@ class CrispPulseMemoView extends ItemView {
       const before = input.value.slice(0, input.selectionStart);
       insertAt(before && !/\s$/.test(before) ? " #" : "#");
     });
-    tool("list", tr("列表", "List"), () => {
-      const { selectionStart: s, value } = input;
-      const lineStart = value.lastIndexOf("\n", s - 1) + 1;
-      input.setRangeText("- ", lineStart, lineStart, "end");
-    });
-    tool("bold", tr("加粗", "Bold"), () => insertAt("", "**"));
+    const formats = [
+      ["list", tr("列表", "List"), () => {
+        const { selectionStart: s, value } = input;
+        const lineStart = value.lastIndexOf("\n", s - 1) + 1;
+        input.setRangeText("- ", lineStart, lineStart, "end");
+      }],
+      ["bold", tr("加粗", "Bold"), () => insertAt("", "**")],
+    ];
+    // 列表、加粗不常用，没有 Menu 时才平铺在工具栏上
+    if (!Menu) for (const [icon, label, fn] of formats) tool(icon, label, fn);
     // 图片：粘贴、拖入或从按钮选择，先存进库里，再在光标处插入嵌入链接
     const addImages = async (files) => {
       const images = [...files].filter((f) => /^image\//.test(f.type) || MEMO_IMAGE_EXT_RE.test(f.name || ""));
@@ -11308,6 +11312,18 @@ class CrispPulseMemoView extends ItemView {
       dictate.addEventListener("mousedown", (e) => e.preventDefault());
       dictate.addEventListener("click", () => { void this.toggleDictation(); });
     }
+    if (Menu) {
+      const more = bar.createEl("button", { cls: "clickable-icon crisp-pulse-memo-tool", attr: { "aria-label": tr("更多格式", "More formatting"), type: "button" } });
+      setIcon(more, "more-horizontal");
+      more.addEventListener("mousedown", (e) => e.preventDefault());
+      more.addEventListener("click", (event) => {
+        const menu = new Menu();
+        for (const [icon, label, fn] of formats) {
+          menu.addItem((i) => i.setTitle(label).setIcon(icon).onClick(() => { fn(); this.setDraft(input.value, input.selectionEnd); input.focus(); }));
+        }
+        menu.showAtMouseEvent(event);
+      });
+    }
     this.statusEl = box.createDiv({ cls: "crisp-pulse-memo-status", attr: { role: "status", "aria-live": "polite" } });
     this.statusSignature = null;
     this.updateRecordingUi();
@@ -11328,7 +11344,7 @@ class CrispPulseMemoView extends ItemView {
       meta.createSpan({ cls: "crisp-pulse-memo-mode", text: this.mode === "anks" ? `ANKS · ${topics[0] || ""}` : tr("日笔记", "Daily note") });
     }
     const send = bar.createEl("button", { cls: "crisp-pulse-memo-send", attr: { "aria-label": tr("记录（⏎）· 换行（⇧⏎）", "Save (⏎) · New line (⇧⏎)"), type: "button" } });
-    setIcon(send, "send");
+    setIcon(send, "arrow-up");
     send.disabled = !!(this.memoSubmitting || this.dictation || this.attachmentSaving());
     const submit = async () => {
       if (this.memoSubmitting || !input.value.trim()) return;
@@ -11370,16 +11386,17 @@ class CrispPulseMemoView extends ItemView {
 
   renderStats(root, stats) {
     const card = root.createDiv({ cls: "crisp-pulse-memo-stats" });
-    const big = card.createDiv({ cls: "crisp-pulse-memo-bignums" });
+    // 一行概览：总数做主角，标签数和连续天数跟在后面，不再分三栏各配标签
     const tagCount = new Set(this.memos.flatMap((m) => m.tags)).size;
-    for (const [value, label] of [[stats.total, tr("速记", "Memos")], [tagCount, tr("标签", "Tags")], [stats.byDate.size, tr("天", "Days")]]) {
-      const k = big.createDiv({ cls: "crisp-pulse-memo-bignum" });
-      k.createDiv({ cls: "crisp-pulse-memo-bignum-value", text: value.toLocaleString(PULSE_NUMBER_LOCALE) });
-      k.createDiv({ cls: "crisp-pulse-memo-bignum-label", text: label });
-    }
+    const summary = card.createDiv({ cls: "crisp-pulse-memo-summary" });
+    summary.createSpan({ cls: "crisp-pulse-memo-summary-value", text: stats.total.toLocaleString(PULSE_NUMBER_LOCALE) });
+    const parts = [tr("条", "memos"), tr(`${tagCount} 标签`, plural(tagCount, "tag"))];
+    if (stats.streak) parts.push(tr(`连续 ${stats.streak} 天`, `${stats.streak}-day streak`));
+    summary.createSpan({ cls: "crisp-pulse-memo-summary-meta", text: parts.join(" · ") });
     const weeks = stats.cells.length / 7;
     const todayKey = getTodayKey();
-    const grid = card.createDiv({ cls: "crisp-pulse-memo-heat", attr: { role: "grid", "aria-label": tr("近 12 周速记热力", "Memo activity, last 12 weeks") } });
+    card.style.setProperty("--memo-heat-weeks", String(weeks));
+    const grid = card.createDiv({ cls: "crisp-pulse-memo-heat", attr: { role: "grid", "aria-label": tr(`近 ${weeks} 周速记热力`, `Memo activity, last ${weeks} weeks`) } });
     const max = Math.max(1, ...stats.cells.map((c) => c.count));
     for (let row = 0; row < 7; row++) {
       for (let col = 0; col < weeks; col++) {
@@ -11400,12 +11417,6 @@ class CrispPulseMemoView extends ItemView {
       months.createSpan({ text: month && month !== lastMonth ? pulseMonthLabel(month) : "" });
       if (month) lastMonth = month;
     }
-    const foot = card.createDiv({ cls: "crisp-pulse-memo-heat-foot" });
-    foot.createDiv({ cls: "crisp-pulse-memo-statline", text: tr(`连续 ${stats.streak} 天 · 本月 ${stats.month} 条 · 近 12 周 ${stats.recent} 条`, `Streak: ${plural(stats.streak, "day")} · ${stats.month} this month · ${stats.recent} in the last 12 weeks`) });
-    const legend = foot.createDiv({ cls: "crisp-pulse-memo-heat-legend", attr: { "aria-hidden": "true" } });
-    legend.createSpan({ text: tr("少", "Less") });
-    for (let level = 0; level <= 4; level++) legend.createSpan({ cls: `crisp-pulse-memo-heat-cell level-${level}` });
-    legend.createSpan({ text: tr("多", "More") });
   }
 
   renderTabs(root, searchFocus) {
@@ -11658,7 +11669,12 @@ class CrispPulseMemoView extends ItemView {
   /** 从 start 起接着渲染到 this.shown 条；底部按钮进入视野时自动再加一批，也可以点。 */
   appendMemoPage(list, start) {
     const end = Math.min(list.length, this.shown);
-    for (const m of list.slice(start, end)) this.renderMemoCard(this.listEl, m);
+    // 按天分组：日期只在组头出现一次，每条只留时刻
+    for (let i = start; i < end; i++) {
+      const m = list[i];
+      if (i === 0 || list[i - 1].date !== m.date) this.listEl.createDiv({ cls: "crisp-pulse-memo-day", text: this.memoDayLabel(m.date) });
+      this.renderMemoCard(this.listEl, m, { grouped: true });
+    }
     if (end >= list.length) {
       if (list.length > MEMO_PAGE_SIZE) this.listEl.createDiv({ cls: "crisp-pulse-memo-end", text: tr(`共 ${list.length} 条，已经到底了`, `That’s all ${list.length}`) });
       return;
@@ -11821,6 +11837,17 @@ class CrispPulseMemoView extends ItemView {
     return `${day} ${m.time || ""}`.trim();
   }
 
+  memoDayLabel(date) {
+    const todayKey = getTodayKey();
+    const diff = Math.round((memoKeyToDay(todayKey) - memoKeyToDay(date)) / 86400000);
+    if (diff === 0) return tr("今天", "Today");
+    if (diff === 1) return tr("昨天", "Yesterday");
+    const [y, mo, d] = date.split("-").map(Number);
+    const sameYear = date.slice(0, 4) === todayKey.slice(0, 4);
+    const en = memoKeyToDay(date).toLocaleDateString("en-US", sameYear ? { month: "short", day: "numeric" } : { year: "numeric", month: "short", day: "numeric" });
+    return sameYear ? tr(`${mo}月${d}日`, en) : tr(`${y}年${mo}月${d}日`, en);
+  }
+
   openCardMenu(m, event) {
     if (!Menu) return;
     const menu = new Menu();
@@ -11860,11 +11887,11 @@ class CrispPulseMemoView extends ItemView {
     menu.showAtMouseEvent(event);
   }
 
-  renderMemoCard(parent, m, { related = false, walk = false } = {}) {
+  renderMemoCard(parent, m, { related = false, walk = false, grouped = false } = {}) {
     const key = this.memoKey(m);
     const card = parent.createDiv({ cls: `crisp-pulse-memo-item${walk ? " is-walk" : ""}` });
     const head = card.createDiv({ cls: "crisp-pulse-memo-item-head" });
-    const time = head.createEl("button", { cls: "crisp-pulse-memo-time", text: this.memoTimeLabel(m) });
+    const time = head.createEl("button", { cls: "crisp-pulse-memo-time", text: grouped && m.time ? m.time : this.memoTimeLabel(m) });
     time.setAttribute("aria-label", tr(`打开 ${m.path}`, `Open ${m.path}`));
     time.addEventListener("click", () => this.plugin.openMemoSource(m));
     const more = head.createEl("button", { cls: "clickable-icon crisp-pulse-memo-more-btn", attr: { "aria-label": tr("更多操作", "More actions") } });
