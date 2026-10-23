@@ -10661,11 +10661,26 @@ class CrispPulseMemoView extends ItemView {
     }
     this.registerEvent(this.app.workspace.on("crisp-asr:state", () => this.refreshMemoTranscriptionControls()));
     this.registerEvent(this.app.workspace.on("crisp-tempo:state", () => this.refreshTempoChips()));
+    // 手机：点输入面板以外的地方就收起（草稿保留），同时收起键盘
     this.registerDomEvent(this.containerEl.ownerDocument, "pointerdown", (event) => {
       const box = this.dockedComposer;
-      if (!box?.isConnected || box.contains(event.target)) return;
-      if (!this.draft.trim() && !this.recording) box.removeClass("is-open");
+      if (!box?.isConnected || !box.hasClass("is-open") || box.contains(event.target)) return;
+      if (this.recording || this.recordingStarting || this.dictation) return;
+      if (event.target?.closest?.(".menu, .modal-container")) return;
+      if (event.target === this.dockBackdrop) event.preventDefault();
+      const input = box.querySelector(".crisp-pulse-memo-input");
+      if (input && box.ownerDocument.activeElement === input) input.blur();
+      this.setDockOpen(false);
     });
+    // 键盘弹出、收起时 Obsidian 只更新 --keyboard-height，不缩页面；面板要自己挪到键盘上方
+    const win = this.containerEl.win || window;
+    const place = () => this.placeDockSheet();
+    for (const type of ["keyboardWillShow", "keyboardDidShow", "keyboardWillHide", "keyboardDidHide", "resize"]) this.registerDomEvent(win, type, place);
+    if (win.visualViewport) {
+      win.visualViewport.addEventListener("resize", place);
+      win.visualViewport.addEventListener("scroll", place);
+      this.register(() => { win.visualViewport.removeEventListener("resize", place); win.visualViewport.removeEventListener("scroll", place); });
+    }
     await this.reload();
   }
 
@@ -10829,7 +10844,7 @@ class CrispPulseMemoView extends ItemView {
     const before = input.value.slice(0, input.selectionStart);
     input.setRangeText(`${before && !/\s$/.test(before) ? "\n" : ""}${text}\n`, input.selectionStart, input.selectionEnd, "end");
     this.setDraft(input.value, input.selectionEnd);
-    input.closest(".crisp-pulse-memo-composer")?.addClass("is-open");
+    if (input.closest(".crisp-pulse-memo-composer") === this.dockedComposer) this.setDockOpen(true);
     input.focus();
   }
 
@@ -10960,7 +10975,7 @@ class CrispPulseMemoView extends ItemView {
     if (!input) return;
     input.value = next;
     input.setSelectionRange?.(selection[0], selection[1]);
-    input.closest?.(".crisp-pulse-memo-composer")?.addClass("is-open");
+    if (this.dockedComposer && input.closest?.(".crisp-pulse-memo-composer") === this.dockedComposer) this.setDockOpen(true);
   }
 
   /** 录音：再点一次结束；音频存进库（跟随附件位置），在速记里插入嵌入链接，卡片上可直接播放。 */
@@ -11208,13 +11223,52 @@ class CrispPulseMemoView extends ItemView {
     // 时长和听写状态显示在输入框下方的状态行里，按钮只变色
   }
 
+  setDockOpen(open) {
+    const box = this.dockedComposer;
+    if (!box) return;
+    box.toggleClass("is-open", open);
+    // 底带是 sticky + z-index，自成层叠上下文；不把它抬到遮罩之上，展开的面板会被遮罩一起糊掉
+    box.parentElement?.toggleClass("is-open", open);
+    this.dockBackdrop?.toggleClass("is-shown", open);
+    if (!open) { box.style.removeProperty("--memo-sheet-shift"); return; }
+    // Obsidian 的 --keyboard-height 是动画过渡的，分几次量
+    const win = box.win || window;
+    this.placeDockSheet();
+    for (const ms of [0, 120, 300, 500]) win.setTimeout(() => this.placeDockSheet(), ms);
+  }
+
+  /** 把展开的面板底边挪到可见区域（键盘上方）内；只往上挪，不往下。 */
+  placeDockSheet() {
+    const box = this.dockedComposer;
+    if (!box?.isConnected || !box.hasClass("is-open")) return;
+    const win = box.win || window;
+    const doc = box.doc || document;
+    box.style.setProperty("--memo-sheet-shift", "0px");
+    const keyboard = parseFloat(win.getComputedStyle(doc.documentElement).getPropertyValue("--keyboard-height")) || 0;
+    const vv = win.visualViewport;
+    const visibleBottom = Math.min(vv ? vv.offsetTop + vv.height : win.innerHeight, win.innerHeight - keyboard);
+    const shift = Math.min(0, visibleBottom - 8 - box.getBoundingClientRect().bottom);
+    box.style.setProperty("--memo-sheet-shift", `${Math.round(shift)}px`);
+  }
+
   renderComposer(root, refocus, { docked = false } = {}) {
-    const box = root.createDiv({ cls: `crisp-pulse-memo-composer${docked ? " is-docked" : ""}` });
+    // 手机：展开时像 flomo 一样成为底部面板，后面一层半透明遮罩，点遮罩收起
+    this.dockBackdrop = docked ? root.createDiv({ cls: "crisp-pulse-memo-sheet-backdrop" }) : null;
+    // 胶囊放在一条和侧栏同色的底带里：圆角外不再露出后面滚过去的列表文字
+    const dock = docked ? root.createDiv({ cls: "crisp-pulse-memo-dock" }) : null;
+    if (dock) {
+      const win = root.win || window;
+      for (let el = root; el; el = el.parentElement) {
+        const color = win.getComputedStyle(el).backgroundColor;
+        if (color && color !== "transparent" && !/^rgba\(.*,\s*0\)$/.test(color)) { dock.style.setProperty("--memo-dock-bg", color); break; }
+      }
+    }
+    const box = (dock || root).createDiv({ cls: `crisp-pulse-memo-composer${docked ? " is-docked" : ""}` });
     if (docked) {
-      // 收起时只占一行；点进来、有草稿或正在录音时展开，点到别处且没写东西就收起
-      box.toggleClass("is-open", !!(refocus || this.draft.trim() || this.recording || this.dictation || this.plugin.memoDrafts?.recordings?.length));
-      box.addEventListener("focusin", () => box.addClass("is-open"));
+      // 收起时是一条胶囊；点进来或正在录音时展开。草稿不再让它一直展开，否则每次重绘都盖住列表
       this.dockedComposer = box;
+      this.setDockOpen(!!(refocus || this.recording || this.dictation || this.plugin.memoDrafts?.recordings?.length));
+      box.addEventListener("focusin", () => this.setDockOpen(true));
     } else {
       this.dockedComposer = null;
     }
@@ -11367,8 +11421,10 @@ class CrispPulseMemoView extends ItemView {
         const tagged = pomodoroBreak && !pomodoroBreak.dismissed && this.plugin.settings.memoPomodoroPrompt !== false ? memoWithTag(submitted, MEMO_POMODORO_TAG) : submitted;
         await this.plugin.memoStore.capture(tagged, new Date());
         if (!this.composerComposing && this.draftRevision === revision && this.draft === submitted) this.setDraft("");
+        // 手机上记完就收起面板和键盘，回到列表看刚记下的那条；桌面端留在输入框里接着记
+        if (docked) { input.blur(); this.setDockOpen(false); }
         await this.reload();
-        this.containerEl.children[1].querySelector(".crisp-pulse-memo-input")?.focus();
+        if (!docked) this.containerEl.children[1].querySelector(".crisp-pulse-memo-input")?.focus();
       } catch (error) {
         new Notice(tr(`Crisp Pulse 速记：${error.message || error}`, `Crisp Pulse memos: ${error.message || error}`), 8000);
       } finally {

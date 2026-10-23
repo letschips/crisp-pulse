@@ -1691,13 +1691,69 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
   min-width: 0;
 }
 
-/* 手机：输入栏停在底部；收起时只露一行，点进来再展开工具栏 */
-.crisp-pulse-memo-composer.is-docked {
+/* 手机：收起时是停在底部的不透明胶囊；点进来变成键盘上方的面板，后面一层遮罩 */
+/* 底带上沿渐隐，下面不透明，列表滚到胶囊后面时被干净地遮住 */
+.crisp-pulse-memo-dock {
   position: sticky;
   bottom: 0;
   z-index: 2;
-  margin: auto 12px 12px;
-  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin-top: auto;
+  padding: 20px 12px 12px;
+  background: linear-gradient(to bottom, transparent, var(--memo-dock-bg, var(--background-primary)) 20px);
+  pointer-events: none;
+}
+
+.crisp-pulse-memo-dock > .crisp-pulse-memo-composer {
+  pointer-events: auto;
+}
+
+/* 展开时整条底带抬到遮罩（z-index 29）之上；底带自己的渐变不再需要，免得盖在模糊层上 */
+.crisp-pulse-memo-dock.is-open {
+  z-index: 30;
+  background: none;
+}
+
+.crisp-pulse-memo-composer.is-docked {
+  position: relative;
+  margin: 0;
+  padding: 6px 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 22px;
+  background: var(--background-primary);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+}
+
+.crisp-pulse-memo-composer.is-docked.is-open {
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 30;
+  margin: 0;
+  padding: 14px 12px 6px 16px;
+  border-radius: 18px;
+  border-color: var(--background-modifier-border);
+  transform: translateY(var(--memo-sheet-shift, 0px));
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16);
+}
+
+.crisp-pulse-memo-composer.is-docked:is(:focus-within, .is-focused) {
+  border-color: var(--background-modifier-border);
+  background: var(--background-primary);
+}
+
+.crisp-pulse-memo-sheet-backdrop {
+  display: none;
+}
+
+.crisp-pulse-memo-sheet-backdrop.is-shown {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  background: color-mix(in srgb, var(--background-primary) 60%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 /* 只为接住 Obsidian 给最后一个 div 的底部留白，本身不占位 */
@@ -1709,9 +1765,15 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
   display: none;
 }
 
+.crisp-pulse-memo-composer.is-docked:not(.is-open) {
+  padding-block: 10px;
+}
+
 .crisp-pulse-memo-composer.is-docked:not(.is-open) .crisp-pulse-memo-input {
+  display: block;
   min-height: 0;
-  height: 2.4em;
+  height: 1.7em;
+  overflow: hidden;
   resize: none;
 }
 
@@ -2071,33 +2133,34 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
   padding-inline: 12px;
 }
 
-/* Six tools keep their touch targets; destination and send get their own row. */
+/* 触屏：工具、Topic、发送排成一行（参考 flomo），每个按钮保留 44px 触控区 */
 .is-mobile .crisp-pulse-memo-toolbar {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 4px 0;
-}
-.is-mobile .crisp-pulse-memo-composer.is-docked {
-  margin-inline: 0;
+  display: flex;
+  align-items: center;
+  gap: 0;
 }
 .is-mobile .crisp-pulse-memo-view button.crisp-pulse-memo-tool,
 .is-mobile .crisp-pulse-memo-view button.crisp-pulse-memo-send {
-  width: 100%;
+  flex: none;
+  width: 44px;
   min-width: 44px;
   height: 44px;
   touch-action: manipulation;
+  --icon-size: 20px;
+}
+.is-mobile .crisp-pulse-memo-view button.crisp-pulse-memo-send {
+  border-radius: 50%;
 }
 .is-mobile .crisp-pulse-memo-toolbar-meta {
-  grid-column: 1 / span 5;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
   margin-left: 0;
-  margin-right: 8px;
+  margin-right: 4px;
+  overflow: hidden;
 }
 .is-mobile .crisp-pulse-memo-view select.crisp-pulse-memo-topic {
-  width: 100%;
   height: 44px;
-}
-.is-mobile .crisp-pulse-memo-send {
-  grid-column: 6;
 }
 
 /* ==========================================================================
