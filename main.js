@@ -11218,6 +11218,11 @@ class CrispPulseMemoView extends ItemView {
     } else {
       this.dockedComposer = null;
     }
+    // 重绘时新输入框要等下一轮才拿回焦点；先按聚焦样式画出来，否则提交后会白→灰→白闪一下
+    if (refocus) {
+      box.addClass("is-focused");
+      box.addEventListener("focusout", () => box.removeClass("is-focused"), { once: true });
+    }
     const input = box.createEl("textarea", { cls: "crisp-pulse-memo-input", attr: { placeholder: tr("现在的想法是…", "What’s on your mind…"), rows: "3", "aria-label": tr("速记内容", "Memo text") } });
     input.value = this.draft;
     input.addEventListener("input", () => this.setDraft(input.value, input.selectionEnd));
@@ -11381,6 +11386,8 @@ class CrispPulseMemoView extends ItemView {
       input.focus();
       input.setSelectionRange(refocus.start, refocus.end, refocus.direction);
       input.scrollTop = refocus.scroll;
+      // 焦点没能拿回来（比如用户已经点到别处）就别一直显示成聚焦
+      if (input.ownerDocument.activeElement !== input) box.removeClass("is-focused");
     }, 0);
   }
 

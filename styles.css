@@ -1138,7 +1138,7 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
   transition: border-color 120ms ease, background-color 120ms ease;
 }
 
-.crisp-pulse-memo-composer:focus-within {
+.crisp-pulse-memo-composer:is(:focus-within, .is-focused) {
   border-color: color-mix(in srgb, var(--memo-accent) 45%, transparent);
   background: var(--background-primary);
 }
