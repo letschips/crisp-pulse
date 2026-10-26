@@ -10859,6 +10859,17 @@ class CrispPulseMemoView extends ItemView {
     this.draft = next;
     this.draftRevision = (this.draftRevision || 0) + 1;
     this.persistDraft();
+    this.fitComposerInput();
+  }
+
+  /** 输入框随内容长高，到 CSS 的 max-height 为止再在框内滚动；固定 3 行时多出来的字会被卷到上面看不见 */
+  fitComposerInput(input = this.composerInput()) {
+    if (!input?.isConnected) return;
+    input.style.height = "auto";
+    input.style.height = `${input.scrollHeight}px`;
+    // 没长到上限就不出滚动条（行高有小数，差半像素也会冒出滚动条）
+    input.style.overflowY = input.scrollHeight > input.clientHeight + 1 ? "auto" : "hidden";
+    if (this.dockedComposer?.hasClass("is-open")) this.placeDockSheet();
   }
 
   /** 听写期间输入框被别的方式改动：改在那一段之前就跟着挪，之后不受影响；改到那一段里面，听写不再覆盖。 */
@@ -10975,6 +10986,7 @@ class CrispPulseMemoView extends ItemView {
     if (!input) return;
     input.value = next;
     input.setSelectionRange?.(selection[0], selection[1]);
+    this.fitComposerInput(input);
     if (this.dockedComposer && input.closest?.(".crisp-pulse-memo-composer") === this.dockedComposer) this.setDockOpen(true);
   }
 
@@ -11233,6 +11245,7 @@ class CrispPulseMemoView extends ItemView {
     if (!open) { box.style.removeProperty("--memo-sheet-shift"); return; }
     // Obsidian 的 --keyboard-height 是动画过渡的，分几次量
     const win = box.win || window;
+    this.fitComposerInput();
     this.placeDockSheet();
     for (const ms of [0, 120, 300, 500]) win.setTimeout(() => this.placeDockSheet(), ms);
   }
@@ -11280,6 +11293,7 @@ class CrispPulseMemoView extends ItemView {
     const input = box.createEl("textarea", { cls: "crisp-pulse-memo-input", attr: { placeholder: tr("现在的想法是…", "What’s on your mind…"), rows: "3", "aria-label": tr("速记内容", "Memo text") } });
     input.value = this.draft;
     input.addEventListener("input", () => this.setDraft(input.value, input.selectionEnd));
+    this.fitComposerInput(input);
     input.addEventListener("compositionstart", () => { this.composerComposing = true; });
     input.addEventListener("compositionend", () => {
       this.composerComposing = false;
@@ -11390,6 +11404,8 @@ class CrispPulseMemoView extends ItemView {
     this.renderPendingRecordings();
     const topics = this.mode === "anks" ? this.plugin.memoStore.anksTopics() : [];
     const meta = bar.createDiv({ cls: "crisp-pulse-memo-toolbar-meta" });
+    // 手机面板一行放不下工具、Topic 和发送，Topic 会被截成「sel…」；挪到输入框上面单独一行
+    if (docked) input.before(meta);
     if (topics.length > 1) {
       const select = meta.createEl("select", { cls: "crisp-pulse-memo-topic dropdown", attr: { "aria-label": tr("写入的 Topic", "Topic to write to") } });
       select.createEl("option", { text: tr("选择 Topic", "Choose a Topic"), attr: { value: "" } });

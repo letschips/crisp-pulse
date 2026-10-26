@@ -1144,16 +1144,20 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
 }
 
 .crisp-pulse-memo-view textarea.crisp-pulse-memo-input {
-  width: 100%;
+  /* 左右各留 2px 再用负边距抵回去：行首 T、p 这类字形左侧伸出时不被裁掉一角 */
+  width: calc(100% + 4px);
+  margin-inline: -2px;
   min-height: 64px;
   resize: none;
   border: none;
   background: transparent;
   box-shadow: none;
-  padding: 0;
+  padding: 0 2px;
   font-size: var(--font-ui-medium);
   line-height: 1.7;
   color: var(--text-normal);
+  /* 脚本按内容设高度，长到这里为止再在框内滚动 */
+  max-height: 40vh;
 }
 
 .crisp-pulse-memo-view textarea.crisp-pulse-memo-input:focus {
@@ -1772,9 +1776,41 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
 .crisp-pulse-memo-composer.is-docked:not(.is-open) .crisp-pulse-memo-input {
   display: block;
   min-height: 0;
-  height: 1.7em;
-  overflow: hidden;
+  height: 1.7em !important;
+  overflow: hidden !important;
   resize: none;
+}
+
+/* 面板里输入框最高长到键盘上方还留出工具栏和状态栏的位置 */
+.crisp-pulse-memo-view .crisp-pulse-memo-composer.is-docked.is-open textarea.crisp-pulse-memo-input {
+  max-height: max(5.1em, calc(100dvh - var(--keyboard-height, 0px) - 220px));
+}
+
+/* 手机面板：Topic 单独一行放在输入框上面，收起时不显示 */
+.crisp-pulse-memo-composer.is-docked > .crisp-pulse-memo-toolbar-meta {
+  justify-content: flex-start;
+  margin: -4px 0 4px;
+  overflow: visible;
+}
+
+.crisp-pulse-memo-composer.is-docked:not(.is-open) > .crisp-pulse-memo-toolbar-meta {
+  display: none;
+}
+
+.crisp-pulse-memo-view .crisp-pulse-memo-composer.is-docked select.crisp-pulse-memo-topic {
+  width: auto;
+  max-width: 100%;
+  height: 32px;
+  padding-left: 0;
+  border: none;
+  background-color: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.crisp-pulse-memo-view .crisp-pulse-memo-composer.is-docked button.crisp-pulse-memo-send {
+  margin-left: auto;
 }
 
 /* 长速记折叠：约 8 行，底部渐隐提示还有内容 */

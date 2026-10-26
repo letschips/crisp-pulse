@@ -328,7 +328,7 @@ test('an older memo reload that finishes late never brings back a deleted card',
    - 附件还在保存时重载插件：新实例的面板不知道还有附件没存好，允许提前提交，迟到的链接串进下一条。
    - 录音「重试保存」时关掉再打开面板：接手的面板不等重试完成就能提交。 */
 class El {
-  constructor(cls = '') { this.cls = cls; this.children = []; this.events = {}; this.value = ''; this.disabled = false; this.isConnected = true; this.selectionStart = 0; this.selectionEnd = 0; }
+  constructor(cls = '') { this.cls = cls; this.children = []; this.events = {}; this.value = ''; this.disabled = false; this.isConnected = true; this.style = {}; this.scrollHeight = 0; this.selectionStart = 0; this.selectionEnd = 0; }
   createEl(tag, o = {}) { const x = new El(o.cls); this.children.push(x); return x; }
   createDiv(o = {}) { return this.createEl('div', o); }
   createSpan(o = {}) { return this.createEl('span', o); }
