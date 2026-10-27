@@ -5,7 +5,8 @@
    - 每分钟重画天体时水墨画布越画越大。
    - 设置里存了不认识的画风，看板报错；一键切换不循环。
    - 换了画风，图例还在说城堡、小旗。
-   - 像素城市的楼顶没落在 groundRidgeRow 那一行，或者分楼时一天对不上一栋。 */
+   - 像素城市的楼顶没落在 groundRidgeRow 那一行，或者分楼时一天对不上一栋。
+   - 样式表还没生效时地面高度由画布撑开：高分辨率画风每次重画都把画布放大，越画越大直到内存不够。 */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -139,4 +140,20 @@ test('the legend names what the current style draws', () => {
   assert.match(pixel, /小城堡/); assert.match(pixel, /小旗是今天/);
   assert.match(ink, /小亭/); assert.match(ink, /红印是今天/); assert.match(ink, /苔点是连续/);
   assert.doesNotMatch(ink, /城堡|小旗|小石子/);
+});
+
+test('a footer sized by its own canvas (no stylesheet yet) does not grow without bound', () => {
+  for (const sceneStyle of ['pixel', 'ink', 'city']) {
+    const c = canvas();
+    const v = Object.create(F.CrispPulseView.prototype);
+    v.containerEl = { ownerDocument: { body: { classList: { contains: () => false } } } };
+    v.currentScope = 'all';
+    v.plugin = { store: { daily: {} }, settings: { sceneStyle }, recordMatchesScope: () => true };
+    v.updateVoyage = () => null; v.queueCelebration = () => {}; v.updatePaperBoats = async () => {}; v.checkLanterns = async () => {};
+    const caption = { setText() {}, setAttr() {}, removeAttribute() {}, toggleClass() {}, hasClass() { return false; } };
+    // 没有样式表：画布按自身像素尺寸显示，地面跟着它的高度走
+    v.footerEls = { canvas: c, ground: { getBoundingClientRect: () => ({ width: 600, height: c.height || 184 }) }, caption, locked: false };
+    for (let i = 0; i < 8; i++) v.paintFooter();
+    assert.ok(v.footerData.height <= 120, `${sceneStyle}：重画 8 次后逻辑高度 ${v.footerData.height}，不该一直变大`);
+  }
 });

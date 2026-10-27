@@ -5488,10 +5488,13 @@ function getPulseSky(doc, mode, weather = "fair", season = "summer", sceneId = "
 
 /* ---------- 水墨山水：和像素湖面同一组元素、同一套几何，只是换一支笔 ----------
    按屏幕分辨率画（不按像素格放大），所有画布仍以「逻辑格」定尺寸和位置，船、灯、鸟的落点与像素风完全一样。
-   底色透明，叠在面板背景上；只铺一层很淡的纸色，白天深墨，夜里是月光下的淡墨。 */
+   白天底色透明，叠在面板背景上，只铺一层很淡的纸色；夜里是月夜：铺一张靛青的夜空当纸，山仍是深墨、比天更暗，
+   远山淡、近山浓，山脊勾一道月光的亮边，山脚一层月光照亮的薄雾。 */
 const PULSE_INK = {
   day: { ink: [38, 40, 44], wash: [112, 118, 124], paper: [234, 226, 206], snow: [252, 252, 249], seal: [192, 56, 42], sun: [208, 70, 48], moon: [236, 232, 214], warm: [236, 150, 70], bird: [44, 46, 50] },
-  night: { ink: [170, 178, 196], wash: [118, 128, 150], paper: [34, 38, 50], snow: [228, 234, 246], seal: [172, 74, 62], sun: [208, 70, 48], moon: [236, 232, 214], warm: [255, 206, 128], bird: [190, 198, 220] },
+  night: { ink: [10, 12, 22], wash: [70, 84, 118], paper: [34, 40, 64], snow: [198, 208, 230], seal: [176, 66, 54], sun: [208, 70, 48], moon: [240, 236, 216], warm: [255, 200, 118], bird: [190, 198, 220],
+    // 夜空：上深下浅（近地平线有一层月光），纸几乎不透明；rim 是山脊上的月光，mist 是山脚的薄雾
+    skyTop: [14, 18, 34], skyBottom: [62, 74, 108], paperAlpha: 0.94, rim: [150, 168, 210], mist: [104, 120, 160] },
 };
 // 季节只染最近的一层山和草木：春花青带一点桃红，夏石绿，秋赭石带朱，冬留白积雪
 const PULSE_INK_SEASON = {
@@ -5613,7 +5616,7 @@ function inkField(w, h, step, fn) {
 
 /** 一层墨山：top 是每个物理列的山顶行（逻辑格）。从山顶往下由浓到淡，fade 行内化开；
     顶边一道浓墨（brush 是每列的干湿），像干笔勾出的山脊线；texture 是山坡上的皴笔（tex 取纹理）。cut 以下不画。 */
-function inkMountain(img, W, H, R, top, { color, alpha, fade, edge = 0, edgeWidth = 0.8, texture = 0, floor = 0, cut = Infinity, tex = null, brush = null, light = null }) {
+function inkMountain(img, W, H, R, top, { color, alpha, fade, edge = 0, edgeWidth = 0.8, edgeColor = null, texture = 0, floor = 0, cut = Infinity, tex = null, brush = null, light = null }) {
   const d = img.data, yEnd = Math.min(H, Math.ceil(cut * R));
   for (let px = 0; px < W; px++) {
     const t0 = top[px];
@@ -5630,6 +5633,12 @@ function inkMountain(img, W, H, R, top, { color, alpha, fade, edge = 0, edgeWidt
       let a = alpha * g * Math.sqrt(g);
       if (a < floor) a = floor;
       a *= lit;
+      // 夜里山脊是另一种颜色的亮边（月光），叠在墨色上面
+      if (edgeColor && dy < edgeWidth) {
+        inkOver(d, (py * W + px) * 4, color, a * cov);
+        inkOver(d, (py * W + px) * 4, edgeColor, edge * b * cov * (ly > cut - 2 ? (cut - ly) / 2 : 1));
+        continue;
+      }
       if (edge && dy < edgeWidth && edge * b > a) a = edge * b;
       if (texture && tex && f < 0.8) {
         // 皴：顺着山势斜下的短笔，越往下越少
@@ -5650,15 +5659,18 @@ function inkBrush(W, R, noise, seed) {
   return b;
 }
 
-/** 收尾：起雾时按 amountAt(px, py)（物理像素）吃掉墨色、蒙一层雾色，最后在下面垫一层纸色。 */
-function inkFinish(img, W, H, R, p, haze, amountAt) {
-  const d = img.data, pa = PULSE_INK_PAPER_ALPHA, [r, g, b] = p.paper;
+/** 收尾：起雾时按 amountAt(px, py)（物理像素）吃掉墨色、蒙一层雾色，最后在下面垫一层纸色。
+    有 skyAt（夜里）时，垫的是按行变化的夜空颜色。 */
+function inkFinish(img, W, H, R, p, haze, amountAt, skyAt = null) {
+  const d = img.data, mist = p.mist || p.paper;
+  let pa = PULSE_INK_PAPER_ALPHA, [r, g, b] = p.paper;
   for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
     const o = (py * W + px) * 4;
+    if (px === 0 && skyAt) { [r, g, b] = skyAt((py + 0.5) / R); pa = p.paperAlpha; }
     if (haze) {
       const k = haze * amountAt(px, py);
       d[o + 3] *= 1 - k * 0.75;
-      inkOver(d, o, p.paper, k * 0.35);
+      inkOver(d, o, mist, k * 0.35);
     }
     const da = d[o + 3] / 255, add = pa * (1 - da), oa = da + add;
     d[o] = (d[o] * da + r * add) / oa;
@@ -5679,14 +5691,21 @@ function paintInkSky(canvas, mode = "night", weather = "fair", season = "summer"
   const { hash, noise, fbm } = pulsePixelNoise(7);
   const horizon = h * 0.6;
   const near = inkSeasonColor(p, mode, season), accent = PULSE_INK_SEASON[season]?.dot;
-  // 云气：横着拉长的几缕淡墨，云越多越浓
-  const threshold = 0.6 - (sky.cover + 0.1) * 0.55, cloudAlpha = 0.14 + sky.cover * 0.12;
+  const pen = inkPen(img, W, H, R), night = !!p.skyTop;
+  // 夜里稀疏几颗星：越往下越淡，阴天、起雾时几乎看不见；画在云后面
+  if (night) for (let y = 1; y < horizon * 0.62; y++) for (let x = 0; x < w; x++) {
+    // hash 取自 256 个随机值的表（最大不到 0.995），两次筛选才够稀疏
+    if (hash(x * 7 + 3, y * 13 + 5) < 0.985 || hash(y * 5 + 1, x * 3 + 7) < 0.8) continue;
+    pen.circle(x + 0.5, y + 0.5, 0.32 + hash(x, y) * 0.25, p.moon, (0.55 + 0.4 * hash(y, x)) * (1 - y / horizon) * (sky.light >= 1 ? 1 : sky.light * 0.4));
+  }
+  // 云气：横着拉长的几缕淡墨，云越多越浓；夜里是被月光照亮的淡银色
+  const threshold = 0.6 - (sky.cover + 0.1) * 0.55, cloudAlpha = (0.14 + sky.cover * 0.12) * (night ? 1.6 : 1), cloudColor = night ? p.mist : p.wash;
   const cloud = inkField(w, horizon, 1, (x, y) => fbm(x / (h * 1.6) + 2, y / (h * 0.15) + 1, 4));
   for (let py = 0; py < Math.ceil(horizon * R); py++) {
     const ly = (py + 0.5) / R, band = 1 - Math.abs(ly / horizon - 0.32) / 0.68;
     for (let px = 0; px < W; px++) {
       const v = (cloud((px + 0.5) / R, ly) - threshold) * band;
-      if (v > 0) inkOver(d, (py * W + px) * 4, p.wash, Math.min(1, v * 2.4) * cloudAlpha);
+      if (v > 0) inkOver(d, (py * W + px) * 4, cloudColor, Math.min(1, v * 2.4) * cloudAlpha);
     }
   }
   // 三层山：越远越淡、越高越尖（高远），最近一层带季节色和皴笔
@@ -5700,12 +5719,37 @@ function paintInkSky(canvas, mode = "night", weather = "fair", season = "summer"
     { base: horizon + 1, amp: h * 0.36, scale: h * 0.8, seed: 8, color: pixelMix(p.wash, p.ink, 0.45), alpha: 0.32, fade: h * 0.2, edge: 0.3 },
     { base: horizon + 2, amp: h * 0.22, scale: h * 0.55, seed: 13, color: near, alpha: 0.5, fade: h * 0.15, edge: 0.6, texture: 0.12 },
   ];
-  const nearTop = new Float32Array(W);
+  const nearTop = new Float32Array(W), midTop = new Float32Array(W);
+  const cloudSea = night ? p.mist : [250, 249, 244];
   layers.forEach((layer, i) => {
     const top = new Float32Array(W);
     for (let px = 0; px < W; px++) top[px] = layer.base - layer.amp * ridged((px + 0.5) / R, layer.scale, layer.seed);
-    inkMountain(img, W, H, R, top, { ...layer, cut: horizon, tex, brush: inkBrush(W, R, noise, layer.seed) });
+    inkMountain(img, W, H, R, top, { ...layer, cut: horizon, tex, brush: inkBrush(W, R, noise, layer.seed), ...(p.rim && i === 2 ? { edgeColor: p.rim, edge: 0.3, edgeWidth: 0.6 } : {}) });
     if (i === 2) nearTop.set(top);
+    if (i === 1) {
+      midTop.set(top);
+      // 云海：远山和近山之间横一条云，山腰没进去，前后就拉开了
+      const mid = horizon - h * 0.13;
+      for (let py = Math.floor((mid - 7) * R); py < Math.ceil((mid + 6) * R); py++) {
+        const ly = (py + 0.5) / R, k = 1 - Math.abs(ly - mid) / 7;
+        if (k <= 0) continue;
+        for (let px = 0; px < W; px++) {
+          const v = cloud((px + 0.5) / R * 0.7 + 40, ly * 0.6 + 8);
+          if (v > 0.42) inkOver(d, (py * W + px) * 4, cloudSea, Math.min(1, (v - 0.42) * 4) * k * (night ? 0.45 : 0.7));
+        }
+      }
+      // 远山顶上一座小塔（七层，越往上越窄），夜里塔窗一点暖灯
+      let best = Math.round(230 * R);
+      for (let px = Math.round(230 * R); px < Math.round(330 * R); px++) if (top[px] < top[best]) best = px;
+      const tx = (best + 0.5) / R, tb = top[best] + 0.6, tc = pixelMix(p.wash, p.ink, 0.55);
+      for (let k = 0; k < 7; k++) {
+        const y = tb - k * 1.55, half = 1.7 - k * 0.17;
+        pen.poly([[tx - half, y], [tx + half, y], [tx + half * 0.85, y - 1.05], [tx - half * 0.85, y - 1.05]], tc, 0.75);
+        pen.stroke(tx - half - 0.6, y - 1.1, tx + half + 0.6, y - 1.1, 0.22, 0.22, tc, 0.8);
+      }
+      pen.stroke(tx, tb - 10.9, tx, tb - 13, 0.22, 0.1, tc, 0.85);
+      if (night) { pen.circle(tx, tb - 3.6, 1.2, p.warm, 0.25, 0.6); pen.circle(tx, tb - 3.6, 0.35, p.warm, 0.95); }
+    }
     // 冬天高处的峰顶留白积雪
     if (season === "winter" && i > 0) for (let px = 0; px < W; px++) {
       const lift = layer.base - top[px];
@@ -5728,6 +5772,32 @@ function paintInkSky(canvas, mode = "night", weather = "fair", season = "summer"
       if (ly < depth && r > 0.42) inkOver(d, o, near, 0.1 * (1 - (ly - horizon) / Math.max(1, depth - horizon)));
     }
   }
+  // 近山山涧里挂一道瀑布，底下一团水雾
+  {
+    let peak = Math.round(420 * R);
+    for (let px = Math.round(420 * R); px < Math.round(520 * R); px++) if (nearTop[px] < nearTop[peak]) peak = px;
+    const fx = (peak + 0.5) / R + 4, top = nearTop[Math.min(W - 1, Math.round(fx * R))] + 1.5, white = night ? p.snow : [252, 252, 250];
+    for (let y = top; y < horizon - 1.5; y += 0.5) {
+      const wob = (noise(y / 3, 5.5) - 0.5) * 0.8, t = (y - top) / Math.max(1, horizon - top);
+      if (noise(fx, y * 1.7) < 0.22) continue;
+      pen.circle(fx + wob, y, 0.65 + t * 0.45, white, (night ? 0.75 : 0.92) * Math.min(1, (y - top) / 2));
+    }
+    pen.ellipse(fx, horizon - 1.6, 4.5, 1.6, white, night ? 0.3 : 0.45, 1.2);
+  }
+  // 右边水边一丛芦苇：和左边的松崖一左一右；秋天苇穗赭色，冬天穗上积雪
+  for (let i = 0; i < 16; i++) {
+    const bx = 572 + i * 3.6 + (hash(i, 51) - 0.5) * 3, by = horizon + 4 + hash(i, 53) * 3, tall = 6 + hash(i, 55) * 6, lean = 0.6 + hash(i, 57) * 2;
+    pen.stroke(bx, by, bx + lean, by - tall, 0.26, 0.08, p.ink, night ? 0.9 : 0.75);
+    const head = season === "autumn" ? [176, 120, 70] : season === "winter" ? p.snow : night ? p.mist : pixelMix(p.wash, p.ink, 0.3);
+    if (hash(i, 59) > 0.25) pen.ellipse(bx + lean + 0.2, by - tall - 0.9, 0.45, 1.4, head, 0.85, 0.2);
+    if (hash(i, 61) > 0.5) pen.stroke(bx + lean * 0.5, by - tall * 0.5, bx + lean * 0.5 + 2.2, by - tall * 0.5 - 1.6, 0.18, 0.05, p.ink, 0.6);
+  }
+  // 夜里水面上贴着一层月光照亮的薄雾，山脚化在里面
+  if (p.mist) for (let py = Math.floor((horizon - 9) * R); py < Math.ceil((horizon + 2) * R); py++) {
+    const ly = (py + 0.5) / R, k = 1 - Math.abs(ly - horizon + 3) / 6;
+    if (k <= 0) continue;
+    for (let px = 0; px < W; px++) inkOver(d, (py * W + px) * 4, p.mist, k * 0.32 * (0.6 + 0.4 * cloud((px + 0.5) / R * 0.5, ly)));
+  }
   // 左边的石崖：上沿起伏，崖面是竖着的披麻皴，往下化开，崖脚没进水里
   const cliffX = h * 0.86, cliffEnd = cliffX + h * 0.22, pineX = h * 0.5;
   const cliff = new Float32Array(W).fill(Infinity);
@@ -5739,8 +5809,7 @@ function paintInkSky(canvas, mode = "night", weather = "fair", season = "summer"
     cliff[px] = horizon + 3 - (h * 0.22 * crown + fbm(lx / 6, 8.1, 3) * 5) * Math.sqrt(Math.max(0, k));
   }
   const strands = inkField(cliffEnd, h, 0.5, (x, y) => noise(x / 0.9, y / 6 + 2));
-  // 夜里的石崖往夜色里压一些，不要比远山还亮
-  const rock = pixelMix(pixelMix(p.ink, near, 0.35), p.paper, mode === "night" ? 0.45 : 0), cliffCut = horizon + 3;
+  const rock = pixelMix(p.ink, near, 0.35), cliffCut = horizon + 3;
   for (let px = 0; px < W; px++) {
     if (!(cliff[px] < cliffCut)) continue;
     const lx = (px + 0.5) / R;
@@ -5751,10 +5820,11 @@ function paintInkSky(canvas, mode = "night", weather = "fair", season = "summer"
       if (dy < 0.9) a = Math.max(a, 0.88);
       if (ly > horizon - 3) a *= (cliffCut - ly) / 6;
       inkOver(d, (py * W + px) * 4, rock, a * cov);
+      // 冬天崖顶积雪
+      if (season === "winter" && dy < 1.6 && strands(lx, ly) > 0.35) inkOver(d, (py * W + px) * 4, p.snow, 0.8 * (1 - dy / 1.6) * cov);
     }
   }
   // 崖顶一棵松：弯着往右伸的树干，三团松针；冬天针团上积雪，春天零星几点梅花
-  const pen = inkPen(img, W, H, R);
   const root = cliff[Math.min(W - 1, Math.round(pineX * R))];
   pen.stroke(pineX, root + 1, pineX + 3, root - 12, 1.5, 1, p.ink, 0.92);
   pen.stroke(pineX + 3, root - 12, pineX + 1, root - 22, 1, 0.55, p.ink, 0.92);
@@ -5768,10 +5838,13 @@ function paintInkSky(canvas, mode = "night", weather = "fair", season = "summer"
       const nx = cx + (hash(i * 3, Math.round(cy)) - 0.5) * rx * 1.6, ny = cy + (hash(i * 5 + 1, Math.round(cx)) - 0.5) * 2;
       pen.stroke(nx - 1.4, ny, nx + 1.4, ny - 0.3, 0.35, 0.15, p.ink, 0.6);
     }
-    if (season === "winter") pen.ellipse(cx, cy - 1.2, rx * 0.8, 0.8, p.snow, 0.85, 0.3);
+    // 冬天针团顶上几小撮雪（一整片会像个盘子）
+    if (season === "winter") for (let i = 0; i < 5; i++) pen.ellipse(cx + (hash(i * 7, Math.round(cx)) - 0.5) * rx * 1.4, cy - 1 - hash(i, Math.round(cy) + 5) * 0.6, 0.9 + hash(i + 3, 9) * 0.7, 0.45, p.snow, 0.85, 0.25);
     else if (season === "spring" && accent) for (let i = 0; i < 4; i++) pen.circle(cx + (hash(i, Math.round(cx) + 3) - 0.5) * rx * 1.6, cy + (hash(i + 9, Math.round(cy)) - 0.5) * 2.4, 0.5, accent, 0.9);
   }
-  inkFinish(img, W, H, R, p, sky.haze, (px, py) => { const ly = (py + 0.5) / R; return ly < horizon ? 0.5 + 0.5 * (ly / horizon) : 0.7; });
+  // 夜空：上深下浅；水面比天暗一些，往下更暗
+  const skyAt = p.skyTop ? (ly) => (ly < horizon ? pixelMix(p.skyTop, p.skyBottom, Math.pow(ly / horizon, 1.3)) : pixelMix(pixelMix(p.skyBottom, p.skyTop, 0.35), p.skyTop, (ly - horizon) / (h - horizon))) : null;
+  inkFinish(img, W, H, R, p, sky.haze, (px, py) => { const ly = (py + 0.5) / R; return ly < horizon ? 0.5 + 0.5 * (ly / horizon) : 0.7; }, skyAt);
   ctx.putImageData(img, 0, 0);
 }
 
@@ -5851,7 +5924,7 @@ function paintInkGround(canvas, mode, profile, todayX = -1, { reflection = null,
 
   const tex = inkField(w, h, 1, (x, y) => noise(x / 1.3, y / 0.9 + 4));
   inkMountain(img, W, H, R, far, { color: p.wash, alpha: 0.2, fade: h * 0.36, cut: lakeTop });
-  inkMountain(img, W, H, R, ridge, { color: near, alpha: 0.55, fade: h * 0.2, edge: 0.92, edgeWidth: 0.9, texture: 0.14, cut: lakeTop, tex, brush: inkBrush(W, R, noise, 5), light });
+  inkMountain(img, W, H, R, ridge, { color: near, alpha: 0.55, fade: h * 0.2, edge: 0.92, edgeWidth: 0.9, texture: 0.14, cut: lakeTop, tex, brush: inkBrush(W, R, noise, 5), light, ...(p.rim ? { edgeColor: p.rim, edge: 0.34, edgeWidth: 0.6 } : {}) });
   // 峰顶留白：山尖两侧一小段墨色淡下去；冬天是积雪
   if (summitX >= 0) for (let px = Math.max(0, Math.floor((summit - 12) * R)); px < Math.min(W, Math.ceil((summit + 12) * R)); px++) {
     const off = Math.abs((px + 0.5) / R - summit), depth = 4 - off * 0.25;
@@ -5862,8 +5935,15 @@ function paintInkGround(canvas, mode, profile, todayX = -1, { reflection = null,
       if (season === "winter") inkOver(d, o, p.snow, 0.75 * (1 - dy / depth));
     }
   }
+  // 夜里山脚和近岸之间飘一层月光下的薄雾
+  if (p.mist) for (let px = 0; px < W; px++) {
+    for (let py = Math.max(0, Math.floor((shore[px] - 7) * R)); py < Math.ceil(shore[px] * R); py++) {
+      const k = 1 - ((shore[px] - (py + 0.5) / R) / 7);
+      inkOver(d, (py * W + px) * 4, p.mist, k * 0.3 * (0.6 + 0.4 * tex((px + 0.5) / R * 0.3, (py + 0.5) / R * 0.3)));
+    }
+  }
   // 近岸：浓墨一道，往下淡
-  inkMountain(img, W, H, R, shore, { color: pixelMix(p.ink, near, 0.3), alpha: 0.78, fade: h * 0.2, edge: 0.88, floor: 0.3, cut: lakeTop + 0.5, brush: inkBrush(W, R, noise, 9) });
+  inkMountain(img, W, H, R, shore, { color: pixelMix(p.ink, near, 0.3), alpha: 0.78, fade: h * 0.2, edge: 0.88, floor: 0.3, cut: lakeTop + 0.5, brush: inkBrush(W, R, noise, 9), ...(p.rim ? { edgeColor: p.rim, edge: 0.22, edgeWidth: 0.5 } : {}) });
   const pen = inkPen(img, W, H, R);
   // 近岸上的小树：位置和像素风一样稀疏（彼此隔 6 列、避开今天），树干一笔，树冠几团点叶
   for (let x = 3, last = -99; x < w - 3; x++) {
@@ -5909,12 +5989,13 @@ function paintInkGround(canvas, mode, profile, todayX = -1, { reflection = null,
       }
     }
   }
+  const skyAt = p.skyTop ? (ly) => (ly < lakeTop ? pixelMix(p.skyTop, p.skyBottom, Math.min(1, ly / lakeTop * 1.1)) : pixelMix(pixelMix(p.skyBottom, p.skyTop, 0.35), p.skyTop, (ly - lakeTop) / (h - lakeTop))) : null;
   inkFinish(img, W, H, R, p, haze, (px, py) => {
     const lx = (px + 0.5) / R, ly = (py + 0.5) / R;
     const amount = ly >= lakeTop ? 0.45 : ly >= shore[px] ? 0.55 : ly >= ridge[px] ? 0.85 : 1;
     // 贴着近岸飘一条薄雾
     return Math.abs(ly - shore[px] + 1) <= 2 && ripple(lx * 0.8, ly + 40) > 0.45 ? Math.min(1, amount + 0.4) : amount;
-  });
+  }, skyAt);
   // 苔点（连续天数）和红印（今天）画在雾上面，起雾也看得见
   for (const sx of stones) {
     if (Math.abs(sx - todayX) <= 2 || sx < 1 || sx >= w - 1) continue;
@@ -5935,12 +6016,12 @@ function paintInkGround(canvas, mode, profile, todayX = -1, { reflection = null,
 /* 湖上的小东西，逻辑格和像素精灵一样大、吃水线一样：帆船、小鸭、鸭妈妈带小鸭、泊着的小舟、纸船。 */
 const PULSE_INK_VOYAGERS = {
   boat(pen, p, mode) {
-    const sail = mode === "night" ? p.ink : p.snow;
+    const sail = p.snow;
     pen.poly([[2.4, 8], [13.6, 8], [12, 9.9], [4.4, 9.9]], p.ink, 0.92);
     pen.stroke(9.4, 0.4, 9.4, 8.2, 0.3, 0.3, p.ink, 0.95);
     const main = [[8.9, 1], [8.9, 7.2], [3, 7.2]], jib = [[9.9, 3.2], [9.9, 7.2], [12.8, 7.2]];
-    pen.poly(main, sail, mode === "night" ? 0.45 : 0.95); pen.outline(main, 0.35, p.ink, 0.75);
-    pen.poly(jib, sail, mode === "night" ? 0.35 : 0.9); pen.outline(jib, 0.3, p.ink, 0.6);
+    pen.poly(main, sail, mode === "night" ? 0.8 : 0.95); pen.outline(main, 0.35, p.ink, 0.75);
+    pen.poly(jib, sail, mode === "night" ? 0.7 : 0.9); pen.outline(jib, 0.3, p.ink, 0.6);
     pen.stroke(0.4, 10.5, 2.4, 10.5, 0.22, 0.1, p.wash, 0.6); pen.stroke(4.6, 10.6, 6.6, 10.6, 0.22, 0.1, p.wash, 0.5);
   },
   duck(pen, p, mode) {
@@ -7877,7 +7958,8 @@ class CrispPulseView extends ItemView {
     const cssWidth = rect.width || PULSE_SKY_WIDTH * PULSE_GROUND_SCALE;
     // 横竖都按同一个倍数放大，像素保持方形
     const width = Math.max(120, Math.ceil(cssWidth / PULSE_GROUND_SCALE));
-    const height = Math.max(32, Math.round((rect.height || PULSE_GROUND_HEIGHT * PULSE_GROUND_SCALE) / PULSE_GROUND_SCALE));
+    // 高度封顶：样式表还没生效时地面由画布撑开，按屏幕分辨率画的画风（水墨）画布比逻辑格大，不封顶会一次比一次高直到内存不够
+    const height = Math.max(32, Math.min(PULSE_GROUND_HEIGHT * 2, Math.round((rect.height || PULSE_GROUND_HEIGHT * PULSE_GROUND_SCALE) / PULSE_GROUND_SCALE)));
     const today = getTodayKey();
     const todayNumber = reviewDayNumber(today);
     let dates = [], values = [], statuses = [], streak = [], streakLength = 0;
