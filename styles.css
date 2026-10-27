@@ -2920,6 +2920,7 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
   opacity: 0;
 }
 .crisp-pulse-view .crisp-pulse-footer-ground canvas.crisp-pulse-sky-event.is-meteor,
+.crisp-pulse-view .crisp-pulse-footer-ground canvas.crisp-pulse-sky-event.is-burst,
 .crisp-pulse-view .crisp-pulse-footer-ground canvas.crisp-pulse-sky-event.is-lantern {
   height: auto;
   -webkit-mask-image: none;

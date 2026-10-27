@@ -36,7 +36,7 @@ const PULSE_ZH = /^zh\b/i.test(PULSE_LANGUAGE);
 const PULSE_HANT = PULSE_ZH && /^zh[-_](tw|hk|mo|hant)\b/i.test(PULSE_LANGUAGE);
 /* 繁体文案由简体文案转出来（OpenCC s2twp：台湾正体 + 台湾用语），表由 scripts/gen-hant.cjs 生成，只收源码里用到的字词。
    分两段按最长匹配替换：s 简→繁，t 台湾用语。插值进来的内容（文件名、标签）也会被转，只影响显示。 */
-const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"24a8223431c3c8c9","s":"一只 一隻|一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|方向 方向|无 無|日历 日曆|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|沉淀 沉澱|没 沒|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|湖面 湖面|满 滿|灯 燈|点 點|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
+const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"e0dfdb3a2a80c484","s":"一只 一隻|一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|头 頭|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|方向 方向|无 無|日历 日曆|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栋 棟|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|楼 樓|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|江面 江面|沉淀 沉澱|没 沒|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|游 遊|游船 遊船|湖面 湖面|满 滿|灯 燈|点 點|烟 煙|烟花 煙花|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風|黄 黃","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
 let pulseHantStages = null;
 function pulseHant(text) {
   if (typeof text !== "string" || !/\p{Script=Han}/u.test(text)) return text;
@@ -6067,9 +6067,427 @@ function paintInkCranes(canvas, width, height) {
   ctx.putImageData(img, 0, 0);
 }
 
+/* ---------- 像素城市：隔着江看过去的天际线，浅色界面是黄昏，深色界面是夜景 ----------
+   和像素湖面同一套抖动、同一套几何：天际线一天一栋楼，楼顶就在 groundRidgeRow 那一行；江面就是湖面那几行。
+   地标只画轮廓：螺旋上升的超高塔、开瓶器、宝塔式塔楼、串着两颗球的电视塔，不写楼名。 */
+const PULSE_CITY_PALETTES = {
+  night: {
+    skyTop: [8, 10, 30], skyMid: [28, 28, 68], skyHorizon: [92, 62, 104], cloudShadow: [30, 30, 60], cloudLit: [76, 70, 110], cloudEdge: [120, 116, 160],
+    far: [40, 40, 74], body: [18, 20, 40], bodyLit: [34, 38, 64], warm: [255, 206, 120], cool: [150, 196, 255], off: [30, 34, 58], red: [255, 74, 62], spire: [120, 128, 170],
+    pearl: [232, 92, 168], pearlLit: [255, 168, 214], gold: [214, 172, 92], steel: [70, 92, 136], tower: [150, 184, 236],
+    seaTop: [24, 26, 56], seaBottom: [6, 8, 22], glint: [120, 130, 196], skyEdge: [92, 62, 104],
+    bank: [22, 24, 40], bankLit: [52, 54, 76], tree: [14, 26, 30], treeLit: [30, 48, 50], lamp: [255, 214, 140], stars: true, lit: 0.42,
+  },
+  day: {
+    skyTop: [66, 100, 168], skyMid: [190, 148, 172], skyHorizon: [250, 192, 140], cloudShadow: [168, 132, 160], cloudLit: [252, 208, 186], cloudEdge: [255, 232, 214],
+    far: [158, 136, 164], body: [62, 64, 96], bodyLit: [92, 92, 126], warm: [255, 214, 140], cool: [206, 222, 250], off: [80, 82, 114], red: [240, 72, 56], spire: [176, 176, 198],
+    pearl: [186, 98, 146], pearlLit: [236, 150, 190], gold: [168, 142, 104], steel: [90, 104, 140], tower: [128, 150, 190],
+    seaTop: [168, 150, 178], seaBottom: [72, 80, 124], glint: [255, 222, 190], skyEdge: [250, 192, 140],
+    bank: [74, 74, 100], bankLit: [118, 114, 136], tree: [46, 84, 60], treeLit: [82, 122, 80], lamp: [255, 220, 150], stars: false, lit: 0.16,
+  },
+};
+
+/** 一层画布像素缓冲：先画进 RGB 数组（江里的倒影要回头取上面的颜色），最后统一抖动量化。 */
+function cityBuffer(w, h) {
+  const rgb = new Float32Array(w * h * 3), light = new Float32Array(w * h);
+  const set = (x, y, c, glow = 0) => {
+    if (x < 0 || y < 0 || x >= w || y >= h) return;
+    const o = y * w + x;
+    rgb[o * 3] = c[0]; rgb[o * 3 + 1] = c[1]; rgb[o * 3 + 2] = c[2];
+    light[o] = glow;
+  };
+  const get = (x, y) => { const o = (Math.max(0, Math.min(h - 1, y)) * w + Math.max(0, Math.min(w - 1, x))) * 3; return [rgb[o], rgb[o + 1], rgb[o + 2]]; };
+  const glowAt = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : light[y * w + x]);
+  return { rgb, light, set, get, glowAt };
+}
+
+/** 楼面：两列一格窗，隔行一层；亮窗按 lit 概率，暖光为主，偶尔冷光。 */
+function cityFacade(buf, p, x0, x1, top, bottom, { lit, hash, seed = 0, color = p.body, shade = p.bodyLit }) {
+  for (let x = x0; x <= x1; x++) for (let y = top; y <= bottom; y++) {
+    let c = x === x1 ? color : pixelMix(color, shade, x === x0 ? 0.5 : 0.18);
+    let glow = 0;
+    if ((x - x0) % 2 === 1 && x < x1 && (y - top) % 2 === 1 && y > top) {
+      const r = hash(x * 7 + seed, y * 3 + seed);
+      if (r < lit) { c = hash(x + seed * 5, y + 11) > 0.82 ? p.cool : p.warm; glow = 1; }
+      else c = p.off;
+    }
+    buf.set(x, y, c, glow);
+  }
+}
+
+/** 地标：电视塔、宝塔式塔楼、开瓶器、螺旋超高塔，底在 base 行（逻辑格）。 */
+function cityLandmarks(buf, p, base, hash, mode) {
+  const night = mode === "night";
+  const put = (x, y, c, g = 0) => buf.set(Math.round(x), Math.round(y), c, g);
+  // 电视塔：三条腿、下面一颗大球、中段、上面一颗小球、顶上一根针
+  const tvX = 24;
+  for (let y = base; y > base - 14; y--) { const t = (base - y) / 14; put(tvX - 4 + t * 3, y, p.spire); put(tvX, y, p.spire); put(tvX + 4 - t * 3, y, p.spire); }
+  const sphere = (cy, r) => {
+    for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+      const d = Math.hypot(x, y);
+      if (d > r + 0.3) continue;
+      const lit = (x + y) < -r * 0.3;
+      put(tvX + x, cy + y, lit ? p.pearlLit : p.pearl, night ? 0.8 : 0.3);
+    }
+  };
+  sphere(base - 17, 5);
+  for (let y = base - 22; y >= base - 35; y--) { put(tvX - 1, y, p.spire); put(tvX, y, pixelMix(p.spire, p.body, 0.3)); put(tvX + 1, y, p.spire); }
+  sphere(base - 37, 3);
+  for (let y = base - 41; y >= base - 43; y--) for (let x = -1; x <= 1; x++) put(tvX + x, y, p.pearl, night ? 0.6 : 0);
+  for (let y = base - 44; y >= base - 54; y--) put(tvX, y, p.spire);
+  put(tvX, base - 55, p.red, 1);
+  // 宝塔式塔楼：一节节往上收，顶上一根尖
+  const jmX = 52;
+  for (let y = base; y >= base - 48; y--) {
+    const tier = Math.floor((base - y) / 6), half = Math.max(1, 5 - Math.floor(tier / 2));
+    for (let x = -half; x <= half; x++) {
+      const window = (x + half) % 2 === 1 && (base - y) % 2 === 0 && Math.abs(x) < half;
+      const on = window && hash(jmX + x, y) < (night ? 0.7 : 0.25);
+      put(jmX + x, y, on ? p.warm : (base - y) % 6 === 0 ? pixelMix(p.gold, p.body, 0.2) : pixelMix(p.body, p.gold, x < 0 ? 0.35 : 0.2), on ? 1 : 0);
+    }
+  }
+  for (let y = base - 49; y >= base - 56; y--) put(jmX, y, p.gold);
+  // 开瓶器：两边往上收，顶上留一道横梁，下面开一个梯形口（透出后面的天）
+  const wfX = 72, wfH = 58;
+  for (let y = base; y >= base - wfH; y--) {
+    const t = (base - y) / wfH, half = Math.round(5.5 - t * 2.5);
+    for (let x = -half; x <= half; x++) {
+      const hole = y <= base - wfH + 7 && y >= base - wfH + 2 && Math.abs(x) <= half - 1;
+      if (hole) continue;
+      const stripe = night && x !== 0 && Math.abs(x) === half - 1 && (base - y) % 3 === 0;
+      put(wfX + x, y, stripe ? p.cool : pixelMix(p.steel, p.body, x > 0 ? 0.35 : 0.1), stripe ? 0.8 : 0);
+    }
+  }
+  // 螺旋超高塔：底宽顶窄，一道亮线绕着往上转，顶上斜切；夜里顶上一盏红灯
+  const stX = 92, stH = 70;
+  for (let y = base; y >= base - stH; y--) {
+    const t = (base - y) / stH, half = 6.4 - t * 3.6;
+    const cut = y < base - stH + 4 ? (base - stH + 4 - y) : 0;
+    for (let x = -Math.round(half); x <= Math.round(half); x++) {
+      if (x > Math.round(half) - cut) continue;
+      const spiral = Math.abs(((x + half) - ((base - y) * 0.22) % (half * 2 + 1)) % (half * 2 + 1)) < 0.9;
+      // 迎光的左半边亮一些，看得出是一座圆塔
+      const c = spiral ? (night ? p.tower : pixelMix(p.tower, p.spire, 0.4)) : pixelMix(pixelMix(p.steel, p.tower, x < 0 ? 0.25 : 0), p.body, x > 0 ? 0.4 : 0.1);
+      put(stX + x, y, c, spiral && night ? 0.7 : 0);
+    }
+  }
+  put(stX - 2, base - stH - 1, p.red, 1);
+}
+
+function paintCitySky(canvas, mode = "night", weather = "fair", season = "summer") {
+  const w = canvas.width, h = canvas.height;
+  const base = PULSE_CITY_PALETTES[mode] || PULSE_CITY_PALETTES.night;
+  const sky = PULSE_WEATHER[weather] || PULSE_WEATHER.fair;
+  const p = base, haze = sky.haze, hazeColor = pixelMix(p.cloudShadow, p.skyHorizon, 0.5);
+  const { hash, noise, fbm } = pulsePixelNoise(23);
+  const mix = pixelMix, clamp01 = pixelClamp01;
+  const horizon = Math.round(h * 0.7);
+  const buf = cityBuffer(w, h);
+  // 天：上深下暖，黄昏的地平线是橙粉色，夜里是城市灯光映红的一层；云和像素湖面同一种画法
+  for (let y = 0; y < horizon; y++) for (let x = 0; x < w; x++) {
+    const t = y / horizon;
+    let c = t < 0.55 ? mix(p.skyTop, p.skyMid, t / 0.55) : mix(p.skyMid, p.skyHorizon, (t - 0.55) / 0.45);
+    if (p.stars && t < 0.6 && hash(x * 7 + 3, y * 13 + 5) > 0.993) c = mix(c, [226, 232, 255], 0.7 * (1 - t));
+    const cx = x / (h * 0.85), cy = y / (h * 0.42);
+    const d = (fbm(cx + fbm(cx * 0.7, cy * 0.7, 3) * 1.2, cy, 5, 0.58) - 0.5) * 3 + (1 - Math.pow(Math.abs(t - 0.35) / 0.65, 2)) * 0.3 - 0.5 + sky.cover;
+    if (d > 0) c = mix(c, mix(p.cloudShadow, p.cloudLit, clamp01(0.4 + (fbm(cx + 3, cy - 0.1, 3) - 0.5) * 2)), clamp01(d * 5) * 0.85);
+    buf.set(x, y, c);
+  }
+  // 远处一层楼：淡淡的剪影，稀疏几盏冷灯
+  for (let x = 0, left = 0; x < w; x++) {
+    if (x >= left) left = x + 4 + Math.floor(hash(x, 71) * 9);
+    const top = horizon - 6 - Math.floor(hash(left, 73) * 16);
+    for (let y = top; y < horizon; y++) {
+      const on = (x % 2) && (y % 2) && hash(x * 3, y * 5) < p.lit * 0.35;
+      buf.set(x, y, on ? mix(p.cool, p.far, 0.4) : mix(p.far, p.skyHorizon, 0.25), on ? 0.4 : 0);
+    }
+  }
+  // 中间一排楼：左边地标附近高、往右渐低，有平顶、阶梯顶和天线
+  for (let left = 104; left < w;) {
+    const bw = 5 + Math.floor(hash(left, 81) * 10), near = 0.6 + 0.4 * fbm(left / 80, 2.3, 2);
+    const height = Math.round((8 + hash(left, 83) * 20) * near);
+    const top = horizon - height, right = Math.min(w - 1, left + bw - 1);
+    cityFacade(buf, p, left, right, top, horizon - 1, { lit: p.lit, hash, seed: left });
+    const roof = hash(left, 89);
+    if (roof > 0.7) for (let y = top - 3; y < top; y++) buf.set(left + (bw >> 1), y, p.spire);
+    if (roof > 0.85) buf.set(left + (bw >> 1), top - 4, p.red, 1);
+    if (roof < 0.25 && bw > 7) cityFacade(buf, p, left + 2, right - 2, top - 3, top - 1, { lit: p.lit, hash, seed: left + 1 });
+    left = right + 1 + (hash(left, 97) > 0.6 ? 1 : 0);
+  }
+  cityLandmarks(buf, p, horizon - 1, hash, mode);
+  // 江：深色水面，上面的楼和灯倒映下来，碎成一道道横纹；亮灯底下是一条竖着的光带
+  for (let y = horizon; y < h; y++) {
+    const t = (y - horizon) / (h - horizon);
+    for (let x = 0; x < w; x++) {
+      let c = mix(p.seaTop, p.seaBottom, Math.sqrt(t));
+      const jitter = Math.round((noise(x / 3, y * 1.3) - 0.5) * (2 + t * 5));
+      const my = horizon - 1 - Math.round((y - horizon) * 1.4);
+      if (my >= 0) {
+        const src = buf.get(x + jitter, my), glow = buf.glowAt(x + jitter, my);
+        c = mix(c, src, (glow ? 0.55 : 0.22) * (1 - t * 0.6));
+      }
+      // 亮窗正下方的光带：往下一列列找最近的亮点
+      let streak = 0;
+      for (let k = 1; k < 14 && !streak; k++) streak = buf.glowAt(x, horizon - k) ? 1 - k / 14 : 0;
+      if (streak && noise(x / 2, y * 2.1) > 0.55) c = mix(c, p.warm, streak * 0.35 * (1 - t));
+      const ripple = noise(x / (6 + t * 12), y * 1.1 + 7);
+      if (ripple > 0.76) c = mix(c, p.glint, (ripple - 0.76) * 2.4 * (1 - t * 0.7));
+      buf.set(x, y, c);
+    }
+  }
+  const ctx = canvas.getContext("2d"), img = ctx.createImageData(w, h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let c = buf.get(x, y);
+    if (haze) c = mix(c, hazeColor, haze * (y < horizon ? 0.5 + 0.4 * (y / horizon) : 0.6) * (buf.glowAt(x, y) ? 0.5 : 1));
+    pixelQuantize(img, (y * w + x) * 4, c, x, y);
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/** 页脚：一天一栋楼，楼顶在 groundRidgeRow；峰值那天换成螺旋超高塔，今天楼顶一盏红灯，连续的日子整栋亮灯、楼前路灯亮着。
+    参数和像素湖面的 paintPulseGround 一样，多一个 days（显示的天数，用来分楼）。 */
+function paintCityGround(canvas, mode, profile, todayX = -1, { reflection = null, stones = [], weather = "fair", season = "summer", peakX = -1, days = 0 } = {}, seed = 11) {
+  const w = canvas.width, h = canvas.height;
+  const p = PULSE_CITY_PALETTES[mode] || PULSE_CITY_PALETTES.night;
+  const haze = (PULSE_WEATHER[weather] || PULSE_WEATHER.fair).haze;
+  const fogColor = pixelMix(p.cloudShadow, p.skyHorizon, 0.5);
+  const { hash, noise } = pulsePixelNoise(seed);
+  const mix = pixelMix, clamp01 = pixelClamp01;
+  const night = mode === "night";
+  const buf = cityBuffer(w, h);
+  const lakeTop = groundLakeTop(h), bank = Math.round(h * 0.86);
+  const n = days > 0 ? days : Math.max(1, Math.floor((w - PULSE_GROUND_MARGIN) / 3));
+  const span = (w - PULSE_GROUND_MARGIN) / n;
+  const streakDays = new Set(stones.map((x) => Math.round(x / span - 0.5)));
+  const peakDay = peakX >= 0 ? Math.round(peakX / span - 0.5) : -1, todayDay = todayX >= 0 ? Math.round(todayX / span - 0.5) : -1;
+  for (let y = 0; y < lakeTop; y++) for (let x = 0; x < w; x++) {
+    const t = y / h;
+    let c = mix(p.skyMid, p.skyHorizon, clamp01(0.3 + t));
+    if (p.stars && y < h * 0.45 && hash(x * 7 + 3, y * 13 + 5) > 0.985) c = mix(c, [226, 232, 255], 0.6 * (1 - t * 2));
+    buf.set(x, y, c);
+  }
+  // 远处一层楼：淡剪影
+  for (let x = 0, left = 0, top = 0; x < w; x++) {
+    if (x >= left) { left = x + 3 + Math.floor(hash(x, 61) * 7); top = Math.round(h * 0.52 + hash(x, 63) * h * 0.2); }
+    for (let y = top; y < bank; y++) {
+      const on = (x % 2) && (y % 2) && hash(x * 3, y * 5) < p.lit * 0.3;
+      buf.set(x, y, on ? mix(p.cool, p.far, 0.45) : mix(p.far, p.skyHorizon, 0.3), on ? 0.3 : 0);
+    }
+  }
+  // 天际线：每天一栋，楼和楼之间留一列缝（太窄时不留）
+  const tops = new Int16Array(w).fill(bank);
+  for (let i = 0; i < n; i++) {
+    const x0 = Math.round(i * span), x1 = Math.round((i + 1) * span) - 1 - (span >= 4 ? 1 : 0);
+    const cx = groundDayX(i, n, w);
+    if (x1 < x0 || cx >= w) continue;
+    const top = Math.round(groundRidgeRow(h, profile[Math.min(w - 1, cx)] || 0));
+    const streak = streakDays.has(i);
+    const tint = hash(i, 5) * 0.25;
+    cityFacade(buf, p, x0, x1, top, bank - 1, { lit: streak ? 0.85 : p.lit * 0.8, hash, seed: i * 13, color: mix(p.body, p.bodyLit, tint), shade: p.bodyLit });
+    for (let x = x0; x <= x1; x++) tops[x] = Math.min(tops[x], top);
+    // 屋顶有点变化，看着是楼不是柱状图：有的退一级台，有的立一根天线（楼顶那一行不动，悬停提示照样对齐）
+    const roof = hash(i, 7);
+    if (x1 - x0 >= 3 && roof < 0.3) { buf.set(x0, top, buf.get(x0, top - 1)); buf.set(x1, top, buf.get(x1, top - 1)); }
+    else if (roof > 0.78 && i !== todayDay) { buf.set(cx, top - 1, p.spire); if (roof > 0.9) buf.set(cx, top - 2, night ? p.red : p.spire, night ? 1 : 0); }
+    if (i === todayDay && i !== peakDay) {
+      // 今天：楼顶一根天线，顶上红灯；夜里红灯带一圈光
+      buf.set(cx, top - 1, p.spire); buf.set(cx, top - 2, p.spire); buf.set(cx, top - 3, p.red, 1);
+      if (night) for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) buf.set(cx + dx, top - 3 + dy, mix(buf.get(cx + dx, top - 3 + dy), p.red, 0.45));
+    }
+  }
+  // 峰值那天：螺旋超高塔，比那栋楼再高一截；今天就是峰值时，塔顶红灯就是今天的灯
+  if (peakDay >= 0 && peakDay < n) {
+    const cx = groundDayX(peakDay, n, w), top = Math.round(groundRidgeRow(h, profile[Math.min(w - 1, cx)] || 0)), crown = top - 14;
+    for (let y = bank - 1; y >= crown; y--) {
+      const t = (bank - 1 - y) / Math.max(1, bank - 1 - crown), half = 4.4 - t * 2.4;
+      const cut = y < crown + 3 ? crown + 3 - y : 0;
+      for (let x = -Math.round(half); x <= Math.round(half) - cut; x++) {
+        const spiral = Math.abs(((x + half + (bank - y) * 0.3) % (half * 2 + 1))) < 0.9;
+        buf.set(cx + x, y, spiral ? (night ? p.tower : mix(p.tower, p.spire, 0.4)) : mix(p.steel, p.body, x > 0 ? 0.4 : 0.1), spiral && night ? 0.7 : 0);
+        tops[cx + x] = Math.min(tops[cx + x] ?? bank, y);
+      }
+    }
+    buf.set(cx - 1, crown - 1, p.red, 1);
+  }
+  // 滨江步道：一道栏杆，行道树（位置和像素湖面一样稀疏），连续的日子楼前路灯亮着
+  for (let x = 0; x < w; x++) for (let y = bank; y < lakeTop; y++) buf.set(x, y, y === bank ? p.bankLit : mix(p.bank, p.bankLit, y === bank + 1 ? 0.3 : 0));
+  const accent = pulseSeasonAccent(p, mode, season);
+  for (let x = 3, last = -99; x < w - 3; x++) {
+    if (x - last < 6 || Math.abs(x - todayX) < 5 || hash(x * 3 + 1, 17) < 0.86) continue;
+    last = x;
+    const [td, tl] = pulseTreeColors(p, mode, season, hash(x, 41));
+    buf.set(x, bank - 1, p.bank); buf.set(x, bank - 2, p.bank);
+    for (const [dx, dy] of [[-1, -3], [0, -3], [1, -3], [-1, -4], [0, -4], [1, -4], [0, -5]]) {
+      let c = dx > 0 ? tl : td;
+      if (accent && season === "winter" && dy <= -4) c = accent;
+      else if (accent && season === "spring" && hash(x + dx, dy + 9) > 0.7) c = accent;
+      buf.set(x + dx, bank + dy, c);
+    }
+  }
+  for (const sx of stones) {
+    if (sx < 1 || sx >= w - 1) continue;
+    buf.set(sx, bank - 1, p.spire); buf.set(sx, bank - 2, p.spire); buf.set(sx, bank - 3, p.spire);
+    buf.set(sx, bank - 4, p.lamp, 1);
+    if (night) { buf.set(sx - 1, bank - 4, mix(buf.get(sx - 1, bank - 4), p.lamp, 0.4)); buf.set(sx + 1, bank - 4, mix(buf.get(sx + 1, bank - 4), p.lamp, 0.4)); }
+  }
+  // 江：倒影、亮窗底下的光带、太阳或月亮的倒影（和像素湖面同一套规则）
+  let glow = null;
+  if (reflection && reflection.opacity > 0) {
+    const lit = reflection.mode === "night" ? (1 - Math.cos(2 * Math.PI * (reflection.phase ?? 0.5))) / 2 : 1;
+    if (lit > 0.08) glow = { x: Math.round(reflection.x / 100 * w), half: reflection.mode === "night" ? 1 + lit * 1.6 : 2.6,
+      color: reflection.mode === "night" ? [214, 226, 248] : [255, 222, 170], strength: reflection.opacity * (reflection.mode === "night" ? 0.45 + 0.4 * lit : 0.8) };
+  }
+  for (let y = lakeTop; y < h; y++) {
+    const r = y - lakeTop, t = r / (h - lakeTop);
+    for (let x = 0; x < w; x++) {
+      let c = mix(p.seaTop, p.seaBottom, Math.sqrt(t));
+      const jitter = Math.round((noise(x / 3, y * 1.5) - 0.5) * 3);
+      const src = buf.get(x + jitter, bank - 1 - r * 2), lightAbove = buf.glowAt(x + jitter, bank - 2 - r * 2) || buf.glowAt(x + jitter, bank - 3 - r * 2);
+      c = mix(c, src, lightAbove ? 0.5 : 0.18);
+      if (noise(x / 6, y * 1.4) > 0.72) c = mix(c, p.glint, 0.25);
+      if (glow) {
+        const shift = Math.round((hash(r * 5 + 1, glow.x & 255) - 0.5) * 3), half = glow.half + r * 0.5, dx = Math.abs(x - glow.x - shift);
+        if (dx <= half && (dx < 1 || hash((x >> 1) + 7, r * 3 + 1) > 0.3)) c = mix(c, glow.color, glow.strength * (1 - 0.45 * dx / (half + 1)) * (1 - 0.35 * t));
+      }
+      buf.set(x, y, c);
+    }
+  }
+  const ctx = canvas.getContext("2d"), img = ctx.createImageData(w, h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let c = buf.get(x, y);
+    // 雾：远处最浓，亮着的灯和红灯透得出来
+    if (haze) {
+      const amount = y >= lakeTop ? 0.45 : y >= bank ? 0.5 : y >= tops[x] ? 0.7 : 1;
+      c = mix(c, fogColor, haze * amount * (buf.glowAt(x, y) ? 0.35 : 1));
+    }
+    pixelQuantize(img, (y * w + x) * 4, c, x, y);
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/* 江上的船：专注是一艘两层的游船，码头停着收工的游船；鸭子是小黄鸭，纸船照旧。尺寸、吃水线和像素湖面的精灵一样。 */
+const PULSE_CITY_VOYAGERS = {
+  boat: {
+    waterline: 9, depth: 3,
+    rows: [
+      "          r   ",
+      "          m   ",
+      "     tttttmt  ",
+      "     cLcLcLc  ",
+      "   TTTTTTTTTT ",
+      "   CLCLCLCLCC ",
+      "   CCCCCCCCCC ",
+      "  hhhhhhhhhhhh",
+      "  HHHHHHHHHHH ",
+      "   HHHHHHHHH  ",
+      "ww w  ww   w w",
+    ],
+  },
+  moored: {
+    waterline: 7, depth: 2,
+    rows: [
+      "    r    ",
+      "    m    ",
+      "  tttt   ",
+      "  cLcL   ",
+      " TTTTTTT ",
+      " CLCLCLC ",
+      "hhhhhhhhh",
+      " HHHHHHH ",
+      "w ww  w w",
+    ],
+  },
+};
+const PULSE_CITY_VOYAGER_COLORS = {
+  day: { t: [232, 232, 238], c: [212, 214, 224], C: [196, 198, 212], L: [255, 214, 140], T: [222, 222, 230], h: [204, 62, 52], H: [44, 48, 76], m: [80, 80, 98], r: [240, 72, 56], w: [255, 226, 196] },
+  night: { t: [124, 128, 156], c: [72, 76, 104], C: [58, 62, 88], L: [255, 206, 120], T: [112, 116, 144], h: [176, 62, 62], H: [22, 24, 44], m: [64, 64, 80], r: [255, 82, 70], w: [150, 160, 214] },
+};
+
+function paintCityVoyager(canvas, sprite, mode) {
+  const kindOf = (s) => Object.keys(PULSE_VOYAGERS).find((k) => PULSE_VOYAGERS[k] === s);
+  const swap = (s) => PULSE_CITY_VOYAGERS[kindOf(s)] || s;
+  const city = sprite.parts ? pulseSpriteRow(sprite.parts.map((part) => swap(part.sprite))) : swap(sprite);
+  const colors = { ...(PULSE_VOYAGER_COLORS[mode] || PULSE_VOYAGER_COLORS.night), ...(PULSE_CITY_VOYAGER_COLORS[mode] || PULSE_CITY_VOYAGER_COLORS.night) };
+  const w = city.rows[0].length, h = city.rows.length;
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(w, h);
+  city.rows.forEach((row, y) => [...row].forEach((ch, x) => {
+    const c = colors[ch];
+    if (!c) return;
+    const o = (y * w + x) * 4;
+    img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2];
+    img.data[o + 3] = ch === "w" ? 150 : ch === "g" ? 110 : 255;
+  }));
+  ctx.putImageData(img, 0, 0);
+  return { w, h, waterline: sprite.waterline, depth: sprite.depth };
+}
+
+/* Tempo 完成一个任务：江面升起一小组无人机灯（5×7 格，和孔明灯一样大）。 */
+const PULSE_DRONES = [" b b ", "  w  ", " b b ", "     ", "b w b", "     ", "  b  "];
+function paintCityDrones(canvas, mode) {
+  const colors = { b: mode === "night" ? [120, 200, 255] : [70, 150, 230], w: mode === "night" ? [240, 248, 255] : [255, 255, 255] };
+  const w = PULSE_DRONES[0].length, h = PULSE_DRONES.length;
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d"), img = ctx.createImageData(w, h);
+  PULSE_DRONES.forEach((row, y) => [...row].forEach((ch, x) => {
+    const c = colors[ch];
+    if (!c) return;
+    const o = (y * w + x) * 4;
+    img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
+  }));
+  ctx.putImageData(img, 0, 0);
+  return { w, h };
+}
+
+/* 达标：一朵像素烟花（25×25 格），一圈圈光点向外散，越外越淡；index 换颜色和形状。返回宽度（格）。 */
+const PULSE_FIREWORK_COLORS = [[255, 206, 96], [255, 104, 128], [120, 220, 255], [200, 150, 255], [150, 250, 170]];
+function paintCityBurst(canvas, index = 0, mode = "night") {
+  const n = 25, c = 12;
+  canvas.width = n; canvas.height = n;
+  const ctx = canvas.getContext("2d"), img = ctx.createImageData(n, n);
+  const color = PULSE_FIREWORK_COLORS[index % PULSE_FIREWORK_COLORS.length], spark = [255, 250, 230];
+  const rays = 10 + (index % 3) * 2, put = (x, y, rgb, a) => {
+    x = Math.round(x); y = Math.round(y);
+    if (x < 0 || y < 0 || x >= n || y >= n) return;
+    const o = (y * n + x) * 4;
+    if (img.data[o + 3] >= a) return;
+    img.data[o] = rgb[0]; img.data[o + 1] = rgb[1]; img.data[o + 2] = rgb[2]; img.data[o + 3] = a;
+  };
+  for (let k = 0; k < rays; k++) {
+    const a = (k / rays) * Math.PI * 2 + index * 0.4;
+    for (let r = 3; r <= 11; r += 1.5) {
+      const fade = 1 - (r - 3) / 9.5;
+      put(c + Math.cos(a) * r, c + Math.sin(a) * r + (r - 3) * 0.08, r > 9 ? spark : color, Math.round(255 * Math.max(0.25, fade)));
+    }
+  }
+  for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1]]) put(c + dx, c + dy, spark, mode === "night" ? 255 : 220);
+  ctx.putImageData(img, 0, 0);
+  return n;
+}
+
 /* ---------- 画风：顶部天空和底部地平线的一组画法 ----------
    数据（天气、季节、山脊、番茄、速记、达标）都在视图里算好，风格只决定怎么画和图例怎么称呼；
    每种风格画同一组元素、用同一套几何，换风格不改任何数据口径和交互。 */
+/* 图例和说明里的叫法：像素湖面的原话；别的画风只覆盖画得不一样的那几样 */
+const PULSE_PIXEL_WORDS = {
+  caption: (n) => tr(`山脊是最近 ${n} 天的贡献`, `The ridge shows the last ${n} days of contributions`),
+  empty: () => tr("开始写作后，这里会长出你的贡献山脊", "Start writing and your contribution ridge will grow here"),
+  peak: (m, d) => tr(`峰值 ${m}月${d}日，山尖上的小城堡`, `Peak ${pulseMonthDay(m, d)}, the little castle on the summit`),
+  today: (mode) => (mode === "night" ? tr("小灯是今天", "The lamp is today") : tr("小旗是今天", "The flag is today")),
+  streak: (n) => tr(`小石子是连续 ${n} 天`, `Pebbles mark a ${n}-day streak`),
+  moored: (n) => tr(`右边岸边的小船是今天完成的 ${n} 个番茄`, `Boats at the right shore are today’s ${n} finished pomodoros`),
+  season: (s) => tr(`树的颜色是现在的季节：${PULSE_SEASON_LABELS[s][0]}`, `Tree colors follow the season: ${PULSE_SEASON_LABELS[s][1]}`),
+  celebration: (mode) => (mode === "night" ? tr("流星", "Shooting stars") : tr("彩虹", "Rainbow")),
+  voyage: (kind, n) => (kind === "boat" ? tr(" · 帆船是这一段专注的进度", " · the boat sails with this focus session")
+    : kind === "family" ? tr(` · 鸭妈妈带着这一轮的 ${n} 只小鸭在长休`, ` · the mother duck leads this set’s ${n} ducklings on the long break`)
+      : tr(" · 小鸭子在陪你休息", " · the duck keeps you company on the break")),
+  memoBird: (mode) => (mode === "night" ? tr("记一条速记，湖上会飞起一只萤火虫", "Each new memo sends a firefly up from the lake") : tr("记一条速记，湖上会飞起一只小鸟", "Each new memo sends a bird up from the lake")),
+  tempo: (count) => (count ? tr(`今天在 Tempo 完成了 ${count} 个任务，每完成一个湖面升起一盏孔明灯`, `${count} Tempo tasks done today; each one sends a lantern up from the lake`)
+    : tr("在 Tempo 完成一个任务，湖面会升起一盏孔明灯", "Finish a Tempo task and a lantern rises from the lake")),
+};
+
 const PULSE_SCENES = {
   pixel: {
     id: "pixel",
@@ -6083,14 +6501,7 @@ const PULSE_SCENES = {
     paintBird: paintPulseBird,
     paintMeteor: paintPulseMeteor,
     paintCelebration: paintPulseRainbow,
-    words: {
-      peak: (m, d) => tr(`峰值 ${m}月${d}日，山尖上的小城堡`, `Peak ${pulseMonthDay(m, d)}, the little castle on the summit`),
-      today: (mode) => (mode === "night" ? tr("小灯是今天", "The lamp is today") : tr("小旗是今天", "The flag is today")),
-      streak: (n) => tr(`小石子是连续 ${n} 天`, `Pebbles mark a ${n}-day streak`),
-      moored: (n) => tr(`右边岸边的小船是今天完成的 ${n} 个番茄`, `Boats at the right shore are today’s ${n} finished pomodoros`),
-      season: (s) => tr(`树的颜色是现在的季节：${PULSE_SEASON_LABELS[s][0]}`, `Tree colors follow the season: ${PULSE_SEASON_LABELS[s][1]}`),
-      celebration: () => tr("彩虹", "Rainbow"),
-    },
+    words: PULSE_PIXEL_WORDS,
   },
   ink: {
     id: "ink",
@@ -6105,13 +6516,46 @@ const PULSE_SCENES = {
     paintMeteor: paintInkMeteor,
     paintCelebration: paintInkCranes,
     words: {
+      ...PULSE_PIXEL_WORDS,
       peak: (m, d) => tr(`峰值 ${m}月${d}日，山尖上的小亭`, `Peak ${pulseMonthDay(m, d)}, the little pavilion on the summit`),
       today: () => tr("红印是今天", "The red seal is today"),
       streak: (n) => tr(`苔点是连续 ${n} 天`, `Moss dots mark a ${n}-day streak`),
       moored: (n) => tr(`右边岸边的小舟是今天完成的 ${n} 个番茄`, `Skiffs at the right shore are today’s ${n} finished pomodoros`),
       season: (s) => tr(`草木的颜色是现在的季节：${PULSE_SEASON_LABELS[s][0]}`, `Plants follow the season: ${PULSE_SEASON_LABELS[s][1]}`),
-      celebration: () => tr("白鹤", "Cranes"),
+      celebration: (mode) => (mode === "night" ? tr("流星", "Shooting stars") : tr("白鹤", "Cranes")),
     },
+  },
+};
+PULSE_SCENES.city = {
+  id: "city",
+  label: () => tr("像素城市", "Pixel city"),
+  smooth: false,
+  paintSky: paintCitySky,
+  paintCelestial,
+  paintGround: paintCityGround,
+  paintVoyager: paintCityVoyager,
+  paintLantern: paintCityDrones,
+  paintBird: paintPulseBird,
+  paintMeteor: paintPulseMeteor,
+  paintCelebration: paintPulseRainbow,
+  // 达标放烟花（白天黄昏和夜里都放），不用彩虹和流星
+  paintBurst: paintCityBurst,
+  words: {
+    ...PULSE_PIXEL_WORDS,
+    caption: (n) => tr(`天际线是最近 ${n} 天的贡献`, `The skyline shows the last ${n} days of contributions`),
+    empty: () => tr("开始写作后，这里会长出你的城市天际线", "Start writing and your skyline will grow here"),
+    peak: (m, d) => tr(`峰值 ${m}月${d}日，最高的那栋塔楼`, `Peak ${pulseMonthDay(m, d)}, the tallest tower`),
+    today: () => tr("楼顶红灯是今天", "The red rooftop light is today"),
+    streak: (n) => tr(`亮着灯的楼和路灯是连续 ${n} 天`, `Lit buildings and street lamps mark a ${n}-day streak`),
+    moored: (n) => tr(`右边码头的游船是今天完成的 ${n} 个番茄`, `Cruise boats at the right pier are today’s ${n} finished pomodoros`),
+    season: (s) => tr(`行道树的颜色是现在的季节：${PULSE_SEASON_LABELS[s][0]}`, `Street trees follow the season: ${PULSE_SEASON_LABELS[s][1]}`),
+    celebration: () => tr("烟花", "Fireworks"),
+    voyage: (kind, n) => (kind === "boat" ? tr(" · 游船是这一段专注的进度", " · the cruise boat sails with this focus session")
+      : kind === "family" ? tr(` · 大黄鸭带着这一轮的 ${n} 只小黄鸭在长休`, ` · the big rubber duck leads this set’s ${n} little ones on the long break`)
+        : tr(" · 小黄鸭在陪你休息", " · the rubber duck keeps you company on the break")),
+    memoBird: (mode) => (mode === "night" ? tr("记一条速记，江上会飞起一只萤火虫", "Each new memo sends a firefly up from the river") : tr("记一条速记，江上会飞起一只小鸟", "Each new memo sends a bird up from the river")),
+    tempo: (count) => (count ? tr(`今天在 Tempo 完成了 ${count} 个任务，每完成一个江面升起一组无人机灯`, `${count} Tempo tasks done today; each one sends a cluster of drone lights up from the river`)
+      : tr("在 Tempo 完成一个任务，江面会升起一组无人机灯", "Finish a Tempo task and drone lights rise from the river")),
   },
 };
 const PULSE_SCENE_IDS = Object.keys(PULSE_SCENES);
@@ -7470,15 +7914,14 @@ class CrispPulseView extends ItemView {
     this.footerReflectionKey = pulseReflectionKey(reflection, width);
     const scene = this.scene();
     scene.paintGround(els.canvas, this.footerMode, profile, dates.length ? groundDayX(dates.length - 1, dates.length, width) : -1,
-      { reflection, stones: streak.map((i) => groundDayX(i, dates.length, width)), weather: weather?.level, season, peakX: snowPeak >= 0 ? groundDayX(snowPeak, dates.length, width) : -1 });
+      { reflection, stones: streak.map((i) => groundDayX(i, dates.length, width)), weather: weather?.level, season, peakX: snowPeak >= 0 ? groundDayX(snowPeak, dates.length, width) : -1, days: dates.length });
     this.footerData = { dates, values, statuses, profile, width, height, streak, streakLength };
     this.footerPaintedWidth = cssWidth;
     this.footerPaintedHeight = rect.height;
     let peak = -1;
     values.forEach((v, i) => { if (v > 0 && (peak < 0 || v > values[peak])) peak = i; });
     // 说明只留一句（山脊），其余元素的含义进图例：悬停看提示，点一下展开
-    const caption = els.locked ? "" : peak < 0 ? tr("开始写作后，这里会长出你的贡献山脊", "Start writing and your contribution ridge will grow here")
-      : tr(`山脊是最近 ${dates.length} 天的贡献`, `The ridge shows the last ${dates.length} days of contributions`);
+    const caption = els.locked ? "" : peak < 0 ? scene.words.empty() : scene.words.caption(dates.length);
     const legend = [];
     if (peak >= 0) {
       legend.push(scene.words.peak(Number(dates[peak].slice(5, 7)), Number(dates[peak].slice(8))));
@@ -7558,9 +8001,7 @@ class CrispPulseView extends ItemView {
     el.style.left = `${x / width * 100}%`;
     el.style.top = `${y / height * 100}%`;
     el.toggleClass("is-paused", snap.status === "paused");
-    const note = kind === "boat" ? tr(" · 帆船是这一段专注的进度", " · the boat sails with this focus session")
-      : kind === "family" ? tr(` · 鸭妈妈带着这一轮的 ${ducklings} 只小鸭在长休`, ` · the mother duck leads this set’s ${ducklings} ducklings on the long break`)
-      : tr(" · 小鸭子在陪你休息", " · the duck keeps you company on the break");
+    const note = scene.words.voyage(kind, ducklings);
     if (note !== this.voyageNote && els.captionText) { this.voyageNote = note; this.setFooterCaption(); }
     return snap;
   }
@@ -7585,10 +8026,9 @@ class CrispPulseView extends ItemView {
       els.paper.style.left = `${spot.x / width * 100}%`;
       els.paper.style.top = `${spot.y / height * 100}%`;
     }
-    const night = this.footerMode === "night";
     els.legendExtra = memos ? [
       ...(pending ? [tr(`左边岸边的纸船是今天还没处理的 ${pending} 条速记`, `Paper boats at the left shore are today’s ${pending} unprocessed memos`)] : []),
-      night ? tr("记一条速记，湖上会飞起一只萤火虫", "Each new memo sends a firefly up from the lake") : tr("记一条速记，湖上会飞起一只小鸟", "Each new memo sends a bird up from the lake"),
+      this.scene().words.memoBird(this.footerMode),
     ] : [];
     this.setFooterCaption();
     // 今天的条数比上次多：飞几只鸟（一次最多 3 只）。第一次读、换了一天都只记下数字不飞
@@ -7613,8 +8053,7 @@ class CrispPulseView extends ItemView {
     if (token !== this.lanternToken || els !== this.footerEls) return;
     const count = Number.isFinite(done?.count) ? done.count : null;
     els.legendTempo = count === null ? []
-      : [count ? tr(`今天在 Tempo 完成了 ${count} 个任务，每完成一个湖面升起一盏孔明灯`, `${count} Tempo tasks done today; each one sends a lantern up from the lake`)
-        : tr("在 Tempo 完成一个任务，湖面会升起一盏孔明灯", "Finish a Tempo task and a lantern rises from the lake")];
+      : [this.scene().words.tempo(count)];
     this.setFooterCaption();
     if (count === null) return;
     const before = this.tempoSeen?.date === done.date ? this.tempoSeen.count : null;
@@ -7749,7 +8188,7 @@ class CrispPulseView extends ItemView {
     const still = !!win.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const night = this.footerMode === "night";
     const scene = this.scene();
-    const what = night ? tr("流星", "Shooting stars") : scene.words.celebration();
+    const what = scene.words.celebration(night ? "night" : "day");
     this.celebrationNote = milestone.reason === "pomodoro"
       ? tr(` · ${what}：今天的 ${milestone.goal} 个番茄目标达成了`, ` · ${what}: today’s goal of ${milestone.goal} pomodoros is done`)
       : tr(` · ${what}：今天的贡献分进了最近 30 天的前四分之一`, ` · ${what}: today’s score is in the top quarter of the last 30 days`);
@@ -7757,7 +8196,23 @@ class CrispPulseView extends ItemView {
     this.celebrating = true;
     const pieces = [];
     let duration;
-    if (night) {
+    if (scene.paintBurst) {
+      // 烟花：几朵错开绽放在天际线上方（偏右，避开左边的文字），先放大再散开、淡出
+      const bursts = [[0.5, 0.2, 0], [0.68, 0.12, 700], [0.82, 0.24, 1400], [0.6, 0.3, 2100]];
+      bursts.forEach(([fx, fy, delay], i) => {
+        const el = els.ground.createEl("canvas", { cls: "crisp-pulse-sky-event is-burst", attr: { "aria-hidden": "true" } });
+        const size = scene.paintBurst(el, i, this.footerMode);
+        el.style.width = `${size / d.width * 100}%`;
+        el.style.left = `${fx * 100}%`;
+        el.style.top = `${fy * 100}%`;
+        const frames = still
+          ? [{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }]
+          : [{ transform: "scale(0.3)", opacity: 0 }, { transform: "scale(1)", opacity: 1, offset: 0.3 }, { opacity: 0.9, offset: 0.65 }, { transform: "scale(1.12) translateY(8%)", opacity: 0 }];
+        el.animate?.(frames, { duration: 1700, delay, easing: "ease-out", fill: "both" });
+        pieces.push(el);
+      });
+      duration = 4000;
+    } else if (night) {
       // 三颗流星错开划过页脚的天空（山脊上方、说明文字下方）
       const paths = [[0.12, 0.24, 0], [0.42, 0.18, 900], [0.7, 0.3, 2000]];
       for (const [fx, fy, delay] of paths) {
