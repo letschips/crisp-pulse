@@ -6,7 +6,9 @@
    - 设置里存了不认识的画风，看板报错；一键切换不循环。
    - 换了画风，图例还在说城堡、小旗。
    - 像素城市的楼顶没落在 groundRidgeRow 那一行，或者分楼时一天对不上一栋。
-   - 样式表还没生效时地面高度由画布撑开：高分辨率画风每次重画都把画布放大，越画越大直到内存不够。 */
+   - 样式表还没生效时地面高度由画布撑开：高分辨率画风每次重画都把画布放大，越画越大直到内存不够。
+   - 像素城市沿用山脊的跨日平滑：孤立的高分日被压矮、一段连续略低分的日子反而更高，峰值塔不是最高；悬停提示指着加高前的楼顶。
+   - 像素城市里历史峰值塔和普通楼也亮红灯，「楼顶红灯是今天」不唯一。 */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -18,7 +20,7 @@ const context = {
   module: { exports: {} }, console, Date, window: { setTimeout, clearTimeout, devicePixelRatio: 2 }, document: {}, setTimeout, clearTimeout, structuredClone, crypto: globalThis.crypto, TextEncoder, TextDecoder, Buffer, atob,
 };
 vm.runInNewContext(`${fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8')}
-module.exports.F = { pulseScene, nextPulseScene, PULSE_SCENE_IDS, paintPulseSky, paintCelestial, paintPulseGround, paintPulseVoyager, paintPulseLantern, paintPulseBird, paintPulseMeteor, paintPulseRainbow,
+module.exports.F = { groundDayLevels: typeof groundDayLevels === 'function' ? groundDayLevels : null, pulseScene, nextPulseScene, PULSE_SCENE_IDS, paintPulseSky, paintCelestial, paintPulseGround, paintPulseVoyager, paintPulseLantern, paintPulseBird, paintPulseMeteor, paintPulseRainbow,
   pulseVoyagerSprite, buildGroundProfile, groundDayX, groundRidgeRow, PULSE_CELESTIAL_SIZE, validateAndRepairStore, CrispPulseView, inkResolution };`, context);
 const F = context.module.exports.F;
 
@@ -156,4 +158,50 @@ test('a footer sized by its own canvas (no stylesheet yet) does not grow without
     for (let i = 0; i < 8; i++) v.paintFooter();
     assert.ok(v.footerData.height <= 120, `${sceneStyle}：重画 8 次后逻辑高度 ${v.footerData.height}，不该一直变大`);
   }
+});
+
+/** 按天的分数造一个看板页脚（像素城市），返回视图和画布。scores[0] 是最早一天，最后一个是今天。 */
+function cityFooter(scores, { mode = 'day' } = {}) {
+  const day = (n) => { const t = new Date(); t.setHours(12, 0, 0, 0); t.setDate(t.getDate() - n); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; };
+  const daily = {};
+  scores.forEach((score, i) => { daily[day(scores.length - 1 - i)] = { contribution: { score }, activity: { focusSessions: [] }, words: score ? 10 : 0 }; });
+  const c = canvas();
+  const v = Object.create(F.CrispPulseView.prototype);
+  v.containerEl = { ownerDocument: { body: { classList: { contains: (k) => k === 'theme-dark' && mode === 'night' } } } };
+  v.currentScope = 'all';
+  v.plugin = { store: { daily }, settings: { sceneStyle: 'city' }, recordMatchesScope: () => true };
+  v.updateVoyage = () => null; v.queueCelebration = () => {}; v.updatePaperBoats = async () => {}; v.checkLanterns = async () => {};
+  const caption = { setText() {}, setAttr() {}, removeAttribute() {}, toggleClass() {}, hasClass() { return false; } };
+  v.footerEls = { canvas: c, ground: { getBoundingClientRect: () => ({ width: 940, height: 184 }) }, caption, locked: false };
+  v.paintFooter();
+  return { v, c };
+}
+
+test('city buildings follow each day’s own score and the peak tower is the tallest', () => {
+  // 30 天以上的历史：一天孤立的 100 分，一段连续 7 天的 80 分，其余 0 分
+  const scores = Array(40).fill(0);
+  scores[12] = 100;
+  for (let i = 21; i <= 27; i++) scores[i] = 80;
+  scores[39] = 5;
+  const { v } = cityFooter(scores);
+  const d = v.footerData, at = (k) => d.dates.indexOf(d.dates[d.dates.length - scores.length + k]);
+  assert.ok(Array.isArray(d.rows) && d.rows.length === d.dates.length, '每天一个提示锚点');
+  const peak = at(12), plateau = at(24), beside = at(13);
+  assert.ok(d.rows[peak] < d.rows[plateau], `峰值塔（${d.rows[peak]}）要比 80 分的楼（${d.rows[plateau]}）高`);
+  assert.equal(d.rows[beside], d.rows[at(5)], '峰值旁边的 0 分日不被相邻高分抬高');
+  assert.ok(d.rows[plateau] < d.rows[beside], '80 分的楼比 0 分的高');
+});
+
+test('only today’s building wears the red rooftop light in the city', () => {
+  const scores = Array(40).fill(20).map((v, i) => v + (i * 37) % 30);
+  scores[10] = 200; // 峰值在过去
+  const { v, c } = cityFooter(scores, { mode: 'night' });
+  const W = c.width, data = c.img.data, reds = [];
+  for (let y = 0; y < c.height; y++) for (let x = 0; x < W; x++) {
+    const o = (y * W + x) * 4;
+    if (data[o] > 200 && data[o + 1] < 110 && data[o + 2] < 110) reds.push(x);
+  }
+  const todayX = F.groundDayX(v.footerData.dates.length - 1, v.footerData.dates.length, v.footerData.width);
+  assert.ok(reds.length > 0, '今天有红灯');
+  assert.ok(reds.every((x) => Math.abs(x - todayX) <= 1), `红灯只在今天那栋楼上（今天 x=${todayX}，红色出现在 ${[...new Set(reds)].join(',')}）`);
 });

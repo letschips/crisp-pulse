@@ -2957,7 +2957,9 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 @media (prefers-reduced-motion: reduce) { .crisp-pulse-view .crisp-pulse-footer-ground canvas.crisp-pulse-voyager { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .crisp-pulse-view .crisp-pulse-footer-tip { transition: none; } }
 @container (max-width: 600px) {
-  .crisp-pulse-view .crisp-pulse-footer-info { grid-template-columns: auto auto; justify-content: space-between; }
+  /* 品牌和入口共一行；面板太窄放不下时入口在右侧换行，不挤出面板 */
+  .crisp-pulse-view .crisp-pulse-footer-info { grid-template-columns: auto minmax(0, 1fr); }
+  .crisp-pulse-view .crisp-pulse-footer-links { flex-wrap: wrap; justify-content: flex-end; row-gap: 2px; }
   .crisp-pulse-view .crisp-pulse-footer-caption { grid-column: 1 / -1; grid-row: 3; text-align: left; }
   .crisp-pulse-view .crisp-pulse-footer-ground { height: 168px; }
 }

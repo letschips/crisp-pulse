@@ -4883,15 +4883,20 @@ function groundDayX(index, n, width) {
   return Math.round((index + 0.5) * (width - PULSE_GROUND_MARGIN) / n);
 }
 
-/** 最近 N 天每天的贡献分 → 每一列像素的山脊高度（0–1）。开平方压住个别高峰、又保留天与天的高低，再高斯平滑，看起来是山，不是柱状图。 */
+/** 每天的贡献分 → 0–1 的高度：开平方压住个别高峰、又保留天与天的高低（按 98 分位封顶）。不跨日平滑。 */
+function groundDayLevels(values) {
+  const scores = values.map((v) => Math.max(0, Number(v) || 0));
+  const positive = scores.filter((v) => v > 0).sort((a, b) => a - b);
+  const ref = positive.length ? positive[Math.min(positive.length - 1, Math.floor(positive.length * 0.98))] : 0;
+  return scores.map((v) => (ref > 0 ? Math.sqrt(Math.min(1, v / ref)) : 0));
+}
+
+/** 最近 N 天每天的贡献分 → 每一列像素的山脊高度（0–1）。按天的高度再高斯平滑，看起来是山，不是柱状图。 */
 function buildGroundProfile(values, width) {
   const out = new Float32Array(Math.max(0, width));
   const n = values.length;
   if (!n || width <= 0) return out;
-  const scores = values.map((v) => Math.max(0, Number(v) || 0));
-  const positive = scores.filter((v) => v > 0).sort((a, b) => a - b);
-  const ref = positive.length ? positive[Math.min(positive.length - 1, Math.floor(positive.length * 0.98))] : 0;
-  const norm = scores.map((v) => (ref > 0 ? Math.sqrt(Math.min(1, v / ref)) : 0));
+  const norm = groundDayLevels(values);
   // 高斯平滑（约前后 3 天），山峰圆一些，不会一天一根柱子
   const kernel = [-3, -2, -1, 0, 1, 2, 3].map((d) => [d, Math.exp(-(d * d) / (2 * 1.4 * 1.4))]);
   const soft = norm.map((_, i) => {
@@ -6327,7 +6332,13 @@ function paintCitySky(canvas, mode = "night", weather = "fair", season = "summer
 
 /** 页脚：一天一栋楼，楼顶在 groundRidgeRow；峰值那天换成螺旋超高塔，今天楼顶一盏红灯，连续的日子整栋亮灯、楼前路灯亮着。
     参数和像素湖面的 paintPulseGround 一样，多一个 days（显示的天数，用来分楼）。 */
-function paintCityGround(canvas, mode, profile, todayX = -1, { reflection = null, stones = [], weather = "fair", season = "summer", peakX = -1, days = 0 } = {}, seed = 11) {
+/** 像素城市每天那栋楼的楼顶行：用当天自己的高度（不跨日平滑），峰值那天的塔再高 PULSE_CITY_TOWER_RISE 行。悬停提示也指这里。 */
+const PULSE_CITY_TOWER_RISE = 14;
+function cityDayRows(levels, height, peak = -1) {
+  return levels.map((level, i) => Math.round(groundRidgeRow(height, level)) - (i === peak ? PULSE_CITY_TOWER_RISE : 0));
+}
+
+function paintCityGround(canvas, mode, profile, todayX = -1, { reflection = null, stones = [], weather = "fair", season = "summer", peakX = -1, days = 0, levels = null } = {}, seed = 11) {
   const w = canvas.width, h = canvas.height;
   const p = PULSE_CITY_PALETTES[mode] || PULSE_CITY_PALETTES.night;
   const haze = (PULSE_WEATHER[weather] || PULSE_WEATHER.fair).haze;
@@ -6361,7 +6372,8 @@ function paintCityGround(canvas, mode, profile, todayX = -1, { reflection = null
     const x0 = Math.round(i * span), x1 = Math.round((i + 1) * span) - 1 - (span >= 4 ? 1 : 0);
     const cx = groundDayX(i, n, w);
     if (x1 < x0 || cx >= w) continue;
-    const top = Math.round(groundRidgeRow(h, profile[Math.min(w - 1, cx)] || 0));
+    // 楼高看当天自己的分数；没给按天高度（单独调用）时退回山脊轮廓
+    const top = Math.round(groundRidgeRow(h, levels ? levels[i] || 0 : profile[Math.min(w - 1, cx)] || 0));
     const streak = streakDays.has(i);
     const tint = hash(i, 5) * 0.25;
     cityFacade(buf, p, x0, x1, top, bank - 1, { lit: streak ? 0.85 : p.lit * 0.8, hash, seed: i * 13, color: mix(p.body, p.bodyLit, tint), shade: p.bodyLit });
@@ -6369,7 +6381,8 @@ function paintCityGround(canvas, mode, profile, todayX = -1, { reflection = null
     // 屋顶有点变化，看着是楼不是柱状图：有的退一级台，有的立一根天线（楼顶那一行不动，悬停提示照样对齐）
     const roof = hash(i, 7);
     if (x1 - x0 >= 3 && roof < 0.3) { buf.set(x0, top, buf.get(x0, top - 1)); buf.set(x1, top, buf.get(x1, top - 1)); }
-    else if (roof > 0.78 && i !== todayDay) { buf.set(cx, top - 1, p.spire); if (roof > 0.9) buf.set(cx, top - 2, night ? p.red : p.spire, night ? 1 : 0); }
+    // 普通楼的天线灯是暖白，红灯只留给今天
+    else if (roof > 0.78 && i !== todayDay) { buf.set(cx, top - 1, p.spire); if (roof > 0.9) buf.set(cx, top - 2, night ? p.lamp : p.spire, night ? 0.6 : 0); }
     if (i === todayDay && i !== peakDay) {
       // 今天：楼顶一根天线，顶上红灯；夜里红灯带一圈光
       buf.set(cx, top - 1, p.spire); buf.set(cx, top - 2, p.spire); buf.set(cx, top - 3, p.red, 1);
@@ -6378,7 +6391,7 @@ function paintCityGround(canvas, mode, profile, todayX = -1, { reflection = null
   }
   // 峰值那天：螺旋超高塔，比那栋楼再高一截；今天就是峰值时，塔顶红灯就是今天的灯
   if (peakDay >= 0 && peakDay < n) {
-    const cx = groundDayX(peakDay, n, w), top = Math.round(groundRidgeRow(h, profile[Math.min(w - 1, cx)] || 0)), crown = top - 14;
+    const cx = groundDayX(peakDay, n, w), top = Math.round(groundRidgeRow(h, levels ? levels[peakDay] || 0 : profile[Math.min(w - 1, cx)] || 0)), crown = top - PULSE_CITY_TOWER_RISE;
     for (let y = bank - 1; y >= crown; y--) {
       const t = (bank - 1 - y) / Math.max(1, bank - 1 - crown), half = 4.4 - t * 2.4;
       const cut = y < crown + 3 ? crown + 3 - y : 0;
@@ -6388,7 +6401,8 @@ function paintCityGround(canvas, mode, profile, todayX = -1, { reflection = null
         tops[cx + x] = Math.min(tops[cx + x] ?? bank, y);
       }
     }
-    buf.set(cx - 1, crown - 1, p.red, 1);
+    // 塔顶的灯：峰值就是今天时是今天的红灯，否则是暖白
+    buf.set(cx - 1, crown - 1, peakDay === todayDay ? p.red : p.lamp, 1);
   }
   // 滨江步道：一道栏杆，行道树（位置和像素湖面一样稀疏），连续的日子楼前路灯亮着
   for (let x = 0; x < w; x++) for (let y = bank; y < lakeTop; y++) buf.set(x, y, y === bank ? p.bankLit : mix(p.bank, p.bankLit, y === bank + 1 ? 0.3 : 0));
@@ -6614,6 +6628,8 @@ PULSE_SCENES.city = {
   paintSky: paintCitySky,
   paintCelestial,
   paintGround: paintCityGround,
+  // 悬停提示指向每栋楼（峰值是塔顶）的实际楼顶
+  dayRows: cityDayRows,
   paintVoyager: paintCityVoyager,
   paintLantern: paintCityDrones,
   paintBird: paintPulseBird,
@@ -7911,7 +7927,7 @@ class CrispPulseView extends ItemView {
       const col = (event.clientX - rect.left) / rect.width * d.width;
       const index = Math.max(0, Math.min(d.dates.length - 1, Math.floor(col / ((d.width - PULSE_GROUND_MARGIN) / d.dates.length))));
       const x = groundDayX(index, d.dates.length, d.width);
-      const row = groundRidgeRow(d.height, d.profile[Math.min(d.width - 1, x)] || 0);
+      const row = d.rows?.[index] ?? groundRidgeRow(d.height, d.profile[Math.min(d.width - 1, x)] || 0);
       const [, m, day] = d.dates[index].split("-").map(Number);
       const score = d.values[index];
       const status = d.statuses?.[index] || (score > 0 ? "included" : "missing");
@@ -7983,7 +7999,7 @@ class CrispPulseView extends ItemView {
       streakLength = last - cursor;
       dates.forEach((d, i) => { const k = reviewDayNumber(d); if (k > cursor && k <= last) streak.push(i); });
     }
-    const profile = buildGroundProfile(values, width);
+    const profile = buildGroundProfile(values, width), levels = groundDayLevels(values);
     // 贡献最高的那天，山尖上立一座小城堡（周围积雪）
     let snowPeak = -1;
     values.forEach((v, i) => { if (v > 0 && (snowPeak < 0 || v > values[snowPeak])) snowPeak = i; });
@@ -7996,8 +8012,11 @@ class CrispPulseView extends ItemView {
     this.footerReflectionKey = pulseReflectionKey(reflection, width);
     const scene = this.scene();
     scene.paintGround(els.canvas, this.footerMode, profile, dates.length ? groundDayX(dates.length - 1, dates.length, width) : -1,
-      { reflection, stones: streak.map((i) => groundDayX(i, dates.length, width)), weather: weather?.level, season, peakX: snowPeak >= 0 ? groundDayX(snowPeak, dates.length, width) : -1, days: dates.length });
-    this.footerData = { dates, values, statuses, profile, width, height, streak, streakLength };
+      { reflection, stones: streak.map((i) => groundDayX(i, dates.length, width)), weather: weather?.level, season, peakX: snowPeak >= 0 ? groundDayX(snowPeak, dates.length, width) : -1, days: dates.length, levels });
+    // 悬停提示的锚点：山脊画风指平滑后的山脊，像素城市指每栋楼的实际楼顶
+    const rows = scene.dayRows ? scene.dayRows(levels, height, snowPeak)
+      : dates.map((_, i) => groundRidgeRow(height, profile[Math.min(width - 1, groundDayX(i, dates.length, width))] || 0));
+    this.footerData = { dates, values, statuses, profile, rows, width, height, streak, streakLength };
     this.footerPaintedWidth = cssWidth;
     this.footerPaintedHeight = rect.height;
     let peak = -1;
