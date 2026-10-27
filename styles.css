@@ -2951,6 +2951,8 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(calc(100% / var(--pulse-voyager-rows, 11))); }
 }
+/* 平滑画风（水墨）按屏幕分辨率画好，缩放时照常插值，不按像素格放大 */
+.crisp-pulse-view.pulse-scene-smooth :is(.crisp-pulse-banner, .crisp-pulse-footer-ground) canvas { image-rendering: auto; }
 @media (prefers-reduced-motion: reduce) { .crisp-pulse-view .crisp-pulse-footer-ground canvas.crisp-pulse-voyager { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .crisp-pulse-view .crisp-pulse-footer-tip { transition: none; } }
 @container (max-width: 600px) {

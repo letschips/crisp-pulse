@@ -36,7 +36,7 @@ const PULSE_ZH = /^zh\b/i.test(PULSE_LANGUAGE);
 const PULSE_HANT = PULSE_ZH && /^zh[-_](tw|hk|mo|hant)\b/i.test(PULSE_LANGUAGE);
 /* 繁体文案由简体文案转出来（OpenCC s2twp：台湾正体 + 台湾用语），表由 scripts/gen-hant.cjs 生成，只收源码里用到的字词。
    分两段按最长匹配替换：s 简→繁，t 台湾用语。插值进来的内容（文件名、标签）也会被转，只影响显示。 */
-const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"038f78b2053d1a9c","s":"一只 一隻|一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|方向 方向|无 無|日历 日曆|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|沉淀 沉澱|没 沒|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|湖面 湖面|满 滿|灯 燈|点 點|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|麦 麥|麦克 麥克|麦克风 麥克風","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
+const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"24a8223431c3c8c9","s":"一只 一隻|一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|方向 方向|无 無|日历 日曆|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|沉淀 沉澱|没 沒|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|湖面 湖面|满 滿|灯 燈|点 點|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
 let pulseHantStages = null;
 function pulseHant(text) {
   if (typeof text !== "string" || !/\p{Script=Han}/u.test(text)) return text;
@@ -543,6 +543,7 @@ const DEFAULT_SETTINGS = {
   showFooterLandscape: true,
   memoPomodoroPrompt: true, // during a Crisp Focus pomodoro break, the memo composer asks what the round produced // pixel horizon at the bottom of the Pulse view; the ridge is recent daily contribution
   headerBannerImage: "", // vault path of a custom banner image; empty uses the generated sky
+  sceneStyle: "pixel", // 顶部天空和底部地平线的画风："pixel" 像素湖面 | "ink" 水墨山水
   celebratedOn: "", // "YYYY-MM-DD"：这一天达标的流星/彩虹已经在页脚放过，不再重复
 
   // --- 1.1 Credible Analytics Settings ---
@@ -1469,7 +1470,7 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
     if (store.settings[key] === undefined) { store.settings[key] = Array.isArray(fallback) ? [...fallback] : fallback; repairedCount++; }
   }
   // 枚举型设置：值不在允许范围就回到默认，免得复盘页等直接报错
-  const enums = { dataQualityScope: ["reliable", "recorded_only", "all"], defaultDateRange: ["year", "90d", "30d", "7d", "ytd"], defaultMetric: ["contribution", "activity", "focus", "pomodoro", "words", "notes", "tasks"], weekStartsOn: ["sunday", "monday"], memoMode: ["auto", "general", "anks"] };
+  const enums = { dataQualityScope: ["reliable", "recorded_only", "all"], defaultDateRange: ["year", "90d", "30d", "7d", "ytd"], defaultMetric: ["contribution", "activity", "focus", "pomodoro", "words", "notes", "tasks"], weekStartsOn: ["sunday", "monday"], memoMode: ["auto", "general", "anks"], sceneStyle: PULSE_SCENE_IDS };
   for (const [key, allowed] of Object.entries(enums)) {
     if (key in defaultSettings && !allowed.includes(store.settings[key])) { store.settings[key] = defaultSettings[key]; repairedCount++; }
   }
@@ -1753,6 +1754,12 @@ class CrispPulsePlugin extends Plugin {
       id: "open-crisp-pulse-view",
       name: tr("打开年度知识工作看板 (Pulse View)", "Open the knowledge work dashboard (Pulse View)"),
       callback: () => this.activatePulseView()
+    });
+
+    this.addCommand({
+      id: "cycle-scene-style",
+      name: tr("切换看板顶部和底部的画风", "Switch the dashboard scene style"),
+      callback: () => this.cycleSceneStyle({ notice: true })
     });
 
     this.addCommand({
@@ -2512,6 +2519,15 @@ class CrispPulsePlugin extends Plugin {
     const path = this.settings.headerBannerImage;
     const file = path ? this.app.vault.getAbstractFileByPath(path) : null;
     return file instanceof TFile && PULSE_BANNER_IMAGE_EXTENSIONS.has(String(file.extension).toLowerCase()) ? file : null;
+  }
+
+  /** 一键换画风（顶部天空和底部地平线），按顺序循环，重画所有看板。 */
+  async cycleSceneStyle({ notice = false } = {}) {
+    this.settings.sceneStyle = nextPulseScene(this.settings.sceneStyle);
+    await this.savePluginData();
+    this.refreshViews();
+    const label = pulseScene(this.settings.sceneStyle).label();
+    if (notice) new Notice(tr(`Crisp Pulse：画风换成${label}`, `Crisp Pulse: scene style is now ${label}`));
   }
 
   refreshViews() {
@@ -5003,13 +5019,16 @@ function pulseSpriteRow(sprites, gap = 1) {
   const below = Math.max(...sprites.map((s) => s.rows.length - s.waterline));
   const width = sprites.reduce((sum, s) => sum + s.rows[0].length, 0) + gap * (sprites.length - 1);
   const grid = Array.from({ length: waterline + below }, () => Array(width).fill(" "));
+  const parts = [];
   let left = 0;
   for (const s of sprites) {
     const top = waterline - s.waterline;
     s.rows.forEach((row, y) => [...row].forEach((ch, x) => { if (ch !== " ") grid[top + y][left + x] = ch; }));
+    // 记下每只在哪：不按像素格画的风格（水墨）要一只一只重新画
+    parts.push({ sprite: s, left, top });
     left += s.rows[0].length + gap;
   }
-  return { waterline, depth: Math.max(...sprites.map((s) => s.depth)), rows: grid.map((r) => r.join("")) };
+  return { waterline, depth: Math.max(...sprites.map((s) => s.depth)), rows: grid.map((r) => r.join("")), parts };
 }
 
 /** 湖面上要画的精灵：boat、duck，family（鸭妈妈前面游，n 只小鸭跟在后面），harbor（n 只泊船）。 */
@@ -5454,16 +5473,655 @@ function paintCelestial(canvas, mode, phase = 0.5) {
   ctx.putImageData(img, 0, 0);
 }
 const pulseSkyCache = {};
-function getPulseSky(doc, mode, weather = "fair", season = "summer") {
-  const key = `${mode}:${weather}:${season}`;
+function getPulseSky(doc, mode, weather = "fair", season = "summer", sceneId = "pixel") {
+  const scene = pulseScene(sceneId);
+  const key = `${scene.id}:${mode}:${weather}:${season}`;
   if (!pulseSkyCache[key]) {
     const canvas = doc.createElement("canvas");
     canvas.width = PULSE_SKY_WIDTH;
     canvas.height = PULSE_SKY_HEIGHT;
-    paintPulseSky(canvas, mode, 7, weather, season);
+    scene.paintSky(canvas, mode, weather, season);
     pulseSkyCache[key] = canvas;
   }
   return pulseSkyCache[key];
+}
+
+/* ---------- 水墨山水：和像素湖面同一组元素、同一套几何，只是换一支笔 ----------
+   按屏幕分辨率画（不按像素格放大），所有画布仍以「逻辑格」定尺寸和位置，船、灯、鸟的落点与像素风完全一样。
+   底色透明，叠在面板背景上；只铺一层很淡的纸色，白天深墨，夜里是月光下的淡墨。 */
+const PULSE_INK = {
+  day: { ink: [38, 40, 44], wash: [112, 118, 124], paper: [234, 226, 206], snow: [252, 252, 249], seal: [192, 56, 42], sun: [208, 70, 48], moon: [236, 232, 214], warm: [236, 150, 70], bird: [44, 46, 50] },
+  night: { ink: [170, 178, 196], wash: [118, 128, 150], paper: [34, 38, 50], snow: [228, 234, 246], seal: [172, 74, 62], sun: [208, 70, 48], moon: [236, 232, 214], warm: [255, 206, 128], bird: [190, 198, 220] },
+};
+// 季节只染最近的一层山和草木：春花青带一点桃红，夏石绿，秋赭石带朱，冬留白积雪
+const PULSE_INK_SEASON = {
+  spring: { tint: [96, 136, 108], dot: [224, 124, 146] },
+  summer: { tint: [58, 106, 98], dot: null },
+  autumn: { tint: [158, 98, 56], dot: [190, 70, 44] },
+  winter: { tint: null, dot: null },
+};
+const PULSE_INK_PAPER_ALPHA = 0.26;
+
+/** 每个逻辑格对应几个物理像素：页脚按 2 倍放大，再乘屏幕倍率。 */
+function inkResolution() {
+  const dpr = (typeof window !== "undefined" && Number(window.devicePixelRatio)) || 1;
+  return Math.max(2, Math.min(8, Math.ceil(PULSE_GROUND_SCALE * dpr)));
+}
+
+/** 把画布设成 w×h 逻辑格乘分辨率，返回一张透明的 ImageData。 */
+function inkCanvas(canvas, w, h, R) {
+  canvas.width = Math.max(1, Math.round(w * R));
+  canvas.height = Math.max(1, Math.round(h * R));
+  const ctx = canvas.getContext("2d");
+  return { ctx, img: ctx.createImageData(canvas.width, canvas.height), W: canvas.width, H: canvas.height };
+}
+
+/** 半透明叠一层（普通的 over）。 */
+function inkOver(d, o, c, a) {
+  if (!(a > 0)) return;
+  if (a > 1) a = 1;
+  const da = d[o + 3] / 255, keep = da * (1 - a), oa = a + keep;
+  d[o] = (c[0] * a + d[o] * keep) / oa;
+  d[o + 1] = (c[1] * a + d[o + 1] * keep) / oa;
+  d[o + 2] = (c[2] * a + d[o + 2] * keep) / oa;
+  d[o + 3] = oa * 255;
+}
+
+/** 垫在已有墨色下面（纸色、雾色）。 */
+function inkUnder(d, o, c, a) {
+  const da = d[o + 3] / 255, add = a * (1 - da), oa = da + add;
+  if (!(oa > 0)) return;
+  d[o] = (d[o] * da + c[0] * add) / oa;
+  d[o + 1] = (d[o + 1] * da + c[1] * add) / oa;
+  d[o + 2] = (d[o + 2] * da + c[2] * add) / oa;
+  d[o + 3] = oa * 255;
+}
+
+/** 多边形的有符号距离（里面为负）。 */
+function inkPolygonSdf(pts) {
+  return (x, y) => {
+    let d = Infinity, inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [ax, ay] = pts[j], [bx, by] = pts[i];
+      const ex = bx - ax, ey = by - ay, wx = x - ax, wy = y - ay;
+      const t = pixelClamp01((wx * ex + wy * ey) / (ex * ex + ey * ey || 1));
+      d = Math.min(d, Math.hypot(wx - ex * t, wy - ey * t));
+      if ((ay > y) !== (by > y) && x < ax + (ex * (y - ay)) / (ey || 1e-9)) inside = !inside;
+    }
+    return inside ? -d : d;
+  };
+}
+
+/** 一支笔：在逻辑坐标里画圆、椭圆、锥形笔画和多边形，边缘按物理像素抗锯齿；at() 平移原点。 */
+function inkPen(img, W, H, R, ox = 0, oy = 0) {
+  const d = img.data;
+  const stamp = (box, sdf, color, alpha = 1, soft = 0) => {
+    const x0 = Math.max(0, Math.floor((box[0] + ox) * R)), x1 = Math.min(W, Math.ceil((box[2] + ox) * R));
+    const y0 = Math.max(0, Math.floor((box[1] + oy) * R)), y1 = Math.min(H, Math.ceil((box[3] + oy) * R));
+    const edge = Math.max(1 / R, soft);
+    for (let py = y0; py < y1; py++) for (let px = x0; px < x1; px++) {
+      const cov = pixelClamp01(0.5 - sdf((px + 0.5) / R - ox, (py + 0.5) / R - oy) / edge);
+      if (cov > 0) inkOver(d, (py * W + px) * 4, color, alpha * cov);
+    }
+  };
+  const pen = {
+    R,
+    at: (dx, dy) => inkPen(img, W, H, R, ox + dx, oy + dy),
+    circle: (cx, cy, r, color, alpha, soft = 0) => stamp([cx - r - soft - 1, cy - r - soft - 1, cx + r + soft + 1, cy + r + soft + 1], (x, y) => Math.hypot(x - cx, y - cy) - r, color, alpha, soft),
+    ellipse: (cx, cy, rx, ry, color, alpha, soft = 0) => stamp([cx - rx - soft - 1, cy - ry - soft - 1, cx + rx + soft + 1, cy + ry + soft + 1],
+      (x, y) => (Math.hypot((x - cx) / rx, (y - cy) / ry) - 1) * Math.min(rx, ry), color, alpha, soft),
+    // 从 a 到 b 的一笔，粗细从 r0 收到 r1（起笔重、收笔轻）
+    stroke: (ax, ay, bx, by, r0, r1, color, alpha, soft = 0) => {
+      const ex = bx - ax, ey = by - ay, len2 = ex * ex + ey * ey || 1, m = Math.max(r0, r1) + soft + 1;
+      stamp([Math.min(ax, bx) - m, Math.min(ay, by) - m, Math.max(ax, bx) + m, Math.max(ay, by) + m], (x, y) => {
+        const t = pixelClamp01(((x - ax) * ex + (y - ay) * ey) / len2);
+        return Math.hypot(x - ax - ex * t, y - ay - ey * t) - (r0 + (r1 - r0) * t);
+      }, color, alpha, soft);
+    },
+    poly: (pts, color, alpha, soft = 0) => {
+      const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
+      stamp([Math.min(...xs) - 1, Math.min(...ys) - 1, Math.max(...xs) + 1, Math.max(...ys) + 1], inkPolygonSdf(pts), color, alpha, soft);
+    },
+    // 只描边：多边形边上一道细线
+    outline: (pts, width, color, alpha) => {
+      const sdf = inkPolygonSdf(pts), xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
+      stamp([Math.min(...xs) - width - 1, Math.min(...ys) - width - 1, Math.max(...xs) + width + 1, Math.max(...ys) + width + 1], (x, y) => Math.abs(sdf(x, y)) - width / 2, color, alpha);
+    },
+  };
+  return pen;
+}
+
+/** 最近一层山和草木的墨色：按季节掺一点颜色；夜里掺得少。 */
+function inkSeasonColor(p, mode, season) {
+  const tint = PULSE_INK_SEASON[season]?.tint;
+  return tint ? pixelMix(p.ink, tint, mode === "night" ? 0.2 : 0.36) : p.ink;
+}
+
+/** 先在逻辑网格上（每 step 格一个点）把 fn 算一遍，取值时双线性插值：逐个物理像素调噪声太慢。 */
+function inkField(w, h, step, fn) {
+  const cols = Math.ceil(w / step) + 2, rows = Math.ceil(h / step) + 2, v = new Float32Array(cols * rows);
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) v[j * cols + i] = fn(i * step, j * step);
+  return (x, y) => {
+    let fx = x / step, fy = y / step;
+    if (fx < 0) fx = 0; else if (fx > cols - 1.001) fx = cols - 1.001;
+    if (fy < 0) fy = 0; else if (fy > rows - 1.001) fy = rows - 1.001;
+    const i = fx | 0, j = fy | 0, tx = fx - i, ty = fy - j, o = j * cols + i;
+    const a = v[o] + (v[o + 1] - v[o]) * tx, b = v[o + cols] + (v[o + cols + 1] - v[o + cols]) * tx;
+    return a + (b - a) * ty;
+  };
+}
+
+/** 一层墨山：top 是每个物理列的山顶行（逻辑格）。从山顶往下由浓到淡，fade 行内化开；
+    顶边一道浓墨（brush 是每列的干湿），像干笔勾出的山脊线；texture 是山坡上的皴笔（tex 取纹理）。cut 以下不画。 */
+function inkMountain(img, W, H, R, top, { color, alpha, fade, edge = 0, edgeWidth = 0.8, texture = 0, floor = 0, cut = Infinity, tex = null, brush = null, light = null }) {
+  const d = img.data, yEnd = Math.min(H, Math.ceil(cut * R));
+  for (let px = 0; px < W; px++) {
+    const t0 = top[px];
+    if (!(t0 < cut)) continue;
+    const lx = (px + 0.5) / R, b = brush ? brush[px] : 1, lit = light ? light[px] : 1;
+    for (let py = Math.max(0, Math.floor(t0 * R)); py < yEnd; py++) {
+      const ly = (py + 0.5) / R, dy = ly - t0;
+      let cov = dy * R + 0.5;
+      if (cov <= 0) continue;
+      if (cov > 1) cov = 1;
+      let f = dy / fade;
+      if (f >= 1) { if (floor <= 0) break; f = 1; }
+      const g = 1 - f;
+      let a = alpha * g * Math.sqrt(g);
+      if (a < floor) a = floor;
+      a *= lit;
+      if (edge && dy < edgeWidth && edge * b > a) a = edge * b;
+      if (texture && tex && f < 0.8) {
+        // 皴：顺着山势斜下的短笔，越往下越少
+        const s = tex(lx + dy * 0.5, ly);
+        if (s > 0.64) a += texture * (s - 0.64) * 3 * (1 - f);
+      }
+      // 脚下贴着 cut 的两行化进雾里
+      if (ly > cut - 2) a *= (cut - ly) / 2;
+      inkOver(d, (py * W + px) * 4, color, a * cov);
+    }
+  }
+}
+
+/** 每列顶边的干湿：0.7–1.3。 */
+function inkBrush(W, R, noise, seed) {
+  const b = new Float32Array(W);
+  for (let px = 0; px < W; px++) b[px] = 0.7 + 0.6 * noise((px + 0.5) / R / 2.2 + seed, seed * 3.1);
+  return b;
+}
+
+/** 收尾：起雾时按 amountAt(px, py)（物理像素）吃掉墨色、蒙一层雾色，最后在下面垫一层纸色。 */
+function inkFinish(img, W, H, R, p, haze, amountAt) {
+  const d = img.data, pa = PULSE_INK_PAPER_ALPHA, [r, g, b] = p.paper;
+  for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+    const o = (py * W + px) * 4;
+    if (haze) {
+      const k = haze * amountAt(px, py);
+      d[o + 3] *= 1 - k * 0.75;
+      inkOver(d, o, p.paper, k * 0.35);
+    }
+    const da = d[o + 3] / 255, add = pa * (1 - da), oa = da + add;
+    d[o] = (d[o] * da + r * add) / oa;
+    d[o + 1] = (d[o + 1] * da + g * add) / oa;
+    d[o + 2] = (d[o + 2] * da + b * add) / oa;
+    d[o + 3] = oa * 255;
+  }
+}
+
+/** 顶部横幅：远近三层山、天上几缕云气，左边一面石崖和一棵松（天体轨迹按它避让，和灯塔同一个位置），下面是水。 */
+function paintInkSky(canvas, mode = "night", weather = "fair", season = "summer") {
+  // 横幅按 cover 放大不到 2 倍，柔和的墨色 3 倍分辨率就够
+  const w = PULSE_SKY_WIDTH, h = PULSE_SKY_HEIGHT, R = Math.min(3, inkResolution());
+  const { ctx, img, W, H } = inkCanvas(canvas, w, h, R);
+  const d = img.data;
+  const p = PULSE_INK[mode] || PULSE_INK.night;
+  const sky = PULSE_WEATHER[weather] || PULSE_WEATHER.fair;
+  const { hash, noise, fbm } = pulsePixelNoise(7);
+  const horizon = h * 0.6;
+  const near = inkSeasonColor(p, mode, season), accent = PULSE_INK_SEASON[season]?.dot;
+  // 云气：横着拉长的几缕淡墨，云越多越浓
+  const threshold = 0.6 - (sky.cover + 0.1) * 0.55, cloudAlpha = 0.14 + sky.cover * 0.12;
+  const cloud = inkField(w, horizon, 1, (x, y) => fbm(x / (h * 1.6) + 2, y / (h * 0.15) + 1, 4));
+  for (let py = 0; py < Math.ceil(horizon * R); py++) {
+    const ly = (py + 0.5) / R, band = 1 - Math.abs(ly / horizon - 0.32) / 0.68;
+    for (let px = 0; px < W; px++) {
+      const v = (cloud((px + 0.5) / R, ly) - threshold) * band;
+      if (v > 0) inkOver(d, (py * W + px) * 4, p.wash, Math.min(1, v * 2.4) * cloudAlpha);
+    }
+  }
+  // 三层山：越远越淡、越高越尖（高远），最近一层带季节色和皴笔
+  const ridged = (x, scale, seed) => {
+    const r = 1 - Math.abs(2 * fbm(x / scale + seed, seed * 1.7, 4) - 1);
+    return Math.pow(Math.max(0, r - 0.3) / 0.7, 1.4) * (0.45 + fbm(x / (scale * 3) + seed, 0.3, 2));
+  };
+  const tex = inkField(w, h, 1, (x, y) => noise(x / 1.3, y / 0.9 + 4));
+  const layers = [
+    { base: horizon - 1, amp: h * 0.5, scale: h * 1.2, seed: 3, color: p.wash, alpha: 0.2, fade: h * 0.24 },
+    { base: horizon + 1, amp: h * 0.36, scale: h * 0.8, seed: 8, color: pixelMix(p.wash, p.ink, 0.45), alpha: 0.32, fade: h * 0.2, edge: 0.3 },
+    { base: horizon + 2, amp: h * 0.22, scale: h * 0.55, seed: 13, color: near, alpha: 0.5, fade: h * 0.15, edge: 0.6, texture: 0.12 },
+  ];
+  const nearTop = new Float32Array(W);
+  layers.forEach((layer, i) => {
+    const top = new Float32Array(W);
+    for (let px = 0; px < W; px++) top[px] = layer.base - layer.amp * ridged((px + 0.5) / R, layer.scale, layer.seed);
+    inkMountain(img, W, H, R, top, { ...layer, cut: horizon, tex, brush: inkBrush(W, R, noise, layer.seed) });
+    if (i === 2) nearTop.set(top);
+    // 冬天高处的峰顶留白积雪
+    if (season === "winter" && i > 0) for (let px = 0; px < W; px++) {
+      const lift = layer.base - top[px];
+      if (lift < layer.amp * 0.45) continue;
+      const depth = 1.2 + (lift - layer.amp * 0.45) * 0.12;
+      for (let py = Math.floor(top[px] * R); py < Math.min(H, Math.ceil((top[px] + depth) * R)); py++) {
+        const dy = (py + 0.5) / R - top[px];
+        if (dy > 0 && tex((px + 0.5) / R * 0.8, dy * 1.6 + i * 9) > 0.3) inkOver(d, (py * W + px) * 4, p.snow, 0.8 * (1 - dy / depth));
+      }
+    }
+  });
+  // 水：淡墨水纹，近山的倒影碎在里面
+  const ripple = inkField(w, h, 1, (x, y) => noise(x / 9, y * 0.9 + 7));
+  for (let py = Math.floor(horizon * R); py < H; py++) {
+    const ly = (py + 0.5) / R, t = (ly - horizon) / (h - horizon);
+    for (let px = 0; px < W; px++) {
+      const o = (py * W + px) * 4, r = ripple((px + 0.5) / R, ly);
+      if (r > 0.74) inkOver(d, o, p.wash, (r - 0.74) * 0.9 * (1 - t * 0.6));
+      const depth = horizon + (horizon - nearTop[px]) * 0.4;
+      if (ly < depth && r > 0.42) inkOver(d, o, near, 0.1 * (1 - (ly - horizon) / Math.max(1, depth - horizon)));
+    }
+  }
+  // 左边的石崖：上沿起伏，崖面是竖着的披麻皴，往下化开，崖脚没进水里
+  const cliffX = h * 0.86, cliffEnd = cliffX + h * 0.22, pineX = h * 0.5;
+  const cliff = new Float32Array(W).fill(Infinity);
+  for (let px = 0; px < W; px++) {
+    const lx = (px + 0.5) / R;
+    if (lx > cliffEnd) break;
+    const k = lx < cliffX ? 1 : 1 - Math.pow((lx - cliffX) / (cliffEnd - cliffX), 1.4);
+    const crown = 1 - Math.pow(Math.abs(lx - h * 0.45) / (h * 0.75), 2) * 0.45;
+    cliff[px] = horizon + 3 - (h * 0.22 * crown + fbm(lx / 6, 8.1, 3) * 5) * Math.sqrt(Math.max(0, k));
+  }
+  const strands = inkField(cliffEnd, h, 0.5, (x, y) => noise(x / 0.9, y / 6 + 2));
+  // 夜里的石崖往夜色里压一些，不要比远山还亮
+  const rock = pixelMix(pixelMix(p.ink, near, 0.35), p.paper, mode === "night" ? 0.45 : 0), cliffCut = horizon + 3;
+  for (let px = 0; px < W; px++) {
+    if (!(cliff[px] < cliffCut)) continue;
+    const lx = (px + 0.5) / R;
+    for (let py = Math.max(0, Math.floor(cliff[px] * R)); py < Math.ceil(cliffCut * R); py++) {
+      const ly = (py + 0.5) / R, dy = ly - cliff[px], cov = Math.min(1, dy * R + 0.5);
+      if (cov <= 0) continue;
+      let a = (0.74 - Math.min(1, dy / (h * 0.4)) * 0.45) * (0.7 + 0.45 * strands(lx, ly));
+      if (dy < 0.9) a = Math.max(a, 0.88);
+      if (ly > horizon - 3) a *= (cliffCut - ly) / 6;
+      inkOver(d, (py * W + px) * 4, rock, a * cov);
+    }
+  }
+  // 崖顶一棵松：弯着往右伸的树干，三团松针；冬天针团上积雪，春天零星几点梅花
+  const pen = inkPen(img, W, H, R);
+  const root = cliff[Math.min(W - 1, Math.round(pineX * R))];
+  pen.stroke(pineX, root + 1, pineX + 3, root - 12, 1.5, 1, p.ink, 0.92);
+  pen.stroke(pineX + 3, root - 12, pineX + 1, root - 22, 1, 0.55, p.ink, 0.92);
+  pen.stroke(pineX + 2.5, root - 14, pineX + 13, root - 18, 0.7, 0.3, p.ink, 0.9);
+  pen.stroke(pineX + 1.5, root - 9, pineX - 8, root - 12, 0.6, 0.25, p.ink, 0.9);
+  const needles = pixelMix(near, p.ink, 0.25);
+  for (const [cx, cy, rx] of [[pineX + 13, root - 19, 7], [pineX - 7.5, root - 13, 6], [pineX + 1.5, root - 23.5, 5.5]]) {
+    // 一团松针是几片压扁的淡墨，上面几道短横笔
+    for (let i = 0; i < 4; i++) pen.ellipse(cx + (hash(i, Math.round(cx)) - 0.5) * rx * 0.6, cy - i * 0.5 + 0.8, rx * (1 - i * 0.15), 1.3, needles, 0.35, 0.6);
+    for (let i = 0; i < 7; i++) {
+      const nx = cx + (hash(i * 3, Math.round(cy)) - 0.5) * rx * 1.6, ny = cy + (hash(i * 5 + 1, Math.round(cx)) - 0.5) * 2;
+      pen.stroke(nx - 1.4, ny, nx + 1.4, ny - 0.3, 0.35, 0.15, p.ink, 0.6);
+    }
+    if (season === "winter") pen.ellipse(cx, cy - 1.2, rx * 0.8, 0.8, p.snow, 0.85, 0.3);
+    else if (season === "spring" && accent) for (let i = 0; i < 4; i++) pen.circle(cx + (hash(i, Math.round(cx) + 3) - 0.5) * rx * 1.6, cy + (hash(i + 9, Math.round(cy)) - 0.5) * 2.4, 0.5, accent, 0.9);
+  }
+  inkFinish(img, W, H, R, p, sky.haze, (px, py) => { const ly = (py + 0.5) / R; return ly < horizon ? 0.5 + 0.5 * (ly / horizon) : 0.7; });
+  ctx.putImageData(img, 0, 0);
+}
+
+/** 太阳是一枚朱红的圆（像画上的红日），月亮按月相画亮面，暗面淡淡一层。 */
+function paintInkCelestial(canvas, mode, phase = 0.5) {
+  const n = PULSE_CELESTIAL_SIZE, R = inkResolution(), c = n / 2;
+  const { ctx, img, W, H } = inkCanvas(canvas, n, n, R);
+  const p = PULSE_INK[mode] || PULSE_INK.night;
+  const pen = inkPen(img, W, H, R);
+  if (mode !== "night") {
+    pen.circle(c, c, 9, p.sun, 0.08, 3);
+    pen.circle(c, c, 5.6, p.sun, 0.88, 0.5);
+  } else {
+    pen.circle(c, c, 9, p.moon, 0.06, 3);
+    pen.circle(c, c, 5.8, p.ink, 0.16, 0.3);
+    const term = Math.cos(2 * Math.PI * phase), r = 5.8;
+    const d = img.data;
+    for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+      const dx = (px + 0.5) / R - c, dy = (py + 0.5) / R - c, dist = Math.hypot(dx, dy);
+      if (dist > r + 0.5) continue;
+      const half = Math.sqrt(Math.max(0, r * r - dy * dy));
+      const edge = phase < 0.5 ? dx - term * half : -term * half - dx;
+      const cov = pixelClamp01(edge * R / 2 + 0.5) * pixelClamp01((r - dist) * R + 0.5);
+      if (cov > 0) inkOver(d, (py * W + px) * 4, p.moon, 0.95 * cov);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/* 水墨页脚的峰顶小亭：四角起翘的屋顶、两根柱子、一方台基；夜里亭中一盏暖灯。（逻辑格，原点在台基中心） */
+function inkPavilion(pen, x, base, p, mode, season) {
+  const ink = p.ink;
+  pen.poly([[x - 6.5, base + 0.2], [x + 6.5, base + 0.2], [x + 5.8, base - 1.2], [x - 5.8, base - 1.2]], ink, 0.92);
+  pen.stroke(x - 3.6, base - 1, x - 3.6, base - 5.6, 0.45, 0.4, ink, 0.95);
+  pen.stroke(x + 3.6, base - 1, x + 3.6, base - 5.6, 0.45, 0.4, ink, 0.95);
+  if (mode === "night") { pen.circle(x, base - 3.4, 2.4, p.warm, 0.25, 1); pen.circle(x, base - 3.4, 0.9, p.warm, 0.95); }
+  pen.poly([[x - 7.6, base - 6.9], [x - 5.2, base - 6.2], [x + 5.2, base - 6.2], [x + 7.6, base - 6.9], [x + 4.4, base - 8.6], [x, base - 10.2], [x - 4.4, base - 8.6]], ink, 0.95);
+  pen.stroke(x, base - 10, x, base - 11.6, 0.35, 0.2, ink, 0.95);
+  if (season === "winter") pen.stroke(x - 4.2, base - 8.8, x + 4.2, base - 8.8, 0.45, 0.45, p.snow, 0.9);
+}
+
+/** 页脚：远山、贡献山脊（浓墨勾边、往下化开）、近岸和几棵点叶的小树，最下面是水。参数和像素风的 paintPulseGround 一样。 */
+function paintInkGround(canvas, mode, profile, todayX = -1, { reflection = null, stones = [], weather = "fair", season = "summer", peakX = -1 } = {}, seed = 11) {
+  // 墨色柔和，3 倍分辨率就够；页脚重画（拖动面板、倒影移动）也快
+  const w = canvas.width, h = canvas.height, R = Math.min(3, inkResolution());
+  const { ctx, img, W, H } = inkCanvas(canvas, w, h, R);
+  const d = img.data;
+  const p = PULSE_INK[mode] || PULSE_INK.night;
+  const haze = (PULSE_WEATHER[weather] || PULSE_WEATHER.fair).haze;
+  const { hash, noise, fbm } = pulsePixelNoise(seed);
+  const near = inkSeasonColor(p, mode, season), accent = PULSE_INK_SEASON[season]?.dot;
+  const lakeTop = groundLakeTop(h);
+  // 每个物理列的远山、山脊、近岸高度。山脊和像素风同一条 groundRidgeRow（悬停提示的位置不变），只是在列与列之间插值，不出台阶
+  const far = new Float32Array(W), ridge = new Float32Array(W), shore = new Float32Array(W), light = new Float32Array(W);
+  for (let px = 0; px < W; px++) {
+    const lx = (px + 0.5) / R, fx = Math.max(0, Math.min(w - 1, lx - 0.5)), i = Math.floor(fx), j = Math.min(w - 1, i + 1);
+    const level = (profile[i] || 0) + ((profile[j] || 0) - (profile[i] || 0)) * (fx - i);
+    far[px] = h * 0.6 - Math.max(0, fbm(lx / (h * 1.1) + 5, 1.7, 4) - 0.3) * h * 0.55;
+    ridge[px] = groundRidgeRow(h, level) + (fbm(lx / 4, 6.2, 3) - 0.5) * 1.6;
+    shore[px] = h * 0.88 - fbm(lx / (h * 0.45) + 2, 9.4, 3) * h * 0.13;
+  }
+  // 光从右上来：朝右的坡淡一些，连续变化，不出竖条
+  for (let px = 0; px < W; px++) {
+    const slope = (ridge[Math.min(W - 1, px + 3 * R)] - ridge[Math.max(0, px - 3 * R)]) / 6;
+    light[px] = 1 - Math.max(0, Math.min(0.25, slope * 0.6));
+  }
+  const colAt = (lx) => Math.max(0, Math.min(W - 1, Math.round(lx * R - 0.5)));
+  const ridgeLx = (lx) => ridge[colAt(lx)];
+  // 峰顶：小亭的位置（和城堡一样找峰值日附近真正的山尖）
+  const logicalRidge = new Float32Array(w);
+  for (let x = 0; x < w; x++) logicalRidge[x] = ridgeLx(x + 0.5);
+  const summitX = peakX >= 0 && peakX < w ? groundSummitX(logicalRidge, peakX, w) : -1;
+  const summit = summitX >= 0 ? summitX + 0.5 : -99;
+  // 今天就是峰值：红印盖在小亭右边，不再另找位置
+  const todayAtSummit = summitX >= 0 && todayX >= 0 && Math.abs(todayX - summitX) <= 8;
+  if (todayAtSummit) todayX = -1;
+
+  const tex = inkField(w, h, 1, (x, y) => noise(x / 1.3, y / 0.9 + 4));
+  inkMountain(img, W, H, R, far, { color: p.wash, alpha: 0.2, fade: h * 0.36, cut: lakeTop });
+  inkMountain(img, W, H, R, ridge, { color: near, alpha: 0.55, fade: h * 0.2, edge: 0.92, edgeWidth: 0.9, texture: 0.14, cut: lakeTop, tex, brush: inkBrush(W, R, noise, 5), light });
+  // 峰顶留白：山尖两侧一小段墨色淡下去；冬天是积雪
+  if (summitX >= 0) for (let px = Math.max(0, Math.floor((summit - 12) * R)); px < Math.min(W, Math.ceil((summit + 12) * R)); px++) {
+    const off = Math.abs((px + 0.5) / R - summit), depth = 4 - off * 0.25;
+    for (let py = Math.max(0, Math.floor((ridge[px] + 1) * R)); py < Math.min(H, Math.ceil((ridge[px] + depth) * R)); py++) {
+      const dy = (py + 0.5) / R - ridge[px], o = (py * W + px) * 4;
+      if (tex((px + 0.5) / R * 1.2, dy * 1.4 + 30) < 0.35) continue;
+      d[o + 3] *= 0.55 + 0.45 * dy / depth;
+      if (season === "winter") inkOver(d, o, p.snow, 0.75 * (1 - dy / depth));
+    }
+  }
+  // 近岸：浓墨一道，往下淡
+  inkMountain(img, W, H, R, shore, { color: pixelMix(p.ink, near, 0.3), alpha: 0.78, fade: h * 0.2, edge: 0.88, floor: 0.3, cut: lakeTop + 0.5, brush: inkBrush(W, R, noise, 9) });
+  const pen = inkPen(img, W, H, R);
+  // 近岸上的小树：位置和像素风一样稀疏（彼此隔 6 列、避开今天），树干一笔，树冠几团点叶
+  for (let x = 3, last = -99; x < w - 3; x++) {
+    if (x - last < 6 || Math.abs(x - todayX) < 5 || hash(x * 3 + 1, 17) < 0.86) continue;
+    last = x;
+    const th = 3 + Math.floor(hash(x, 29) * 4), base = shore[colAt(x + 0.5)], cx = x + 0.5;
+    pen.stroke(cx, base + 0.5, cx + 0.4, base - th, 0.45, 0.25, p.ink, 0.9);
+    for (let i = 0; i < 5; i++) {
+      const dx = (hash(x + i, 41) - 0.5) * 3.4, dy = -th + (hash(x * 2 + i, 43) - 0.3) * 2.4;
+      pen.circle(cx + dx, base + dy, 0.9 + hash(x + i * 3, 47) * 0.6, near, 0.72, 0.3);
+      if (season === "winter" && i < 2) pen.circle(cx + dx, base + dy - 0.7, 0.6, p.snow, 0.9);
+      else if (accent && hash(x * 5 + i, 7) > 0.55) pen.circle(cx + dx + 0.4, base + dy - 0.3, 0.45, accent, 0.95);
+    }
+  }
+  // 峰顶小亭，台基下面山坡低的地方补墨，不悬空
+  if (summitX >= 0) {
+    const base = Math.round(ridgeLx(summit) * 2) / 2 + 0.6;
+    for (let px = Math.max(0, Math.floor((summit - 6.5) * R)); px < Math.min(W, Math.ceil((summit + 6.5) * R)); px++) {
+      for (let py = Math.floor(base * R); py < Math.min(H, Math.ceil((ridge[px] + 0.5) * R)); py++) inkOver(d, (py * W + px) * 4, near, 0.7);
+    }
+    inkPavilion(pen, summit, base, p, mode, season);
+  }
+  // 水：岸线一道若有若无的淡墨，几行水纹；太阳是一道朱红的碎光，月亮是一道淡光（新月没有）
+  let glow = null;
+  if (reflection && reflection.opacity > 0) {
+    const lit = reflection.mode === "night" ? (1 - Math.cos(2 * Math.PI * (reflection.phase ?? 0.5))) / 2 : 1;
+    if (lit > 0.08) glow = { x: reflection.x / 100 * w, half: reflection.mode === "night" ? 1 + lit * 1.6 : 2.4, color: reflection.mode === "night" ? p.moon : p.sun,
+      strength: reflection.opacity * (reflection.mode === "night" ? 0.4 + 0.4 * lit : 0.55) };
+  }
+  const ripple = inkField(w, h, 1, (x, y) => noise(x / 7, y * 1.3 + 3)), edgeLine = inkField(w, 1, 1, (x) => noise(x / 6, 2.2));
+  for (let py = Math.floor(lakeTop * R); py < H; py++) {
+    const ly = (py + 0.5) / R, r = ly - lakeTop, t = r / (h - lakeTop);
+    for (let px = 0; px < W; px++) {
+      const lx = (px + 0.5) / R, o = (py * W + px) * 4;
+      if (r < 0.55) inkOver(d, o, p.ink, Math.max(0, edgeLine(lx, 0) - 0.3) * 0.6);
+      else if (r < 3) inkOver(d, o, near, 0.14 * (1 - r / 3));
+      const q = ripple(lx, ly);
+      if (r > 1.5 && q > 0.7) inkOver(d, o, p.wash, (q - 0.7) * 1.1 * (1 - t * 0.5));
+      if (glow && r > 0.8) {
+        const row = Math.floor(r), shift = (hash(row * 5 + 1, Math.round(glow.x) & 255) - 0.5) * 3;
+        const half = glow.half + r * 0.5, dx = Math.abs(lx - glow.x - shift);
+        if (dx <= half && hash(Math.floor(lx / 2) + 7, row * 3 + 1) > 0.3 && (ly % 1) < 0.6) inkOver(d, o, glow.color, glow.strength * (1 - 0.45 * dx / (half + 1)) * (1 - 0.35 * t));
+      }
+    }
+  }
+  inkFinish(img, W, H, R, p, haze, (px, py) => {
+    const lx = (px + 0.5) / R, ly = (py + 0.5) / R;
+    const amount = ly >= lakeTop ? 0.45 : ly >= shore[px] ? 0.55 : ly >= ridge[px] ? 0.85 : 1;
+    // 贴着近岸飘一条薄雾
+    return Math.abs(ly - shore[px] + 1) <= 2 && ripple(lx * 0.8, ly + 40) > 0.45 ? Math.min(1, amount + 0.4) : amount;
+  });
+  // 苔点（连续天数）和红印（今天）画在雾上面，起雾也看得见
+  for (const sx of stones) {
+    if (Math.abs(sx - todayX) <= 2 || sx < 1 || sx >= w - 1) continue;
+    const top = Math.min(ridgeLx(sx + 0.5), shore[colAt(sx + 0.5)]);
+    pen.circle(sx + 0.3, top - 0.6, 1.05, p.ink, 0.95, 0.2);
+    pen.circle(sx + 1.5, top - 0.2, 0.6, p.ink, 0.9, 0.2);
+  }
+  // 小亭靠右边放不下红印时盖在左边
+  const sealX = todayX >= 0 ? todayX + 0.5 : todayAtSummit ? (summit + 9.5 <= w - 3 ? summit + 9.5 : summit - 9.5) : -1;
+  if (sealX >= 0) {
+    const top = (todayAtSummit ? ridgeLx(summit) - 2 : ridgeLx(sealX)) - 5.6;
+    pen.poly([[sealX - 1.9, top], [sealX + 1.9, top], [sealX + 1.9, top + 4], [sealX - 1.9, top + 4]], p.seal, 0.95, 0.15);
+    pen.outline([[sealX - 1.15, top + 0.7], [sealX + 1.15, top + 0.7], [sealX + 1.15, top + 3.3], [sealX - 1.15, top + 3.3]], 0.32, p.snow, 0.75);
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/* 湖上的小东西，逻辑格和像素精灵一样大、吃水线一样：帆船、小鸭、鸭妈妈带小鸭、泊着的小舟、纸船。 */
+const PULSE_INK_VOYAGERS = {
+  boat(pen, p, mode) {
+    const sail = mode === "night" ? p.ink : p.snow;
+    pen.poly([[2.4, 8], [13.6, 8], [12, 9.9], [4.4, 9.9]], p.ink, 0.92);
+    pen.stroke(9.4, 0.4, 9.4, 8.2, 0.3, 0.3, p.ink, 0.95);
+    const main = [[8.9, 1], [8.9, 7.2], [3, 7.2]], jib = [[9.9, 3.2], [9.9, 7.2], [12.8, 7.2]];
+    pen.poly(main, sail, mode === "night" ? 0.45 : 0.95); pen.outline(main, 0.35, p.ink, 0.75);
+    pen.poly(jib, sail, mode === "night" ? 0.35 : 0.9); pen.outline(jib, 0.3, p.ink, 0.6);
+    pen.stroke(0.4, 10.5, 2.4, 10.5, 0.22, 0.1, p.wash, 0.6); pen.stroke(4.6, 10.6, 6.6, 10.6, 0.22, 0.1, p.wash, 0.5);
+  },
+  duck(pen, p, mode) {
+    const body = mode === "night" ? [176, 160, 112] : [222, 182, 82], bill = mode === "night" ? [168, 102, 60] : [214, 102, 52];
+    pen.stroke(3.6, 8.4, 0.5, 5.4, 1, 0.25, body, 0.9);
+    pen.ellipse(7.8, 9.3, 5.4, 2.5, body, 0.92, 0.2);
+    pen.stroke(9, 7.2, 9.3, 4.8, 1.4, 1.2, body, 0.92);
+    pen.circle(9.5, 3.2, 2.4, body, 0.95, 0.2);
+    pen.poly([[11.4, 3.2], [13.8, 3.8], [11.4, 4.6]], bill, 0.95);
+    pen.circle(10.3, 2.7, 0.45, p.ink, 0.95);
+    pen.stroke(4.6, 8.6, 9.6, 8.9, 0.55, 0.3, pixelMix(body, p.ink, 0.35), 0.7);
+    pen.stroke(2.6, 11.9, 12.6, 11.9, 0.3, 0.3, p.ink, 0.35);
+    pen.stroke(0.2, 13.4, 2.2, 13.4, 0.22, 0.1, p.wash, 0.6); pen.stroke(5.4, 13.5, 8, 13.5, 0.22, 0.1, p.wash, 0.5);
+  },
+  duckling(pen, p, mode) {
+    const body = mode === "night" ? [176, 160, 112] : [228, 196, 96], bill = mode === "night" ? [168, 102, 60] : [214, 102, 52];
+    pen.ellipse(2.8, 3.3, 2.3, 1.25, body, 0.92, 0.15);
+    pen.circle(3.9, 1.35, 1.05, body, 0.95, 0.15);
+    pen.poly([[4.8, 1.2], [5.9, 1.55], [4.8, 1.9]], bill, 0.95);
+    pen.circle(4.15, 1.1, 0.25, p.ink, 0.95);
+    pen.stroke(0.3, 5.4, 1.6, 5.4, 0.2, 0.1, p.wash, 0.55);
+  },
+  moored(pen, p, mode) {
+    pen.poly([[0.3, 6], [8.5, 6], [7.2, 7.9], [1.4, 7.9]], p.ink, 0.9);
+    pen.stroke(4.5, 1.6, 4.5, 6.1, 0.25, 0.25, p.ink, 0.95);
+    pen.stroke(1.3, 4.5, 5.9, 4.5, 0.5, 0.4, mode === "night" ? p.wash : pixelMix(p.snow, p.wash, 0.35), 0.9);
+    if (mode === "night") { pen.circle(4.5, 1.2, 1.5, p.warm, 0.3, 0.8); pen.circle(4.5, 1.2, 0.5, p.warm, 1); }
+    pen.stroke(0.1, 8.5, 1.4, 8.5, 0.2, 0.1, p.wash, 0.55); pen.stroke(7.5, 8.5, 8.9, 8.5, 0.2, 0.1, p.wash, 0.55);
+  },
+  paper(pen, p, mode) {
+    const paper = mode === "night" ? [178, 184, 204] : [252, 250, 244];
+    const hull = [[0.2, 2], [6.8, 2], [5.6, 3.9], [1.4, 3.9]], sail = [[3.5, 0.1], [5.1, 2], [1.9, 2]];
+    pen.poly(hull, paper, 0.98); pen.outline(hull, 0.28, p.ink, 0.6);
+    pen.poly(sail, paper, 0.98); pen.outline(sail, 0.28, p.ink, 0.6);
+    pen.stroke(0.1, 4.5, 1.2, 4.5, 0.18, 0.1, p.wash, 0.5); pen.stroke(5.8, 4.5, 6.9, 4.5, 0.18, 0.1, p.wash, 0.5);
+  },
+};
+
+function paintInkVoyager(canvas, sprite, mode) {
+  const w = sprite.rows[0].length, h = sprite.rows.length, R = inkResolution();
+  const { ctx, img, W, H } = inkCanvas(canvas, w, h, R);
+  const p = PULSE_INK[mode] || PULSE_INK.night;
+  const pen = inkPen(img, W, H, R);
+  for (const part of sprite.parts || [{ sprite, left: 0, top: 0 }]) {
+    const kind = Object.keys(PULSE_VOYAGERS).find((k) => PULSE_VOYAGERS[k] === part.sprite) || "boat";
+    (PULSE_INK_VOYAGERS[kind] || PULSE_INK_VOYAGERS.boat)(pen.at(part.left, part.top), p, mode);
+  }
+  ctx.putImageData(img, 0, 0);
+  return { w, h, waterline: sprite.waterline, depth: sprite.depth };
+}
+
+/** 孔明灯：一盏纸灯，中间透亮，底下一点火苗，外面一圈暖光。尺寸和像素灯一样（5×7 格）。 */
+function paintInkLantern(canvas, mode) {
+  const R = inkResolution(), night = mode === "night";
+  const { ctx, img, W, H } = inkCanvas(canvas, PULSE_LANTERN[0].length, PULSE_LANTERN.length, R);
+  const pen = inkPen(img, W, H, R);
+  pen.circle(2.5, 3, 2.6, night ? [255, 196, 110] : [255, 214, 150], night ? 0.3 : 0.2, 1);
+  pen.ellipse(2.5, 2.9, 1.8, 2.4, night ? [246, 160, 84] : [214, 92, 54], 0.95, 0.2);
+  pen.ellipse(2.5, 3.1, 0.8, 1.5, night ? [255, 230, 160] : [248, 186, 110], 0.85, 0.4);
+  pen.circle(2.5, 6.1, 0.55, [255, 236, 150], 0.95, 0.2);
+  ctx.putImageData(img, 0, 0);
+  return { w: PULSE_LANTERN[0].length, h: PULSE_LANTERN.length };
+}
+
+/** 飞起的小鸟：两帧并排（翅膀上、翅膀下），每帧 7×3 格；夜里是萤火虫。 */
+function paintInkBird(canvas, mode) {
+  const R = inkResolution(), p = PULSE_INK[mode] || PULSE_INK.night;
+  if (mode === "night") {
+    const { ctx, img, W, H } = inkCanvas(canvas, 3, 3, R);
+    const pen = inkPen(img, W, H, R);
+    pen.circle(1.5, 1.5, 1.4, [255, 236, 140], 0.35, 0.8);
+    pen.circle(1.5, 1.5, 0.45, [255, 244, 190], 1);
+    ctx.putImageData(img, 0, 0);
+    return { w: 3, h: 3, frames: 1 };
+  }
+  const fw = PULSE_BIRD_FRAMES[0][0].length, fh = PULSE_BIRD_FRAMES[0].length;
+  const { ctx, img, W, H } = inkCanvas(canvas, fw * 2, fh, R);
+  const pen = inkPen(img, W, H, R);
+  pen.stroke(3.5, 2.3, 0.5, 0.3, 0.45, 0.1, p.bird, 0.95); pen.stroke(3.5, 2.3, 6.5, 0.3, 0.45, 0.1, p.bird, 0.95);
+  const down = pen.at(fw, 0);
+  down.stroke(3.5, 1.2, 0.5, 2.6, 0.45, 0.1, p.bird, 0.95); down.stroke(3.5, 1.2, 6.5, 2.6, 0.45, 0.1, p.bird, 0.95);
+  ctx.putImageData(img, 0, 0);
+  return { w: fw, h: fh, frames: 2 };
+}
+
+/** 一颗流星：淡墨里一道白光，头在右下。尺寸和像素流星一样。 */
+function paintInkMeteor(canvas) {
+  const [w, h] = PULSE_METEOR_SIZE, R = inkResolution();
+  const { ctx, img, W, H } = inkCanvas(canvas, w, h, R);
+  const pen = inkPen(img, W, H, R);
+  for (let i = 0; i < 12; i++) {
+    const t0 = i / 12, t1 = (i + 1) / 12;
+    const at = (t) => [w - 1.5 - t * (w - 3), h - 1.5 - t * (h - 3)];
+    const [ax, ay] = at(t0), [bx, by] = at(t1);
+    pen.stroke(ax, ay, bx, by, 0.7 * (1 - t0) + 0.08, 0.7 * (1 - t1) + 0.08, [246, 244, 232], Math.pow(1 - t0, 1.4) * 0.9);
+  }
+  pen.circle(w - 1.5, h - 1.5, 2, [246, 244, 232], 0.3, 1);
+  ctx.putImageData(img, 0, 0);
+}
+
+/** 白天达标：三只白鹤从湖上飞过（偏右，避开左边文字），白身、墨色翅尖、头顶一点红。 */
+function paintInkCranes(canvas, width, height) {
+  const R = inkResolution();
+  const { ctx, img, W, H } = inkCanvas(canvas, width, height, R);
+  const pen = inkPen(img, W, H, R), p = PULSE_INK.day;
+  const lake = groundLakeTop(height), base = Math.max(12, lake - height * 0.55);
+  const flock = [[0.56, 0], [0.66, -4], [0.75, 1.5]];
+  flock.forEach(([fx, dy], i) => {
+    const c = pen.at(Math.round(width * fx), base + dy);
+    const up = i % 2 === 0;
+    const tipL = up ? [-5, -3.4] : [-5.2, 1.6], tipR = up ? [4.4, -3.8] : [4.6, 2];
+    c.stroke(-0.3, -0.2, tipL[0], tipL[1], 1, 0.3, p.snow, 0.98);
+    c.stroke(0.4, -0.3, tipR[0], tipR[1], 1, 0.3, p.snow, 0.98);
+    c.stroke(tipL[0] * 0.6, tipL[1] * 0.6, tipL[0], tipL[1], 0.6, 0.25, p.ink, 0.92);
+    c.stroke(tipR[0] * 0.6, tipR[1] * 0.6, tipR[0], tipR[1], 0.6, 0.25, p.ink, 0.92);
+    c.ellipse(0, 0, 2.4, 0.9, p.snow, 0.98, 0.15);
+    c.stroke(2, -0.2, 4.6, -0.7, 0.32, 0.28, p.ink, 0.9);
+    c.circle(4.9, -0.8, 0.55, p.snow, 0.98);
+    c.circle(5, -1.1, 0.28, p.seal, 0.95);
+    c.stroke(5.3, -0.7, 6.4, -0.4, 0.15, 0.08, [190, 170, 110], 0.9);
+    c.stroke(-1.9, 0.3, -5, 1, 0.16, 0.12, p.ink, 0.8);
+    c.outline([[-2.4, 0], [0, -0.9], [2.4, 0], [0, 0.9]], 0.2, p.wash, 0.5);
+  });
+  ctx.putImageData(img, 0, 0);
+}
+
+/* ---------- 画风：顶部天空和底部地平线的一组画法 ----------
+   数据（天气、季节、山脊、番茄、速记、达标）都在视图里算好，风格只决定怎么画和图例怎么称呼；
+   每种风格画同一组元素、用同一套几何，换风格不改任何数据口径和交互。 */
+const PULSE_SCENES = {
+  pixel: {
+    id: "pixel",
+    label: () => tr("像素湖面", "Pixel lake"),
+    smooth: false,
+    paintSky: (canvas, mode, weather, season) => paintPulseSky(canvas, mode, 7, weather, season),
+    paintCelestial,
+    paintGround: paintPulseGround,
+    paintVoyager: paintPulseVoyager,
+    paintLantern: paintPulseLantern,
+    paintBird: paintPulseBird,
+    paintMeteor: paintPulseMeteor,
+    paintCelebration: paintPulseRainbow,
+    words: {
+      peak: (m, d) => tr(`峰值 ${m}月${d}日，山尖上的小城堡`, `Peak ${pulseMonthDay(m, d)}, the little castle on the summit`),
+      today: (mode) => (mode === "night" ? tr("小灯是今天", "The lamp is today") : tr("小旗是今天", "The flag is today")),
+      streak: (n) => tr(`小石子是连续 ${n} 天`, `Pebbles mark a ${n}-day streak`),
+      moored: (n) => tr(`右边岸边的小船是今天完成的 ${n} 个番茄`, `Boats at the right shore are today’s ${n} finished pomodoros`),
+      season: (s) => tr(`树的颜色是现在的季节：${PULSE_SEASON_LABELS[s][0]}`, `Tree colors follow the season: ${PULSE_SEASON_LABELS[s][1]}`),
+      celebration: () => tr("彩虹", "Rainbow"),
+    },
+  },
+  ink: {
+    id: "ink",
+    label: () => tr("水墨山水", "Ink landscape"),
+    smooth: true,
+    paintSky: paintInkSky,
+    paintCelestial: paintInkCelestial,
+    paintGround: paintInkGround,
+    paintVoyager: paintInkVoyager,
+    paintLantern: paintInkLantern,
+    paintBird: paintInkBird,
+    paintMeteor: paintInkMeteor,
+    paintCelebration: paintInkCranes,
+    words: {
+      peak: (m, d) => tr(`峰值 ${m}月${d}日，山尖上的小亭`, `Peak ${pulseMonthDay(m, d)}, the little pavilion on the summit`),
+      today: () => tr("红印是今天", "The red seal is today"),
+      streak: (n) => tr(`苔点是连续 ${n} 天`, `Moss dots mark a ${n}-day streak`),
+      moored: (n) => tr(`右边岸边的小舟是今天完成的 ${n} 个番茄`, `Skiffs at the right shore are today’s ${n} finished pomodoros`),
+      season: (s) => tr(`草木的颜色是现在的季节：${PULSE_SEASON_LABELS[s][0]}`, `Plants follow the season: ${PULSE_SEASON_LABELS[s][1]}`),
+      celebration: () => tr("白鹤", "Cranes"),
+    },
+  },
+};
+const PULSE_SCENE_IDS = Object.keys(PULSE_SCENES);
+function pulseScene(id) {
+  return PULSE_SCENES[id] || PULSE_SCENES.pixel;
+}
+/** 一键切换的下一个画风（循环）。 */
+function nextPulseScene(id) {
+  const ids = PULSE_SCENE_IDS;
+  return ids[(ids.indexOf(pulseScene(id).id) + 1) % ids.length];
 }
 
 class CrispPulseView extends ItemView {
@@ -5572,6 +6230,8 @@ class CrispPulseView extends ItemView {
     container.classList.add("crisp-pulse-view");
     container.classList.add("pulse-v2");
     container.classList.toggle("has-banner", !!this.plugin.settings.showHeaderBanner);
+    // 平滑画风（水墨）按屏幕分辨率画，不要像素格放大
+    container.classList.toggle("pulse-scene-smooth", this.scene().smooth);
     if (this.plugin.settings.showHeaderBanner) this.renderBanner(container);
     else { this.bannerResizeObserver?.disconnect(); this.celestialEl = null; this.celestialPosition = null; }
 
@@ -6667,6 +7327,11 @@ class CrispPulseView extends ItemView {
     return this.containerEl.ownerDocument.body.classList.contains("theme-dark") ? "night" : "day";
   }
 
+  /** 顶部天空和底部地平线当前的画风。 */
+  scene() {
+    return pulseScene(this.plugin?.settings?.sceneStyle);
+  }
+
   /* 页脚：和顶部天空呼应的像素地平线。山脊是最近一段时间每天的贡献分，最右边的小灯杆是今天；
      白天灯杆上挂小旗。未激活时只画地形，不读统计。 */
   renderFooter(container, { locked = false } = {}) {
@@ -6699,6 +7364,8 @@ class CrispPulseView extends ItemView {
       if (tempo) void tempo.activateView();
       else new Notice(tr("Crisp Tempo 尚未启用或正在重新加载", "Crisp Tempo is not enabled or is reloading"));
     });
+    // 一键换画风：顶部天空和底部地平线一起换，数据和交互不变
+    link(tr("换画风", "Scene"), () => void this.plugin.cycleSceneStyle());
     link(tr("设置", "Settings"), () => { const setting = this.app.setting; if (setting?.open) { setting.open(); setting.openTabById?.(this.plugin.manifest.id); } });
     const ground = footer.createDiv({ cls: "crisp-pulse-footer-ground" });
     const canvas = ground.createEl("canvas", { attr: { "aria-hidden": "true" } });
@@ -6801,7 +7468,8 @@ class CrispPulseView extends ItemView {
     const sky = this.bannerMode !== "image" ? this.celestialPosition : null;
     const reflection = sky && Number.isFinite(sky.x) ? sky : null;
     this.footerReflectionKey = pulseReflectionKey(reflection, width);
-    paintPulseGround(els.canvas, this.footerMode, profile, dates.length ? groundDayX(dates.length - 1, dates.length, width) : -1,
+    const scene = this.scene();
+    scene.paintGround(els.canvas, this.footerMode, profile, dates.length ? groundDayX(dates.length - 1, dates.length, width) : -1,
       { reflection, stones: streak.map((i) => groundDayX(i, dates.length, width)), weather: weather?.level, season, peakX: snowPeak >= 0 ? groundDayX(snowPeak, dates.length, width) : -1 });
     this.footerData = { dates, values, statuses, profile, width, height, streak, streakLength };
     this.footerPaintedWidth = cssWidth;
@@ -6813,10 +7481,10 @@ class CrispPulseView extends ItemView {
       : tr(`山脊是最近 ${dates.length} 天的贡献`, `The ridge shows the last ${dates.length} days of contributions`);
     const legend = [];
     if (peak >= 0) {
-      legend.push(tr(`峰值 ${Number(dates[peak].slice(5, 7))}月${Number(dates[peak].slice(8))}日，山尖上的小城堡`, `Peak ${pulseMonthDay(Number(dates[peak].slice(5, 7)), Number(dates[peak].slice(8)))}, the little castle on the summit`));
-      legend.push(this.footerMode === "night" ? tr("小灯是今天", "The lamp is today") : tr("小旗是今天", "The flag is today"));
+      legend.push(scene.words.peak(Number(dates[peak].slice(5, 7)), Number(dates[peak].slice(8))));
+      legend.push(scene.words.today(this.footerMode));
     }
-    if (caption && streakLength >= 2) legend.push(tr(`小石子是连续 ${streakLength} 天`, `Pebbles mark a ${streakLength}-day streak`));
+    if (caption && streakLength >= 2) legend.push(scene.words.streak(streakLength));
     // 今天完成的番茄停在右边岸边；数量取 Pulse 自己的专注记录，未激活时不读
     const moored = els.locked ? 0 : dayPomodoros(this.plugin.store?.daily?.[today]).done;
     const harbor = groundHarborSpot(moored, width, height);
@@ -6824,14 +7492,14 @@ class CrispPulseView extends ItemView {
     if (els.harbor) {
       els.harbor.toggleClass("is-visible", !!harbor);
       if (harbor) {
-        const size = paintPulseVoyager(els.harbor, harbor.sprite, this.footerMode);
+        const size = scene.paintVoyager(els.harbor, harbor.sprite, this.footerMode);
         els.harbor.style.width = `${size.w / width * 100}%`;
         els.harbor.style.left = `${harbor.x / width * 100}%`;
         els.harbor.style.top = `${harbor.y / height * 100}%`;
       }
     }
-    if (caption && moored > 0) legend.push(tr(`右边岸边的小船是今天完成的 ${moored} 个番茄`, `Boats at the right shore are today’s ${moored} finished pomodoros`));
-    if (caption) legend.push(tr(`树的颜色是现在的季节：${PULSE_SEASON_LABELS[season][0]}`, `Tree colors follow the season: ${PULSE_SEASON_LABELS[season][1]}`));
+    if (caption && moored > 0) legend.push(scene.words.moored(moored));
+    if (caption) legend.push(scene.words.season(season));
     if (caption && weather) legend.push(tr(`天气是最近 7 天写了 ${weather.active} 天：${PULSE_WEATHER_LABELS[weather.level][0]}`, `The weather is the last 7 days: ${weather.active} active, ${PULSE_WEATHER_LABELS[weather.level][1]}`));
     els.captionText = caption;
     els.legend = legend;
@@ -6877,9 +7545,10 @@ class CrispPulseView extends ItemView {
     const kind = snap.kind !== "break" ? "boat" : snap.phase === "long-break" ? "family" : "duck";
     const ducklings = kind === "family" ? Math.max(1, Math.round(Number(snap.every) || 4)) : 0;
     const { width, height } = this.footerData;
-    const key = `${kind}:${ducklings}:${this.footerMode}:${width}x${height}`;
+    const scene = this.scene();
+    const key = `${scene.id}:${kind}:${ducklings}:${this.footerMode}:${width}x${height}`;
     if (key !== this.voyageKey) {
-      this.voyageSprite = paintPulseVoyager(el, pulseVoyagerSprite(kind, ducklings), this.footerMode);
+      this.voyageSprite = scene.paintVoyager(el, pulseVoyagerSprite(kind, ducklings), this.footerMode);
       this.voyageKey = key;
       el.style.width = `${this.voyageSprite.w / width * 100}%`;
       el.style.setProperty("--pulse-voyager-rows", String(this.voyageSprite.h));
@@ -6911,7 +7580,7 @@ class CrispPulseView extends ItemView {
     this.footerPaperRight = spot ? spot.x + spot.sprite.rows[0].length : null;
     els.paper.toggleClass("is-visible", !!spot);
     if (spot) {
-      const size = paintPulseVoyager(els.paper, spot.sprite, this.footerMode);
+      const size = this.scene().paintVoyager(els.paper, spot.sprite, this.footerMode);
       els.paper.style.width = `${size.w / width * 100}%`;
       els.paper.style.left = `${spot.x / width * 100}%`;
       els.paper.style.top = `${spot.y / height * 100}%`;
@@ -6962,7 +7631,7 @@ class CrispPulseView extends ItemView {
     const px = rect.width / d.width, lake = groundLakeTop(d.height);
     for (let i = 0; i < count; i++) {
       const el = els.ground.createEl("canvas", { cls: "crisp-pulse-sky-event is-lantern", attr: { "aria-hidden": "true" } });
-      const size = paintPulseLantern(el, this.footerMode);
+      const size = this.scene().paintLantern(el, this.footerMode);
       el.style.width = `${size.w * px}px`;
       // 从湖面中段升起，几盏错开位置和时间
       const x = Math.round(d.width * (0.38 + 0.12 * i)), rise = (lake - 18) * px, sway = 3 * px;
@@ -6994,7 +7663,7 @@ class CrispPulseView extends ItemView {
     for (let i = 0; i < count; i++) {
       const box = els.ground.createDiv({ cls: `crisp-pulse-bird${mode === "night" ? " is-firefly" : ""}`, attr: { "aria-hidden": "true" } });
       const art = box.createEl("canvas");
-      const size = paintPulseBird(art, mode);
+      const size = this.scene().paintBird(art, mode);
       box.style.width = `${size.w * px}px`;
       box.style.height = `${size.h * px}px`;
       box.style.left = `${(fromX + i * 3) * px}px`;
@@ -7079,7 +7748,8 @@ class CrispPulseView extends ItemView {
     const win = els.ground.ownerDocument.defaultView;
     const still = !!win.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const night = this.footerMode === "night";
-    const what = night ? tr("流星", "Shooting stars") : tr("彩虹", "Rainbow");
+    const scene = this.scene();
+    const what = night ? tr("流星", "Shooting stars") : scene.words.celebration();
     this.celebrationNote = milestone.reason === "pomodoro"
       ? tr(` · ${what}：今天的 ${milestone.goal} 个番茄目标达成了`, ` · ${what}: today’s goal of ${milestone.goal} pomodoros is done`)
       : tr(` · ${what}：今天的贡献分进了最近 30 天的前四分之一`, ` · ${what}: today’s score is in the top quarter of the last 30 days`);
@@ -7092,7 +7762,7 @@ class CrispPulseView extends ItemView {
       const paths = [[0.12, 0.24, 0], [0.42, 0.18, 900], [0.7, 0.3, 2000]];
       for (const [fx, fy, delay] of paths) {
         const el = els.ground.createEl("canvas", { cls: "crisp-pulse-sky-event is-meteor", attr: { "aria-hidden": "true" } });
-        paintPulseMeteor(el);
+        scene.paintMeteor(el);
         el.style.width = `${PULSE_METEOR_SIZE[0] / d.width * 100}%`;
         el.style.left = `${fx * 100}%`;
         el.style.top = `${fy * 100}%`;
@@ -7105,7 +7775,7 @@ class CrispPulseView extends ItemView {
       duration = 3600;
     } else {
       const el = els.ground.createEl("canvas", { cls: "crisp-pulse-sky-event is-rainbow", attr: { "aria-hidden": "true" } });
-      paintPulseRainbow(el, d.width, d.height);
+      scene.paintCelebration(el, d.width, d.height);
       el.animate?.([{ opacity: 0 }, { opacity: 0.8, offset: 0.12 }, { opacity: 0.8, offset: 0.75 }, { opacity: 0 }], { duration: 10000, easing: "ease-in-out", fill: "both" });
       pieces.push(el);
       duration = 10000;
@@ -7130,13 +7800,15 @@ class CrispPulseView extends ItemView {
       banner.createEl("img", { attr: { src: this.app.vault.getResourcePath(file), alt: "" } });
       return;
     }
-    const canvas = banner.createEl("canvas", { attr: { width: PULSE_SKY_WIDTH, height: PULSE_SKY_HEIGHT } });
     // 天气跟最近 7 天走；未激活时不读统计，保持默认的少云
     let entitled = false;
     try { entitled = pulseEntitled(this.plugin); } catch (_) { /* 授权状态读不到就当未激活 */ }
     this.bannerWeather = (entitled && this.currentWeather()?.level) || "fair";
     this.bannerSeason = this.currentSeason();
-    canvas.getContext("2d").drawImage(getPulseSky(parent.ownerDocument, this.bannerMode, this.bannerWeather, this.bannerSeason), 0, 0);
+    this.bannerScene = this.scene().id;
+    const painted = getPulseSky(parent.ownerDocument, this.bannerMode, this.bannerWeather, this.bannerSeason, this.bannerScene);
+    const canvas = banner.createEl("canvas", { attr: { width: painted.width, height: painted.height } });
+    canvas.getContext("2d").drawImage(painted, 0, 0);
     this.celestialEl = banner.createEl("canvas", { cls: "crisp-pulse-celestial", attr: { width: PULSE_CELESTIAL_SIZE, height: PULSE_CELESTIAL_SIZE } });
     this.updateCelestial(true);
     const win = parent.ownerDocument.defaultView;
@@ -7159,9 +7831,11 @@ class CrispPulseView extends ItemView {
     if (mode !== this.bannerMode) {
       this.bannerMode = mode;
       const sky = banner.querySelector('canvas:not(.crisp-pulse-celestial)');
-      sky?.getContext('2d').drawImage(getPulseSky(doc, mode, this.bannerWeather, this.bannerSeason), 0, 0);
+      const painted = getPulseSky(doc, mode, this.bannerWeather, this.bannerSeason, this.bannerScene);
+      if (sky && (sky.width !== painted.width || sky.height !== painted.height)) { sky.width = painted.width; sky.height = painted.height; }
+      sky?.getContext('2d').drawImage(painted, 0, 0);
     }
-    paintCelestial(el, mode, lunarPhase(now));
+    pulseScene(this.bannerScene).paintCelestial(el, mode, lunarPhase(now));
     const placed = celestialPlacement(now, mode, rect.width, rect.height);
     const { x, y, t } = placed;
     // 多云、起雾时太阳和月亮暗一些，湖里的倒影也跟着淡
@@ -12499,16 +13173,27 @@ class CrispPulseSettingTab extends PluginSettingTab {
         this.plugin.refreshViews();
       }));
 
+    new Setting(containerEl)
+      .setName(tr("顶部和底部的画风", "Scene style"))
+      .addDropdown(drop => {
+        for (const id of PULSE_SCENE_IDS) drop.addOption(id, pulseScene(id).label());
+        drop.setValue(pulseScene(this.plugin.settings.sceneStyle).id).onChange(async value => {
+          this.plugin.settings.sceneStyle = value;
+          await this.plugin.savePluginData();
+          this.plugin.refreshViews();
+        });
+      });
+
     const bannerImage = new Setting(containerEl)
       .setName(tr("自定义横幅图片", "Custom banner image"))
-      .setDesc(tr("留空用像素天空", "Leave empty for the pixel sky"));
+      .setDesc(tr("留空用画风自带的天空", "Leave empty for the scene’s own sky"));
     const bannerStatus = bannerImage.descEl.createDiv({ cls: "crisp-pulse-banner-status" });
     const showBannerStatus = () => {
       const path = this.plugin.settings.headerBannerImage;
       bannerStatus.removeClass("is-warning");
       if (!path) { bannerStatus.setText(""); return; }
       const file = this.plugin.getBannerImageFile();
-      if (!file) { bannerStatus.addClass("is-warning");bannerStatus.setText(tr("找不到这张图片，或格式不支持（png / jpg / webp / gif / avif），暂时显示像素天空。", "Image not found or format not supported (png / jpg / webp / gif / avif); showing the pixel sky for now."));return; }
+      if (!file) { bannerStatus.addClass("is-warning");bannerStatus.setText(tr("找不到这张图片，或格式不支持（png / jpg / webp / gif / avif），暂时显示画风自带的天空。", "Image not found or format not supported (png / jpg / webp / gif / avif); showing the scene’s own sky for now."));return; }
       const probe = new Image();
       probe.onload = () => {
         if (this.plugin.settings.headerBannerImage !== path) return;
@@ -12531,7 +13216,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
       text.setPlaceholder(tr("例如 Assets/banner.jpg", "e.g. Assets/banner.jpg")).setValue(this.plugin.settings.headerBannerImage || "").onChange(saveBannerImage);
       createBannerImageSuggest(this.app, text.inputEl, saveBannerImage);
     });
-    bannerImage.addExtraButton(button => button.setIcon("x").setTooltip(tr("清除，改用像素天空", "Clear and use the pixel sky")).onClick(async () => {
+    bannerImage.addExtraButton(button => button.setIcon("x").setTooltip(tr("清除，改用画风自带的天空", "Clear and use the scene’s own sky")).onClick(async () => {
       await saveBannerImage("");
       this.display();
     }));
