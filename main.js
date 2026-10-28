@@ -36,7 +36,7 @@ const PULSE_ZH = /^zh\b/i.test(PULSE_LANGUAGE);
 const PULSE_HANT = PULSE_ZH && /^zh[-_](tw|hk|mo|hant)\b/i.test(PULSE_LANGUAGE);
 /* 繁体文案由简体文案转出来（OpenCC s2twp：台湾正体 + 台湾用语），表由 scripts/gen-hant.cjs 生成，只收源码里用到的字词。
    分两段按最长匹配替换：s 简→繁，t 台湾用语。插值进来的内容（文件名、标签）也会被转，只影响显示。 */
-const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"e0dfdb3a2a80c484","s":"一只 一隻|一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|头 頭|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|方向 方向|无 無|日历 日曆|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栋 棟|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|楼 樓|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|江面 江面|沉淀 沉澱|没 沒|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|游 遊|游船 遊船|湖面 湖面|满 滿|灯 燈|点 點|烟 煙|烟花 煙花|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風|黄 黃","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
+const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"5c8a6aa19fdb9dd5","s":"一只 一隻|一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|头 頭|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|方向 方向|无 無|日历 日曆|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栋 棟|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|楼 樓|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|江面 江面|沉淀 沉澱|没 沒|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|游 遊|游船 遊船|湖面 湖面|满 滿|灯 燈|点 點|烟 煙|烟花 煙花|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记了 記了|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風|黄 黃","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
 let pulseHantStages = null;
 function pulseHant(text) {
   if (typeof text !== "string" || !/\p{Script=Han}/u.test(text)) return text;
@@ -538,6 +538,8 @@ const DEFAULT_SETTINGS = {
   includeFocusInContribution: true, // v1.3.0: enabled by default for ecosystem integration
   weightFocusMinute: 0.05,
   hasRunBackfill: false,
+  // Crisp Focus 1.9.0 会话日志补记的起点（毫秒时间戳）：只补这之后结束的专注；0 表示还没定，第一次补记时定为当时
+  focusLedgerSince: 0,
   showStatusBarItem: true,
   showHeaderBanner: true,
   showFooterLandscape: true,
@@ -1528,6 +1530,12 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
             && Number.isFinite(x.minutes) && x.minutes >= 0 && x.minutes <= 240 && typeof x.completed === "boolean" && typeof x.pomodoro === "boolean"
             && (x.note === undefined || x.note === null || typeof x.note === "string")).slice(-200);
           if (valid.length !== rec.activity.focusSessions.length) { rec.activity.focusSessions = valid; repairedCount++; }
+          // 会话 id（Pulse 1.34.0 起）用来去重补记；坏了只去掉 id，专注本身保留
+          for (const x of valid) {
+            if (x.sessionId === undefined || (typeof x.sessionId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(x.sessionId))) continue;
+            delete x.sessionId;
+            repairedCount++;
+          }
           // Tempo 任务字段成对出现；任一项不合规就两项一起去掉，专注本身保留
           for (const x of valid) {
             if (x.taskId === undefined && x.taskTitle === undefined) continue;
@@ -1866,6 +1874,8 @@ class CrispPulsePlugin extends Plugin {
       this.focusAdapter.attach();
       await this.initializeSnapshots();
       if (this.stopped) return;
+      // Pulse 停用、重载期间结束的专注只在 Crisp Focus 的会话日志里
+      this.catchUpFocusSessionsIfChanged();
       this.registerVaultEvents();
       // Obsidian 关着或 Pulse 停用时删掉的当天新建笔记，启动时补一次撤回
       if (this.rollbackSameDayCreations((path) => !this.app.vault.getAbstractFileByPath(path))) {
@@ -2338,24 +2348,11 @@ class CrispPulsePlugin extends Plugin {
       this.refreshMemoComposerStatus();
     }
     if (event.kind === "focus" && (event.type === "complete" || event.type === "stop")) {
-      const completed = event.type === "complete";
-      const minutes = completed ? Math.max(1, Math.round(Number(event.plannedMinutes) || 0)) : Math.floor((Number(event.elapsedMs) || 0) / 60000);
-      // 不到 1 分钟就结束的不留记录
-      if (completed || minutes >= 1) {
-        const started = new Date(Number(event.startedAt) || Date.now());
-        const today = this.getOrCreateTodayRecord();
-        if (!Array.isArray(today.activity.focusSessions)) today.activity.focusSessions = [];
-        // 跨零点的专注记在结束那天，开始时刻按当天 00:00 记，免得排到当天深夜
-        const sameDay = dateKey(started) === getTodayKey();
-        today.activity.focusSessions.push({
-          at: sameDay ? `${String(started.getHours()).padStart(2, "0")}:${String(started.getMinutes()).padStart(2, "0")}` : "00:00",
-          minutes: Math.min(240, minutes), completed, pomodoro: !!event.pomodoro,
-          note: typeof event.notePath === "string" ? event.notePath : null,
-          // Focus 1.7.0（apiVersion 2）起事件带任务；只认 Tempo 的任务，点开时交给 Tempo 定位
-          ...(Number(event.apiVersion) >= 2 && event.task?.source === "crisp-tempo" ? focusSessionTask(event.task.id, event.task.title, { clip: true }) : null),
-        });
+      // 已经从 Focus 的会话日志补记过的，不再按今天记一次
+      const ended = this.recordedFocusSessionIds().has(event.id) ? null : this.appendFocusSession(event, new Date());
+      if (ended) {
         this.dirty = true;
-        if (completed) await this.handleFocusSessionCompleted(Math.min(240, minutes), { quiet: !!event.pomodoro });
+        if (ended.completed) await this.handleFocusSessionCompleted(ended.minutes, { quiet: !!event.pomodoro });
         else { await this.savePluginData(); this.refreshViews(); }
       } else this.refreshViewsAfterFocus();
     } else if (event.type === "stop" || event.type === "skip" || event.type === "complete") {
@@ -2366,13 +2363,105 @@ class CrispPulsePlugin extends Plugin {
     this.updateStatusBar();
   }
 
+  /**
+   * 把一段结束的专注记进它结束那天：实时事件按现在，补记按日志里的结束时刻。不到 1 分钟就结束的不记，返回 null；
+   * 只写这一条记录，专注分钟和贡献分由调用方处理。
+   */
+  appendFocusSession(event, endedAt) {
+    const completed = event.type === "complete";
+    const minutes = completed ? Math.max(1, Math.round(Number(event.plannedMinutes) || 0)) : Math.floor((Number(event.elapsedMs) || 0) / 60000);
+    if (!completed && minutes < 1) return null;
+    const started = new Date(Number(event.startedAt) || endedAt.getTime());
+    const day = dateKey(endedAt);
+    const record = this.getOrCreateRecord(day);
+    if (!Array.isArray(record.activity.focusSessions)) record.activity.focusSessions = [];
+    const sessionId = typeof event.id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(event.id) ? event.id : null;
+    // 跨零点的专注记在结束那天，开始时刻按当天 00:00 记，免得排到当天深夜
+    const sameDay = dateKey(started) === day;
+    record.activity.focusSessions.push({
+      at: sameDay ? `${String(started.getHours()).padStart(2, "0")}:${String(started.getMinutes()).padStart(2, "0")}` : "00:00",
+      minutes: Math.min(240, minutes), completed, pomodoro: !!event.pomodoro,
+      note: typeof event.notePath === "string" ? event.notePath : null,
+      ...(sessionId ? { sessionId } : null),
+      // Focus 1.7.0（apiVersion 2）起事件带任务；只认 Tempo 的任务，点开时交给 Tempo 定位
+      ...(Number(event.apiVersion) >= 2 && event.task?.source === "crisp-tempo" ? focusSessionTask(event.task.id, event.task.title, { clip: true }) : null),
+    });
+    return { day, record, completed, minutes: Math.min(240, minutes) };
+  }
+
+  /** 已经记下的专注会话 id（1.34.0 之前的记录没有 id）。 */
+  recordedFocusSessionIds() {
+    const ids = new Set();
+    for (const record of Object.values(this.store?.daily || {})) {
+      for (const x of record?.activity?.focusSessions || []) if (x?.sessionId) ids.add(x.sessionId);
+    }
+    return ids;
+  }
+
+  /**
+   * Crisp Focus 1.9.0（focusApiVersion 3）起，结束的专注先记进 Focus 的会话日志。Pulse 停用、重载、还没加载时错过的
+   * 结束事件，按日志补记到它结束那天：完成的计入专注分钟和贡献分，中断的只记录。按会话 id 去重，补几遍都只记一次。
+   * 第一次只把现在定为起点：之前的专注旧版 Pulse 已经实时记过，旧记录没有 id，补记会记成两份。
+   * 返回补记了几段。
+   */
+  async catchUpFocusSessions() {
+    if (!this.settings.enableCrispFocusSync || this.stopped || this.storeLoadFailed || !this.store?.daily) return 0;
+    const focus = this.focusAdapter?.getFocusPlugin?.();
+    if (!focus || !(Number(focus.focusApiVersion) >= 3) || typeof focus.getSessionLog !== "function") return 0;
+    let sessions;
+    try { sessions = focus.getSessionLog()?.sessions; } catch (_) { return 0; } // Focus 重载中：下次再补
+    if (!Array.isArray(sessions)) return 0;
+    if (!(Number(this.settings.focusLedgerSince) > 0)) {
+      this.settings.focusLedgerSince = Date.now();
+      await this.savePluginData();
+      return 0;
+    }
+    const since = Number(this.settings.focusLedgerSince);
+    const seen = this.recordedFocusSessionIds();
+    const touched = new Set();
+    let added = 0;
+    for (const event of sessions) {
+      if (!event || event.kind !== "focus" || (event.type !== "complete" && event.type !== "stop")) continue;
+      const endedAt = Number(event.at);
+      if (!(endedAt > since) || typeof event.id !== "string" || seen.has(event.id)) continue;
+      const ended = this.appendFocusSession(event, new Date(endedAt));
+      if (!ended) continue;
+      seen.add(event.id);
+      if (ended.completed) ended.record.activity.focusMinutes = (ended.record.activity.focusMinutes || 0) + ended.minutes;
+      touched.add(ended.record);
+      added++;
+    }
+    if (!added) return 0;
+    for (const record of touched) this.recomputeScore(record);
+    this.dirty = true;
+    await this.savePluginData();
+    this.updateStatusBar();
+    this.refreshViews();
+    new Notice(tr(`Crisp Pulse：补记了 ${added} 段 Crisp Focus 专注`, `Crisp Pulse: recorded ${plural(added, "Crisp Focus session")} missed earlier`));
+    return added;
+  }
+
   /** 每 30 秒：结算闲置的编辑会话；过了零点时没有输入、没有待保存数据也要换到新的一天（状态栏、看板、crisp-pulse:state）。 */
   maintenanceTick() {
     void this.checkIdleSessions();
+    this.catchUpFocusSessionsIfChanged();
     const day = getTodayKey();
     if (this.maintenanceDay && day !== this.maintenanceDay) this.refreshViews();
     else if (this.focusAdapter?.isFocusRunning()) this.updateStatusBar();
     this.maintenanceDay = day;
+  }
+
+  /** 只在 Focus 会话日志的最新 seq 变了时补记（Focus 后启用、重载后），平时不扫。 */
+  catchUpFocusSessionsIfChanged() {
+    let latest = null;
+    try {
+      const focus = this.settings.enableCrispFocusSync ? this.focusAdapter?.getFocusPlugin?.() : null;
+      const sessions = Number(focus?.focusApiVersion) >= 3 ? focus.getSessionLog?.()?.sessions : null;
+      if (Array.isArray(sessions)) latest = `${sessions.length}:${sessions[sessions.length - 1]?.seq ?? 0}`;
+    } catch (_) { return; }
+    if (latest === null || latest === this.focusLedgerChecked) return;
+    this.focusLedgerChecked = latest;
+    void this.catchUpFocusSessions();
   }
 
   /** Crisp Focus 先发结束、跳过事件，再清空自己的会话状态：等它改完再重画，否则看板（番茄卡片、湖面上的船）读到的还是旧状态。 */
@@ -13882,6 +13971,8 @@ class CrispPulseSettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.enableCrispFocusSync).onChange(async (val) => {
           this.plugin.settings.enableCrispFocusSync = val;
           if (val) {
+            // 关着联动期间的专注不补记
+            this.plugin.settings.focusLedgerSince = Date.now();
             this.plugin.focusAdapter?.attach();
           } else {
             this.plugin.focusAdapter?.detach();

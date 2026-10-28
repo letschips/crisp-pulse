@@ -2735,7 +2735,7 @@ test('a completed pomodoro is recorded and scored; an interrupted one is recorde
   await p.handleFocusSessionEvent(focusEvent('complete', { completed: true, elapsedMs: 25 * 60000 }));
   let today = p.getOrCreateTodayRecord();
   assert.equal(today.activity.focusMinutes, 25, '同一个事件只记一次');
-  assert.deepEqual(JSON.parse(JSON.stringify(today.activity.focusSessions)), [{ at: '11:30', minutes: 25, completed: true, pomodoro: true, note: 'notes/draft.md' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(today.activity.focusSessions)), [{ at: '11:30', minutes: 25, completed: true, pomodoro: true, note: 'notes/draft.md', sessionId: 's1' }]);
   const score = today.contribution.score;
   await p.handleFocusSessionEvent(focusEvent('stop', { id: 's2', completed: false, elapsedMs: 12 * 60000 + 5000 }));
   await p.handleFocusSessionEvent(focusEvent('stop', { id: 's3', completed: false, elapsedMs: 40000 }));
@@ -2804,8 +2804,8 @@ test('a focus session started from a Tempo task records the task id and title, s
   await p.handleFocusSessionEvent(focusEvent('stop', { apiVersion: 2, id: 's2', completed: false, elapsedMs: 10 * 60000, task }));
   const today = p.getOrCreateTodayRecord();
   assert.deepEqual(JSON.parse(JSON.stringify(today.activity.focusSessions)), [
-    { at: '11:30', minutes: 25, completed: true, pomodoro: true, note: 'notes/draft.md', taskId: 'task_A-1', taskTitle: '写 Pulse 发布说明' },
-    { at: '11:30', minutes: 10, completed: false, pomodoro: true, note: 'notes/draft.md', taskId: 'task_A-1', taskTitle: '写 Pulse 发布说明' },
+    { at: '11:30', minutes: 25, completed: true, pomodoro: true, note: 'notes/draft.md', sessionId: 's1', taskId: 'task_A-1', taskTitle: '写 Pulse 发布说明' },
+    { at: '11:30', minutes: 10, completed: false, pomodoro: true, note: 'notes/draft.md', sessionId: 's2', taskId: 'task_A-1', taskTitle: '写 Pulse 发布说明' },
   ]);
   assert.equal(today.activity.focusMinutes, 25, '中断的仍只记录不计分');
 });
@@ -3270,4 +3270,82 @@ test('memo changes announce themselves so other plugins can re-read the counts',
   const memoEvents = fired.filter(e => e.name === 'crisp-pulse:state' && e.payload.reason === 'memos');
   assert.equal(memoEvents.length, 1);
   assert.equal(memoEvents[0].payload.apiVersion, 1);
+});
+
+/* 从 Crisp Focus 的会话日志补记（Focus 1.9.0，focusApiVersion 3）。失败模式：
+   - Pulse 停用、重载或还没加载时结束的专注，事件错过就永远没记。
+   - 升级前旧版 Pulse 已经实时记过的专注（旧记录没有会话 id）被补记成第二份。
+   - 补记按「今天」记，昨天结束的专注算到今天；中断的被补记计分。
+   - 实时事件和补记各记一次；补记跑两遍记两遍。
+   - 关掉 Focus 联动期间的专注，重新打开后被补进来。 */
+function ledgerEntry(id, startedAt, endedAt, extra = {}) {
+  return { apiVersion: 3, type: 'complete', id, kind: 'focus', phase: 'focus', pomodoro: true, round: 1, plannedMinutes: 25, startedAt, at: endedAt, completed: true, elapsedMs: 25 * 60000, notePath: null, task: null, seq: 1, ...extra };
+}
+
+test('sessions missed while Pulse was off are caught up from the Focus log, once, on the day they ended', async () => {
+  const { p, advance } = setup();await p.loadPluginData();
+  p.settings.enableCrispFocusSync = true;p.settings.includeFocusInContribution = true;
+  const at = (d, h, m) => new Date(2026, 8, d, h, m).getTime();
+  const sessions = [ledgerEntry('old', at(8, 11, 0), at(8, 11, 25))];
+  const focus = { focusApiVersion: 3, getSessionLog: () => ({ apiVersion: 3, sessions: sessions.map((x) => ({ ...x })) }) };
+  p.app.plugins.getPlugin = (id) => (id === 'crisp-focus' ? focus : null);
+
+  assert.equal(await p.catchUpFocusSessions(), 0, '第一次只定起点，不补以前的');
+  assert.equal(p.settings.focusLedgerSince, at(8, 12, 0));
+  assert.equal(p.getOrCreateTodayRecord().activity.focusSessions, undefined, '升级前的专注旧版已经记过');
+
+  advance(30 * 60000); // 12:30
+  const live = ledgerEntry('L', at(8, 12, 5), at(8, 12, 30), { seq: 2 });
+  sessions.push(live);
+  await p.handleFocusSessionEvent(live);
+  sessions.push(ledgerEntry('M1', at(8, 11, 55), at(8, 12, 20), { seq: 3, task: { source: 'crisp-tempo', id: 'task-1', title: '写方案' } }));
+  const scoreBefore = p.store.daily['2026-09-08'].contribution.score;
+
+  advance(13 * 3600e3); // 9/9 01:30
+  sessions.push(ledgerEntry('M2', at(8, 23, 55), at(9, 0, 5), { seq: 4, type: 'stop', completed: false, elapsedMs: 9 * 60000 + 3000 }));
+  assert.equal(await p.catchUpFocusSessions(), 2);
+  const sep8 = p.store.daily['2026-09-08'];
+  assert.deepEqual(JSON.parse(JSON.stringify(sep8.activity.focusSessions.map((x) => [x.sessionId, x.at, x.minutes, x.taskId ?? null]))),
+    [['L', '12:05', 25, null], ['M1', '11:55', 25, 'task-1']]);
+  assert.equal(sep8.activity.focusMinutes, 50, '补记的完成番茄计入它结束那天');
+  assert.ok(sep8.contribution.score > scoreBefore, '那天的贡献分重算');
+  const sep9 = p.store.daily['2026-09-09'];
+  assert.deepEqual(JSON.parse(JSON.stringify(sep9.activity.focusSessions)), [{ at: '00:00', minutes: 9, completed: false, pomodoro: true, note: null, sessionId: 'M2' }]);
+  assert.equal(sep9.activity.focusMinutes || 0, 0, '中断的只记录不计分');
+
+  assert.equal(await p.catchUpFocusSessions(), 0, '补记两遍不会多记');
+  await p.handleFocusSessionEvent(sessions[2]);
+  assert.equal(sep9.activity.focusSessions.length, 1, '已补记的会话再来实时事件也不重复');
+  assert.equal(sep8.activity.focusSessions.length, 2);
+
+  const saved = JSON.parse(JSON.stringify(p.store));
+  const reloaded = setup().helpers.validateAndRepairStore(saved);
+  assert.equal(reloaded.store.daily['2026-09-08'].activity.focusSessions[1].sessionId, 'M1', '会话 id 写盘后读回');
+});
+
+test('no catch-up from an older Focus, a failing log, or while the Focus integration is off', async () => {
+  const { p } = setup();await p.loadPluginData();
+  p.settings.enableCrispFocusSync = true;
+  const now = Date.now();
+  let focus = { focusApiVersion: 2, getSessionLog: () => ({ sessions: [ledgerEntry('x', now - 60e3, now)] }) };
+  p.app.plugins.getPlugin = (id) => (id === 'crisp-focus' ? focus : null);
+  assert.equal(await p.catchUpFocusSessions(), 0);
+  focus = { focusApiVersion: 3, getSessionLog: () => { throw new Error('reloading'); } };
+  assert.equal(await p.catchUpFocusSessions(), 0);
+  assert.equal(p.settings.focusLedgerSince || 0, 0, '读不到日志时不定起点');
+  focus = { focusApiVersion: 3, getSessionLog: () => ({ sessions: [ledgerEntry('y', now + 1000, now + 60e3)] }) };
+  p.settings.enableCrispFocusSync = false;
+  assert.equal(await p.catchUpFocusSessions(), 0);
+  assert.equal(p.getOrCreateTodayRecord().activity.focusSessions, undefined);
+});
+
+test('a damaged session id is dropped and the session kept', () => {
+  const { helpers } = setup();
+  const base = { at: '09:00', minutes: 25, completed: true, pomodoro: true, note: null };
+  const store = { version: 1, settings: {}, daily: { '2026-09-08': { date: '2026-09-08', quality: 'recorded', contribution: { score: 3 }, activity: { activeMinutes: 5, focusMinutes: 25, focusSessions: [{ ...base, sessionId: 'ok-1' }, { ...base, sessionId: 42 }, { ...base, sessionId: '' }] }, files: {} } } };
+  const list = helpers.validateAndRepairStore(store).store.daily['2026-09-08'].activity.focusSessions;
+  assert.equal(list.length, 3);
+  assert.equal(list[0].sessionId, 'ok-1');
+  assert.equal('sessionId' in list[1], false);
+  assert.equal('sessionId' in list[2], false);
 });
