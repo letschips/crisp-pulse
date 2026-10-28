@@ -8,7 +8,9 @@
    - 像素城市的楼顶没落在 groundRidgeRow 那一行，或者分楼时一天对不上一栋。
    - 样式表还没生效时地面高度由画布撑开：高分辨率画风每次重画都把画布放大，越画越大直到内存不够。
    - 像素城市沿用山脊的跨日平滑：孤立的高分日被压矮、一段连续略低分的日子反而更高，峰值塔不是最高；悬停提示指着加高前的楼顶。
-   - 像素城市里历史峰值塔和普通楼也亮红灯，「楼顶红灯是今天」不唯一。 */
+   - 像素城市里历史峰值塔和普通楼也亮红灯，「楼顶红灯是今天」不唯一。
+   - 像素城市的江岸比湖面、水墨低，楼群和地标正好落在看板工具栏后面：夜里亮窗透过标签文字，电视塔压在菜单按钮上。
+     江岸抬到和另外两种画风同一行时，地标不能顶出天空。 */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -204,4 +206,25 @@ test('only today’s building wears the red rooftop light in the city', () => {
   const todayX = F.groundDayX(v.footerData.dates.length - 1, v.footerData.dates.length, v.footerData.width);
   assert.ok(reds.length > 0, '今天有红灯');
   assert.ok(reds.every((x) => Math.abs(x - todayX) <= 1), `红灯只在今天那栋楼上（今天 x=${todayX}，红色出现在 ${[...new Set(reds)].join(',')}）`);
+});
+
+test('the city skyline stands on the same waterline as the other styles, landmarks inside the sky', () => {
+  // 抓 cityLandmarks 的江岸行和它画到的最高一行：函数声明是 vm 上下文的全局属性，替换后天空绘制会走到这里
+  const original = context.cityLandmarks;
+  let base = null, top = Infinity;
+  context.cityLandmarks = (buf, p, b, hash, mode) => {
+    base = b;
+    const set = buf.set;
+    buf.set = (x, y, ...rest) => { top = Math.min(top, y); return set.call(buf, x, y, ...rest); };
+    try { return original(buf, p, b, hash, mode); } finally { buf.set = set; }
+  };
+  try {
+    for (const mode of ['day', 'night']) {
+      base = null; top = Infinity;
+      F.pulseScene('city').paintSky(canvas(900, 112), mode, 'clear', 'summer');
+      assert.ok(base !== null, '城市天空画了地标');
+      assert.ok(base + 1 <= Math.round(112 * 0.6), `江岸在第 ${base + 1} 行，湖面和水墨在第 ${Math.round(112 * 0.6)} 行`);
+      assert.ok(top >= 2, `${mode}：地标顶到第 ${top} 行，顶出了天空`);
+    }
+  } finally { context.cityLandmarks = original; }
 });

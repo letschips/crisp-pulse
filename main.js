@@ -543,7 +543,7 @@ const DEFAULT_SETTINGS = {
   showFooterLandscape: true,
   memoPomodoroPrompt: true, // during a Crisp Focus pomodoro break, the memo composer asks what the round produced // pixel horizon at the bottom of the Pulse view; the ridge is recent daily contribution
   headerBannerImage: "", // vault path of a custom banner image; empty uses the generated sky
-  sceneStyle: "pixel", // 顶部天空和底部地平线的画风："pixel" 像素湖面 | "ink" 水墨山水
+  sceneStyle: "pixel", // 顶部天空和底部地平线的画风："pixel" 像素湖面 | "ink" 水墨山水 | "city" 像素城市
   celebratedOn: "", // "YYYY-MM-DD"：这一天达标的流星/彩虹已经在页脚放过，不再重复
 
   // --- 1.1 Credible Analytics Settings ---
@@ -6220,11 +6220,11 @@ function cityLandmarks(buf, p, base, hash, mode) {
   for (let y = base - 22; y >= base - 35; y--) { put(tvX - 1, y, p.spire); put(tvX, y, pixelMix(p.spire, p.body, 0.3)); put(tvX + 1, y, p.spire); }
   sphere(base - 37, 3);
   for (let y = base - 41; y >= base - 43; y--) for (let x = -1; x <= 1; x++) put(tvX + x, y, p.pearl, night ? 0.6 : 0);
-  for (let y = base - 44; y >= base - 54; y--) put(tvX, y, p.spire);
-  put(tvX, base - 55, p.red, 1);
+  for (let y = base - 44; y >= base - 48; y--) put(tvX, y, p.spire);
+  put(tvX, base - 49, p.red, 1);
   // 宝塔式塔楼：一节节往上收，顶上一根尖
   const jmX = 52;
-  for (let y = base; y >= base - 48; y--) {
+  for (let y = base; y >= base - 42; y--) {
     const tier = Math.floor((base - y) / 6), half = Math.max(1, 5 - Math.floor(tier / 2));
     for (let x = -half; x <= half; x++) {
       const window = (x + half) % 2 === 1 && (base - y) % 2 === 0 && Math.abs(x) < half;
@@ -6232,9 +6232,9 @@ function cityLandmarks(buf, p, base, hash, mode) {
       put(jmX + x, y, on ? p.warm : (base - y) % 6 === 0 ? pixelMix(p.gold, p.body, 0.2) : pixelMix(p.body, p.gold, x < 0 ? 0.35 : 0.2), on ? 1 : 0);
     }
   }
-  for (let y = base - 49; y >= base - 56; y--) put(jmX, y, p.gold);
+  for (let y = base - 43; y >= base - 48; y--) put(jmX, y, p.gold);
   // 开瓶器：两边往上收，顶上留一道横梁，下面开一个梯形口（透出后面的天）
-  const wfX = 72, wfH = 58;
+  const wfX = 72, wfH = 52;
   for (let y = base; y >= base - wfH; y--) {
     const t = (base - y) / wfH, half = Math.round(5.5 - t * 2.5);
     for (let x = -half; x <= half; x++) {
@@ -6245,7 +6245,7 @@ function cityLandmarks(buf, p, base, hash, mode) {
     }
   }
   // 螺旋超高塔：底宽顶窄，一道亮线绕着往上转，顶上斜切；夜里顶上一盏红灯
-  const stX = 92, stH = 70;
+  const stX = 92, stH = 62;
   for (let y = base; y >= base - stH; y--) {
     const t = (base - y) / stH, half = 6.4 - t * 3.6;
     const cut = y < base - stH + 4 ? (base - stH + 4 - y) : 0;
@@ -6267,7 +6267,8 @@ function paintCitySky(canvas, mode = "night", weather = "fair", season = "summer
   const p = base, haze = sky.haze, hazeColor = pixelMix(p.cloudShadow, p.skyHorizon, 0.5);
   const { hash, noise, fbm } = pulsePixelNoise(23);
   const mix = pixelMix, clamp01 = pixelClamp01;
-  const horizon = Math.round(h * 0.7);
+  // 江岸和湖面、水墨同一行：楼群立在看板工具栏上方，工具栏后面是江面
+  const horizon = Math.round(h * 0.6);
   const buf = cityBuffer(w, h);
   // 天：上深下暖，黄昏的地平线是橙粉色，夜里是城市灯光映红的一层；云和像素湖面同一种画法
   for (let y = 0; y < horizon; y++) for (let x = 0; x < w; x++) {
