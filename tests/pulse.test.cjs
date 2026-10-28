@@ -3349,3 +3349,82 @@ test('a damaged session id is dropped and the session kept', () => {
   assert.equal('sessionId' in list[1], false);
   assert.equal('sessionId' in list[2], false);
 });
+
+/* 记账身份与展示明细分开（Pulse 1.34.1，审查 F3）。失败模式：
+   - 一天超过 200 段时明细在加载时被裁掉，最早几段的会话 id 跟着没了，重载后补读把它们再记一遍，分钟和分数翻倍。
+   - 记账身份只增不减，存储越来越大；或者清理得太狠，Focus 日志里还在的会话又被补进来。
+   - Focus 日志已经把 Pulse 没见过的会话挤掉了，Pulse 却不说，用户以为都记上了。 */
+test('caught-up sessions are not counted again after the day list is trimmed on reload', async () => {
+  const { p, helpers } = setup();await p.loadPluginData();
+  p.settings.enableCrispFocusSync = true;p.settings.includeFocusInContribution = true;
+  const at = (min) => new Date(2026, 8, 8, 13, 0).getTime() + min * 60000;
+  const sessions = Array.from({ length: 201 }, (_, i) => ledgerEntry(`s-${i}`, at(i * 2), at(i * 2 + 1), { seq: i + 1, plannedMinutes: 1 }));
+  const focus = { focusApiVersion: 3, getSessionLog: () => ({ apiVersion: 3, sessions: sessions.map((x) => ({ ...x })) }) };
+  p.app.plugins.getPlugin = (id) => (id === 'crisp-focus' ? focus : null);
+  await p.catchUpFocusSessions(); // sets the starting point at 12:00
+  assert.equal(await p.catchUpFocusSessions(), 201);
+  assert.equal(p.store.daily['2026-09-08'].activity.focusMinutes, 201);
+
+  for (let round = 0; round < 2; round++) {
+    const { store } = helpers.validateAndRepairStore(JSON.parse(JSON.stringify(p.store)));
+    assert.equal(store.daily['2026-09-08'].activity.focusSessions.length, 200, '展示明细照旧只留 200 段');
+    p.store = store;p.settings = store.settings;
+    assert.equal(await p.catchUpFocusSessions(), 0, `第 ${round + 1} 次重载后不再补记`);
+    assert.equal(p.store.daily['2026-09-08'].activity.focusMinutes, 201);
+  }
+});
+
+test('the ledger keeps every id still in the Focus log and drops old ones beyond it', async () => {
+  const { p, advance } = setup();await p.loadPluginData();
+  p.settings.enableCrispFocusSync = true;
+  const now = advance(0); // the plugin's clock, not the machine's
+  let sessions = [];
+  const focus = { focusApiVersion: 3, getSessionLog: () => ({ apiVersion: 3, sessions: sessions.map((x) => ({ ...x })) }) };
+  p.app.plugins.getPlugin = (id) => (id === 'crisp-focus' ? focus : null);
+  await p.catchUpFocusSessions();
+  advance(60000);
+  sessions = [ledgerEntry('a', now + 1000, now + 30000, { seq: 1 }), ledgerEntry('b', now + 31000, now + 50000, { seq: 2 })];
+  assert.equal(await p.catchUpFocusSessions(), 2);
+  assert.deepEqual(Object.keys(p.store.focusLedger.seen).sort(), ['a', 'b']);
+
+  // 40 days later Focus has dropped "a"; its id is old and outside the log, so it can go. "b" is still in the log.
+  advance(40 * 86400e3);
+  const later = advance(0);
+  sessions = [sessions[1], ledgerEntry('c', later - 20000, later - 1000, { seq: 3 })];
+  assert.equal(await p.catchUpFocusSessions(), 1);
+  assert.deepEqual(Object.keys(p.store.focusLedger.seen).sort(), ['b', 'c']);
+  assert.equal(p.store.focusLedger.lastSeq, 3);
+});
+
+test('sessions Focus dropped before Pulse saw them are reported, not silently missing', async () => {
+  const { p, advance } = setup();await p.loadPluginData();
+  p.settings.enableCrispFocusSync = true;
+  const now = advance(0);
+  let sessions = [ledgerEntry('a', now - 60000, now - 30000, { seq: 5 })];
+  const focus = { focusApiVersion: 3, getSessionLog: () => ({ apiVersion: 3, sessions: sessions.map((x) => ({ ...x })) }) };
+  p.app.plugins.getPlugin = (id) => (id === 'crisp-focus' ? focus : null);
+  await p.catchUpFocusSessions();
+  assert.equal(p.store.focusLedger.lastSeq, 5, '定起点时也记下看到的位置');
+  advance(3600e3);
+  const later = advance(0);
+  sessions = [ledgerEntry('j', later - 60000, later - 1000, { seq: 10 })];
+  assert.equal(await p.catchUpFocusSessions(), 1);
+  assert.equal(p.lastFocusLedgerGap, 4, 'seq 6–9 已经被 Focus 挤掉');
+  sessions.push(ledgerEntry('k', later - 500, later - 100, { seq: 11 }));
+  await p.catchUpFocusSessions();
+  assert.equal(p.lastFocusLedgerGap, 0, '连续时不报');
+});
+
+test('a damaged focus ledger is reset to empty without touching the days', () => {
+  const { helpers } = setup();
+  const day = { date: '2026-09-08', quality: 'recorded', contribution: { score: 3 }, activity: { activeMinutes: 5, focusMinutes: 0 }, files: {} };
+  const ok = helpers.validateAndRepairStore({ version: 1, settings: {}, daily: { '2026-09-08': day }, focusLedger: { seen: { good: 5, 'bad id!': 6, worse: 'x' }, lastSeq: 7 } });
+  assert.deepEqual(JSON.parse(JSON.stringify(ok.store.focusLedger)), { seen: { good: 5 }, lastSeq: 7 });
+  const broken = helpers.validateAndRepairStore({ version: 1, settings: {}, daily: { '2026-09-08': day }, focusLedger: 'nope' });
+  assert.deepEqual(JSON.parse(JSON.stringify(broken.store.focusLedger)), { seen: {}, lastSeq: 0 });
+  assert.ok(broken.store.daily['2026-09-08']);
+  // 1.34.0 stored ids only in the day list; they move into the ledger so trimming the list cannot lose them.
+  const old = { ...day, activity: { ...day.activity, focusSessions: [{ at: '09:00', minutes: 25, completed: true, pomodoro: true, note: null, sessionId: 'from-1340' }] } };
+  const migrated = helpers.validateAndRepairStore({ version: 1, settings: {}, daily: { '2026-09-08': old } });
+  assert.equal(migrated.store.focusLedger.seen['from-1340'], new Date(2026, 8, 8).getTime());
+});
