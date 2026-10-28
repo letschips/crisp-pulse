@@ -457,6 +457,22 @@
 /* 当日专注：时刻 · 分钟 · Tempo 任务名，右侧番茄/单次、中断 */
 /* 一天顶多十几段，整列展开，免得手机上页面里再套一个小滚动区 */
 .pulse-day-focus-list { max-height: none; overflow: visible; }
+/* 当日明细的长列表折叠：超出前 5 条的行藏起来，末尾一个文字按钮展开/收起；笔记列表也随之去掉内部滚动区 */
+.crisp-pulse-view .crisp-pulse-file-list-wrap:has(> .pulse-day-list-more) > .crisp-pulse-file-list { max-height: none; overflow: visible; }
+.crisp-pulse-file-list > .is-folded { display: none; }
+.crisp-pulse-view button.pulse-day-list-more {
+  align-self: flex-start;
+  height: auto;
+  padding: 2px 0;
+  background: none;
+  box-shadow: none;
+  border: none;
+  color: var(--pulse-ui-accent, var(--text-accent));
+  font-size: 12px;
+  cursor: pointer;
+}
+.crisp-pulse-view button.pulse-day-list-more:hover { text-decoration: underline; }
+.crisp-pulse-view button.pulse-day-list-more:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; border-radius: 2px; }
 .pulse-day-focus-item {
   display: flex;
   align-items: center;

@@ -9443,6 +9443,7 @@ class CrispPulseView extends ItemView {
         }
         row.createSpan({ cls: "pulse-day-focus-kind", text: [s.pomodoro ? tr("番茄", "Pomodoro") : tr("单次专注", "Single session"), s.completed ? "" : tr("中断", "Interrupted")].filter(Boolean).join(" · ") });
       }
+      this.foldDayList(focusList, "focus");
     }
 
     // 当天在 Crisp Tempo 里完成的任务：Tempo 异步给数据，先占位，有任务才显示；只展示、不计分
@@ -9468,6 +9469,7 @@ class CrispPulseView extends ItemView {
           });
           if (r.project) row.createSpan({ cls: "pulse-day-focus-kind", text: r.project });
         }
+        this.foldDayList(list, "tempo");
         tempoWrap.show?.();
       });
     }
@@ -9516,7 +9518,31 @@ class CrispPulseView extends ItemView {
           this.app.workspace.openLinkText(fp, "");
         });
       }
+      this.foldDayList(fileList, "files");
     }
+  }
+
+  /** 当日明细的长列表只露出前 5 条，末尾一个按钮展开其余；展开状态在重绘后保留，换一天再折回去。 */
+  foldDayList(list, key) {
+    const keep = 5;
+    const hidden = Array.from(list.children).slice(keep);
+    // 只多出一条就不折，折了反而多点一下
+    if (hidden.length < 2) return;
+    if (this.dayListDate !== this.selectedDate) { this.dayListDate = this.selectedDate; this.dayListOpen = new Set(); }
+    const toggle = list.insertAdjacentElement("afterend", createEl("button", { cls: "pulse-day-list-more", attr: { type: "button" } }));
+    const apply = (open) => {
+      for (const row of hidden) row.toggleClass("is-folded", !open);
+      toggle.setText(open ? tr("收起", "Show less") : tr(`展开其余 ${hidden.length} 条`, `Show ${hidden.length} more`));
+      toggle.setAttr("aria-expanded", String(open));
+    };
+    apply(this.dayListOpen.has(key));
+    toggle.addEventListener("click", () => {
+      const open = !this.dayListOpen.has(key);
+      if (open) this.dayListOpen.add(key); else this.dayListOpen.delete(key);
+      apply(open);
+      // 收起后按钮会往上跳一大截，把它带回视野里
+      if (!open) toggle.scrollIntoView({ block: "nearest" });
+    });
   }
 
   // --- Knowledge review: period → clues → materials and charts on one side, the review itself on the other ---
