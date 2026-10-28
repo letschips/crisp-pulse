@@ -3861,6 +3861,32 @@ class CrispPulsePlugin extends Plugin {
     try { return !!this.app.plugins?.enabledPlugins?.has?.("crisp-tempo"); } catch (_) { return false; }
   }
 
+  /**
+   * Crisp Tempo 0.10.0 起：某天在 Tempo 里完成的任务和子任务，供当日明细列出。只展示，不进「完成任务」和贡献分
+   * （新建再勾掉就能加分）。Tempo 缺失、旧版、出错或给了坏数据时返回空列表。
+   */
+  async tempoCompletedOn(date) {
+    const tempo = this.app.plugins?.plugins?.["crisp-tempo"];
+    if (!tempo || tempo.unloaded || typeof tempo.getCompletedOn !== "function") return [];
+    let tasks;
+    try { tasks = (await tempo.getCompletedOn(date))?.tasks; } catch (_) { return []; }
+    if (!Array.isArray(tasks)) return [];
+    const text = (v) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, 200) : "");
+    const rows = [];
+    for (const x of tasks.slice(0, 200)) {
+      if (!x || typeof x.id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(x.id) || !text(x.title)) continue;
+      const at = Number(x.completedAt);
+      const d = Number.isFinite(at) && at > 0 ? new Date(at) : null;
+      rows.push({
+        id: x.id,
+        label: text(x.parentTitle) ? `${text(x.parentTitle)} › ${text(x.title)}` : text(x.title),
+        time: d ? `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` : "",
+        project: text(x.projectTitle) || null,
+      });
+    }
+    return rows;
+  }
+
   memoTempo() {
     const tempo = this.app.plugins?.plugins?.["crisp-tempo"];
     if (!tempo || tempo.unloaded || typeof tempo.createTaskFromSource !== "function" || typeof tempo.getTasksBySource !== "function") return null;
@@ -9417,6 +9443,33 @@ class CrispPulseView extends ItemView {
         }
         row.createSpan({ cls: "pulse-day-focus-kind", text: [s.pomodoro ? tr("番茄", "Pomodoro") : tr("单次专注", "Single session"), s.completed ? "" : tr("中断", "Interrupted")].filter(Boolean).join(" · ") });
       }
+    }
+
+    // 当天在 Crisp Tempo 里完成的任务：Tempo 异步给数据，先占位，有任务才显示；只展示、不计分
+    if (this.plugin.tempoLinked()) {
+      const tempoWrap = card.createDiv({ cls: "crisp-pulse-file-list-wrap pulse-day-tempo" });
+      tempoWrap.hide?.();
+      const date = this.selectedDate;
+      void this.plugin.tempoCompletedOn(date).then((rows) => {
+        if (!rows.length || this.selectedDate !== date || !tempoWrap.isConnected) { tempoWrap.remove?.(); return; }
+        tempoWrap.createDiv({ cls: "crisp-pulse-file-list-title", text: tr(`Tempo 完成的任务 · ${rows.length}`, `Finished in Tempo · ${rows.length}`) });
+        const list = tempoWrap.createDiv({ cls: "crisp-pulse-file-list pulse-day-focus-list" });
+        for (const r of rows) {
+          const row = list.createDiv({ cls: "pulse-day-focus-item" });
+          row.createSpan({ cls: "pulse-day-focus-time", text: r.time });
+          const main = row.createSpan({ cls: "pulse-day-focus-main" });
+          const link = main.createEl("button", { cls: "pulse-day-focus-task is-link", text: r.label, attr: { type: "button", "aria-label": tr(`在 Tempo 中打开任务：${r.label}`, `Open task in Tempo: ${r.label}`) } });
+          link.addEventListener("click", async () => {
+            const tempo = this.app.plugins?.plugins?.["crisp-tempo"];
+            try {
+              if (typeof tempo?.revealTask !== "function") throw new Error(tr("Crisp Tempo 尚未启用或正在重新加载", "Crisp Tempo is not enabled or is reloading"));
+              await tempo.revealTask(r.id);
+            } catch (error) { new Notice(tr(`Crisp Pulse：${error.message || error}`, `Crisp Pulse: ${error.message || error}`)); }
+          });
+          if (r.project) row.createSpan({ cls: "pulse-day-focus-kind", text: r.project });
+        }
+        tempoWrap.show?.();
+      });
     }
 
     // Associated Files List

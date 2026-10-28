@@ -104,3 +104,40 @@ test('after the task is deleted in Tempo, converting again creates one new task 
  assert.equal(f.tasks().length,1);const m=f.memos()[0];assert.deepEqual(JSON.parse(JSON.stringify(m.tempoTasks)),[first.id,second.id]);
  const snap=await f.tempo.getTasksBySource([`crisp-pulse:${m.id}`]);assert.equal(snap[`crisp-pulse:${m.id}`].id,second.id);
 });
+
+/* Tempo 完成的任务出现在 Pulse 当日明细（Tempo 0.10.0 getCompletedOn + Pulse 1.35.0），只展示、不计分。失败模式：
+ * - 列出了别的日子完成的、已取消的或已删除的任务；子任务看不出属于哪件事。
+ * - 把 Tempo 的完成数加进 Pulse 的「完成任务」或贡献分（会被新建再勾掉刷分）。
+ * - Tempo 缺失、旧版、返回坏数据时 Pulse 报错，而不是安静地不显示。 */
+test('Pulse lists the Tempo tasks finished on a day, without scoring them',async t=>{
+ const f=fixture(t);await f.makeTempo();
+ const store=f.TempoStore.get(f.tempo);
+ const day=new Date(2026,9,28,15,30).getTime(),dayKey='2026-10-28';
+ const mk=(id,title,x={})=>({id,title,status:'done',triage:'processed',availability:'anytime',priority:'none',createdAt:1,updatedAt:1,order:id,completedAt:day,...x});
+ store.updateDatabase(db=>({...db,projects:{p:{id:'p',title:'产品方案',status:'active',priority:'none',createdAt:1,updatedAt:1,order:'a'}},tasks:{
+   a:mk('a','写方案',{projectId:'p',completedAt:day+60000}),
+   b:mk('b','改错别字',{completedAt:day-3600000}),
+   parent:mk('parent','准备分享',{status:'todo',completedAt:undefined}),
+   sub:mk('sub','做幻灯片',{parentTaskId:'parent'}),
+   y:mk('y','昨天做完的',{completedAt:day-86400000}),
+   c:mk('c','取消的',{status:'canceled',completedAt:undefined,canceledAt:day}),
+ }}),false);await store.flush();
+ const api=await f.tempo.getCompletedOn(dayKey);
+ assert.deepEqual(JSON.parse(JSON.stringify(api.tasks.map(x=>[x.id,x.title,x.parentTitle??null,x.projectTitle??null]))),
+   [['b','改错别字',null,null],['sub','做幻灯片','准备分享',null],['a','写方案',null,'产品方案']],'按完成时间排，只有那天完成的');
+ const rows=await f.pulse.tempoCompletedOn(dayKey);
+ assert.deepEqual(JSON.parse(JSON.stringify(rows.map(r=>[r.id,r.label,r.time]))),[['b','改错别字','14:30'],['sub','准备分享 › 做幻灯片','15:30'],['a','写方案','15:31']]);
+ assert.equal(rows[2].project,'产品方案');
+ const rec=f.pulse.store?.daily?.[dayKey];assert.ok(!rec||!(rec.contribution?.tasksCompleted>0),'不计入 Pulse 的完成任务');
+});
+
+test('without Tempo, with an older one or with bad data, Pulse shows no Tempo list and does not throw',async t=>{
+ const f=fixture(t);
+ assert.deepEqual(JSON.parse(JSON.stringify(await f.pulse.tempoCompletedOn('2026-10-28'))),[]);
+ f.app.plugins.plugins['crisp-tempo']={getCompletedToday:async()=>({count:1})};
+ assert.deepEqual(JSON.parse(JSON.stringify(await f.pulse.tempoCompletedOn('2026-10-28'))),[],'旧版没有接口');
+ f.app.plugins.plugins['crisp-tempo']={getCompletedOn:async()=>({tasks:[{id:'x',title:42},null,{id:'ok',title:'好的',completedAt:Date.now()}]})};
+ assert.deepEqual(JSON.parse(JSON.stringify((await f.pulse.tempoCompletedOn('2026-10-28')).map(r=>r.id))),['ok'],'坏条目丢掉');
+ f.app.plugins.plugins['crisp-tempo']={getCompletedOn:async()=>{throw new Error('reloading');}};
+ assert.deepEqual(JSON.parse(JSON.stringify(await f.pulse.tempoCompletedOn('2026-10-28'))),[]);
+});
