@@ -557,7 +557,9 @@ const DEFAULT_SETTINGS = {
   activeFolderPreset: "all", // "all" | "anks-knowledge" | "custom"
 
   // --- 1.2.0 Work Review Settings ---
-  defaultDateRange: "year", // "year" | "90d" | "30d" | "7d" | "ytd"
+  defaultDateRange: "year", // "year" | "90d" | "30d" | "7d" | "ytd"；看板上点选后也写回这里，下次打开沿用
+  analyticsDays: 7, // 数据分析页上次选的天数：7 | 30 | 90
+  yearlyYear: "auto", // 年度画像上次选的年份："auto" 或年份数字
 
   // --- 1.3.0 Ecosystem Integration Settings ---
   enableCrispFocusSync: true,
@@ -1472,7 +1474,7 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
     if (store.settings[key] === undefined) { store.settings[key] = Array.isArray(fallback) ? [...fallback] : fallback; repairedCount++; }
   }
   // 枚举型设置：值不在允许范围就回到默认，免得复盘页等直接报错
-  const enums = { dataQualityScope: ["reliable", "recorded_only", "all"], defaultDateRange: ["year", "90d", "30d", "7d", "ytd"], defaultMetric: ["contribution", "activity", "focus", "pomodoro", "words", "notes", "tasks"], weekStartsOn: ["sunday", "monday"], memoMode: ["auto", "general", "anks"], sceneStyle: PULSE_SCENE_IDS };
+  const enums = { dataQualityScope: ["reliable", "recorded_only", "all"], defaultDateRange: ["year", "90d", "30d", "7d", "ytd"], analyticsDays: [7, 30, 90], defaultMetric: ["contribution", "activity", "focus", "pomodoro", "words", "notes", "tasks"], weekStartsOn: ["sunday", "monday"], memoMode: ["auto", "general", "anks"], sceneStyle: PULSE_SCENE_IDS };
   for (const [key, allowed] of Object.entries(enums)) {
     if (key in defaultSettings && !allowed.includes(store.settings[key])) { store.settings[key] = defaultSettings[key]; repairedCount++; }
   }
@@ -6861,8 +6863,17 @@ class CrispPulseView extends ItemView {
     this.currentScope = plugin?.settings?.dataQualityScope || "reliable";
     this.currentDateRange = plugin?.settings?.defaultDateRange || "year";
     this.showBreakdown = false;
-    this.analyticsDays = 7;
+    this.analyticsDays = plugin?.settings?.analyticsDays || 7;
+    this.yearlyYear = plugin?.settings?.yearlyYear ?? "auto";
     this.activeViewTab = "dashboard"; // "dashboard" | "review"
+  }
+
+  /** 记住看板上点选的维度（时间范围、指标等），下次打开或刷新沿用。只存数据，不重算分数。 */
+  rememberChoice(key, value) {
+    const settings = this.plugin?.settings;
+    if (!settings || settings[key] === value) return;
+    settings[key] = value;
+    this.plugin.savePluginData();
   }
 
   getViewType() {
@@ -7043,6 +7054,7 @@ class CrispPulseView extends ItemView {
     text.createEl('p', { text: tr('每天的写作与投入怎么变化。', 'How your writing and effort change day to day.') });
     this.renderRangeBar(heading, [7, 30, 90].map(days => [days, tr(`近 ${days} 天`, `${days} days`)]), this.analyticsDays, days => {
       this.analyticsDays = days;
+      this.rememberChoice('analyticsDays', days);
       this.render();
       this.containerEl.querySelector('.pulse-range-seg button[aria-selected="true"]')?.focus({ preventScroll: true });
     }, tr('分析时间范围', 'Analytics time range'));
@@ -7500,7 +7512,7 @@ class CrispPulseView extends ItemView {
     text.createEl('h2', { text: tr('年度画像', 'Year Portrait') });
     text.createEl('p', { text: tr('用年轮、指纹、月相和地层看长期记录。', 'Your long-term records as rings, fingerprint, moons and strata.') });
     const options = ['auto', ...years];
-    const bar = this.renderRangeBar(heading, options.map(option => [option, option === 'auto' ? tr('自动', 'Auto') : String(option)]), this.yearlyYear, option => { this.yearlyYear = option; this.render(); }, tr('选择时间范围', 'Choose time range'));
+    const bar = this.renderRangeBar(heading, options.map(option => [option, option === 'auto' ? tr('自动', 'Auto') : String(option)]), this.yearlyYear, option => { this.yearlyYear = option; this.rememberChoice('yearlyYear', option); this.render(); }, tr('选择时间范围', 'Choose time range'));
     bar.querySelectorAll('button').forEach((button, i) => button.setAttr('title', options[i] === 'auto' ? tr('从第一条记录到今天，至少 30 天', 'From the first record to today, at least 30 days') : tr(`${options[i]} 年完整日历年`, `Calendar year ${options[i]}`)));
     const profile = this.yearlyYear === 'auto'
       ? buildDayProfile(daily, portraitDates(daily, include), include)
@@ -8707,7 +8719,7 @@ class CrispPulseView extends ItemView {
   }
 
   renderDashboardV2(wrapper) {
-    this.renderRangeBar(wrapper, [['7d', tr('近 7 天', '7 days')], ['30d', tr('近 30 天', '30 days')], ['90d', tr('近 90 天', '90 days')], ['ytd', tr('今年', 'This year')], ['year', tr('近一年', 'Past year')]], this.currentDateRange, value => { this.currentDateRange = value; this.render(); }, tr('看板时间范围', 'Dashboard time range'));
+    this.renderRangeBar(wrapper, [['7d', tr('近 7 天', '7 days')], ['30d', tr('近 30 天', '30 days')], ['90d', tr('近 90 天', '90 days')], ['ytd', tr('今年', 'This year')], ['year', tr('近一年', 'Past year')]], this.currentDateRange, value => { this.currentDateRange = value; this.rememberChoice('defaultDateRange', value); this.render(); }, tr('看板时间范围', 'Dashboard time range'));
     const stats = this.plugin.calcStats(this.currentScope, this.currentDateRange);
     const scopeLabel = REVIEW_SCOPE_LABELS[this.currentScope] || this.currentScope;
     const rangeLabel = PULSE_RANGE_LABELS[this.currentDateRange] || PULSE_RANGE_LABELS.year;
@@ -8728,7 +8740,7 @@ class CrispPulseView extends ItemView {
       b.setAttr('aria-selected', String(this.selectedMetric === m[0]));
       const open = m[0] === 'contribution' || entitled;
       if (!open) { b.addClass('is-locked'); b.setAttr('title', tr('需要激活', 'Requires activation')); }
-      b.addEventListener('click', () => { if (!open && !this.plugin.requireEntitlement('heatmapMetrics')) return; this.selectedMetric = m[0]; this.render(); });
+      b.addEventListener('click', () => { if (!open && !this.plugin.requireEntitlement('heatmapMetrics')) return; this.selectedMetric = m[0]; this.rememberChoice('defaultMetric', m[0]); this.render(); });
     }
     this.renderHeatmapCard(heat);
     // 热力图是看板的主角放在上面；番茄是今天的行动入口，紧跟其后
