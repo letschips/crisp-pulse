@@ -96,6 +96,19 @@
   gap: 8px;
 }
 
+/* Crisp Search 入口：只放图标，和刷新按钮同高。 */
+.crisp-pulse-search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 9px;
+}
+
+.crisp-pulse-search-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
 .crisp-pulse-scope-select {
   padding: 4px 10px;
   border-radius: var(--radius-s);

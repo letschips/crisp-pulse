@@ -1,5 +1,10 @@
 # Changelog - Crisp Pulse
 
+## [1.38.0] - 2026-10-29
+
+### Added
+- 看板右上角「刷新」旁边新增搜索按钮，点击打开 Crisp Search 的搜索面板。只在启用了 Crisp Search 时显示。
+
 ## [1.37.0] - 2026-10-29
 
 ### Added
