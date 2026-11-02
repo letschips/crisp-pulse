@@ -36,7 +36,7 @@ const PULSE_ZH = /^zh\b/i.test(PULSE_LANGUAGE);
 const PULSE_HANT = PULSE_ZH && /^zh[-_](tw|hk|mo|hant)\b/i.test(PULSE_LANGUAGE);
 /* 繁体文案由简体文案转出来（OpenCC s2twp：台湾正体 + 台湾用语），表由 scripts/gen-hant.cjs 生成，只收源码里用到的字词。
    分两段按最长匹配替换：s 简→繁，t 台湾用语。插值进来的内容（文件名、标签）也会被转，只影响显示。 */
-const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"092f288025525e61","s":"一只 一隻|一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|头 頭|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|方向 方向|无 無|日历 日曆|日子里 日子裏|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栋 棟|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|楼 樓|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|江面 江面|沉淀 沉澱|没 沒|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|游 遊|游船 遊船|湖面 湖面|满 滿|灯 燈|点 點|烟 煙|烟花 煙花|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记了 記了|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|超出 超出|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風|黄 黃","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
+const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"3a13b89cb297713d","s":"一只 一隻|一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|头 頭|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|方向 方向|无 無|日历 日曆|日子里 日子裏|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栋 棟|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|楼 樓|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|江面 江面|沉淀 沉澱|没 沒|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|游 遊|游船 遊船|湖面 湖面|满 滿|灯 燈|点 點|烟 煙|烟花 煙花|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记了 記了|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|超出 超出|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風|黄 黃","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
 let pulseHantStages = null;
 function pulseHant(text) {
   if (typeof text !== "string" || !/\p{Script=Han}/u.test(text)) return text;
@@ -3736,26 +3736,7 @@ class CrispPulsePlugin extends Plugin {
     const daily = this.store.daily || {};
     const days = Object.keys(daily);
 
-    const getVal = (rec) => {
-      if (!rec) return 0;
-      switch (metric) {
-        case "activity":
-          return rec.activity?.activeMinutes || 0;
-        case "focus":
-          return rec.activity?.focusMinutes || 0;
-        case "pomodoro":
-          return dayPomodoros(rec).done;
-        case "words":
-          return rec.contribution?.wordsAdded || 0;
-        case "notes":
-          return rec.contribution?.notesCreated || 0;
-        case "tasks":
-          return rec.contribution?.tasksCompleted || 0;
-        case "contribution":
-        default:
-          return rec.contribution?.score || 0;
-      }
-    };
+    const getVal = (rec) => heatMetricValue(rec, metric);
 
     const now = Date.now();
     const rolling90Ms = 90 * 24 * 60 * 60 * 1000;
@@ -4589,6 +4570,85 @@ const PACE_FIELDS = {
 
 // This month's running total against the same day of last month. A last-month day past this month's length
 // keeps its total; days without an included record add nothing and are counted separately, never invented.
+const ICON_MAP_ARROW_RIGHT_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M1.98744 2.95325C2.67201 2.29971 3.75513 2.01313 4.80282 2.48035L21.3125 9.84285C23.229 10.6975 23.229 13.3032 21.3125 14.1579L4.80282 21.5204C3.75513 21.9876 2.67201 21.701 1.98744 21.0475C1.2971 20.3884 0.978305 19.3122 1.52928 18.2802L4.68131 12.3765L5.34291 12.7298L4.68131 12.3765C4.8086 12.1381 4.8086 11.8626 4.68131 11.6242L1.52928 5.72049C0.978304 4.68853 1.2971 3.6123 1.98744 2.95325ZM3.02323 4.03821C2.74905 4.29996 2.66253 4.65823 2.85249 5.01402L2.19088 5.36725L2.85249 5.01402L6.00452 10.9177C6.36753 11.5976 6.36753 12.4031 6.00452 13.083L2.85249 18.9867C2.66253 19.3425 2.74905 19.7008 3.02323 19.9625C3.30317 20.2298 3.74374 20.3503 4.19189 20.1504L20.7016 12.7879C21.4326 12.4619 21.4327 11.5388 20.7016 11.2128L4.19189 3.8503C3.74374 3.65045 3.30317 3.77096 3.02323 4.03821Z" fill="currentColor"></path></svg>';
+
+function heatMetricValue(rec, metric) {
+  if (!rec) return 0;
+  switch (metric) {
+    case "activity": return rec.activity?.activeMinutes || 0;
+    case "focus": return rec.activity?.focusMinutes || 0;
+    case "pomodoro": return dayPomodoros(rec).done;
+    case "words": return rec.contribution?.wordsAdded || 0;
+    case "notes": return rec.contribution?.notesCreated || 0;
+    case "tasks": return rec.contribution?.tasksCompleted || 0;
+    case "contribution":
+    default: return rec.contribution?.score || 0;
+  }
+}
+
+/** 热力图标题的总量：当前指标在统计区间内、符合数据范围的合计。 */
+function heatMetricSummary(daily, dates, includeRecord, metric) {
+  let total = 0;
+  for (const key of dates) if (daily[key] && includeRecord(daily[key], key)) total += heatMetricValue(daily[key], metric);
+  const number = (value, digits = 0) => value.toLocaleString(PULSE_NUMBER_LOCALE, { maximumFractionDigits: digits });
+  switch (metric) {
+    case "activity": return tr(`交互 ${number(total / 60, 1)} 小时`, `${number(total / 60, 1)} h active`);
+    case "focus": return tr(`专注 ${number(total / 60, 1)} 小时`, `${number(total / 60, 1)} h focus`);
+    case "pomodoro": return tr(`完成 ${number(total)} 个番茄`, `${number(total)} pomodoros`);
+    case "words": return tr(`新增 ${number(total)} 词`, `${number(total)} words added`);
+    case "notes": return tr(`新建 ${number(total)} 篇`, `${number(total)} notes created`);
+    case "tasks": return tr(`完成 ${number(total)} 项任务`, `${number(total)} tasks completed`);
+    default: return tr(`贡献 ${number(total, 1)} 分`, `${number(total, 1)} pts`);
+  }
+}
+
+/** 当天新增词数过半落在同一个目录（取前两级）时才返回它，否则不下结论。 */
+function heatDayFolder(files) {
+  const byFolder = new Map();
+  let total = 0;
+  for (const [path, meta] of Object.entries(files || {})) {
+    const words = meta?.wordsAdded || 0;
+    total += words;
+    const segments = path.split("/");
+    if (segments.length < 2 || !words) continue;
+    const folder = segments.slice(0, Math.min(2, segments.length - 1)).join("/");
+    byFolder.set(folder, (byFolder.get(folder) || 0) + words);
+  }
+  for (const [folder, words] of byFolder) if (words * 2 > total) return folder;
+  return null;
+}
+
+/** 热力图下方的一行摘要。未记录、不在数据范围的日子照实说，不写成 0 分。 */
+function heatDaySummary(date, rec, { inRange, included }) {
+  const month = Number(date.slice(5, 7)), day = Number(date.slice(8));
+  const label = tr(`${month}月${day}日`, `${date.slice(5).replace("-", "/")}`);
+  if (!rec || rec.quality === "none") return `${label} · ${tr("未记录", "Not recorded")}`;
+  if (!included) return `${label} · ${tr("不在当前数据范围", "Outside the data scope")}`;
+  const number = (value) => Number(value).toLocaleString(PULSE_NUMBER_LOCALE, { maximumFractionDigits: 1 });
+  const words = rec.contribution?.wordsAdded || 0, focusMinutes = rec.activity?.focusMinutes || 0;
+  const folder = heatDayFolder(rec.files);
+  const parts = [label, tr(`贡献 ${number(rec.contribution?.score || 0)} 分`, `${number(rec.contribution?.score || 0)} pts`)];
+  if (words > 0) parts.push(tr(`新增 ${number(words)} 词`, `${number(words)} words`));
+  if (focusMinutes > 0) parts.push(tr(`专注 ${number(focusMinutes)} 分钟`, `${number(focusMinutes)} min focus`));
+  if (folder) parts.push(tr(`主要在 ${folder}`, `mostly in ${folder}`));
+  if (rec.quality === "estimated") parts.push(tr("估算", "estimated"));
+  if (!inRange) parts.push(tr("统计区间外", "outside the range"));
+  return parts.join(" · ");
+}
+
+/** 方向键的目标格：上下跨周连续走，Home/End 到首尾。其他按键返回 null。 */
+function heatMoveTarget(key, week, day) {
+  switch (key) {
+    case "ArrowLeft": return { week: week - 1, day };
+    case "ArrowRight": return { week: week + 1, day };
+    case "ArrowUp": return day > 0 ? { week, day: day - 1 } : { week: week - 1, day: 6 };
+    case "ArrowDown": return day < 6 ? { week, day: day + 1 } : { week: week + 1, day: 0 };
+    case "Home": return { edge: "first" };
+    case "End": return { edge: "last" };
+    default: return null;
+  }
+}
+
 /** 活跃率只在有记录的日子里算：未记录不等于没产出。 */
 function activeDayShare(activeDays, recordedDays) {
   return { denominator: recordedDays, share: recordedDays ? Math.min(1, activeDays / recordedDays) : 0 };
@@ -8761,7 +8821,7 @@ class CrispPulseView extends ItemView {
 
     if (!entitled) this.selectedMetric = 'contribution';
     const metricLabel = this.getMetricLabel(this.selectedMetric);
-    const heat = this.trayCard(wrapper, { icon: 'calendar-days', title: tr('年度知识活跃脉冲', 'Yearly activity'), pill: tr(`${stats.activeDays} 天活跃`, `${plural(stats.activeDays, 'active day')}`), pillMuted: true, cls: 'pulse-v2-heat' });
+    const heat = this.trayCard(wrapper, { icon: 'calendar-days', title: tr('年度知识活跃脉冲', 'Yearly activity'), pill: `${rangeLabel} · ${heatMetricSummary(this.plugin.store.daily || {}, filterDatesByRange(Object.keys(this.plugin.store.daily || {}), this.currentDateRange, new Date()), (record, key) => this.plugin.recordMatchesScope(record, key, this.currentScope), this.selectedMetric)}`, pillMuted: true, cls: 'pulse-v2-heat' });
     const seg = heat.createDiv({ cls: 'pulse-v2-seg' });
     seg.setAttr('role', 'tablist');
     // 「番茄」只在装了带番茄钟的 Crisp Focus、或者已经有番茄记录时出现
@@ -8772,7 +8832,7 @@ class CrispPulseView extends ItemView {
       b.setAttr('aria-selected', String(this.selectedMetric === m[0]));
       const open = m[0] === 'contribution' || entitled;
       if (!open) { b.addClass('is-locked'); b.setAttr('title', tr('需要激活', 'Requires activation')); }
-      b.addEventListener('click', () => { if (!open && !this.plugin.requireEntitlement('heatmapMetrics')) return; this.selectedMetric = m[0]; this.rememberChoice('defaultMetric', m[0]); this.render(); });
+      b.addEventListener('click', () => { if (!open && !this.plugin.requireEntitlement('heatmapMetrics')) return; this.selectedMetric = m[0]; this.heatLevelFilter = null; this.rememberChoice('defaultMetric', m[0]); this.render(); });
     }
     this.renderHeatmapCard(heat);
     // 热力图是看板的主角放在上面；番茄是今天的行动入口，紧跟其后
@@ -8810,7 +8870,8 @@ class CrispPulseView extends ItemView {
     const snap = focus?.getPomodoroSnapshot();
     if (snap?.entitled) fact(tr(`番茄 ${dayPomodoros(rec).done} / ${snap.goal}`, `Pomodoros ${dayPomodoros(rec).done} / ${snap.goal}`));
     if (stats.currentStreak > 0) fact(tr(`连续 ${stats.currentStreak} 天`, `${plural(stats.currentStreak, 'day')} streak`));
-    const open = strip.createEl('button', { cls: 'pulse-today-open', text: tr('看明细 →', 'Details →'), attr: { type: 'button' } });
+    const open = strip.createEl('button', { cls: 'pulse-today-open', attr: { type: 'button', 'aria-label': tr('看明细', 'Details'), 'data-tooltip-position': 'top' } });
+    open.innerHTML = ICON_MAP_ARROW_RIGHT_SVG;
     open.addEventListener('click', () => this.openAnalyticsDay(todayKey));
   }
 
@@ -9295,16 +9356,12 @@ class CrispPulseView extends ItemView {
 
         cell.addEventListener("click", selectCell);
         cell.addEventListener("keydown", (event) => {
-          let targetWeek = w;
-          let targetDay = d;
-          if (event.key === "ArrowLeft") { targetWeek--; event.preventDefault(); }
-          else if (event.key === "ArrowRight") { targetWeek++; event.preventDefault(); }
-          else if (event.key === "ArrowUp") { targetDay--; event.preventDefault(); }
-          else if (event.key === "ArrowDown") { targetDay++; event.preventDefault(); }
-          else if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectCell(); return; }
-          else { return; }
-
-          const nextEl = gridWrap.querySelector(`[data-week="${targetWeek}"][data-day="${targetDay}"]`);
+          if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectCell(); return; }
+          const move = heatMoveTarget(event.key, w, d);
+          if (!move) return;
+          event.preventDefault();
+          const cells = weeksGrid.querySelectorAll("[data-date]");
+          const nextEl = move.edge ? cells[move.edge === "first" ? 0 : cells.length - 1] : gridWrap.querySelector(`[data-week="${move.week}"][data-day="${move.day}"]`);
           if (nextEl && nextEl.style.visibility !== "hidden") {
             cell.tabIndex = -1;
             nextEl.tabIndex = 0;
@@ -9316,13 +9373,31 @@ class CrispPulseView extends ItemView {
 
     const footer = card.createDiv({ cls: "crisp-pulse-heatmap-footer" });
     const rangeLabel = PULSE_RANGE_LABELS[this.currentDateRange] || PULSE_RANGE_LABELS.year;
-    footer.createDiv({ text: tr(`完整 53 周 · 统计：${rangeLabel} · 区间外淡化 · 范围: ${REVIEW_SCOPE_LABELS[this.currentScope] || REVIEW_SCOPE_LABELS.all} · 强度基于个人近期分位数`, `Full 53 weeks · stats: ${rangeLabel} · days outside are faded · scope: ${REVIEW_SCOPE_LABELS[this.currentScope] || REVIEW_SCOPE_LABELS.all} · intensity by your recent percentiles`) });
+    const readout = footer.createDiv({ cls: "crisp-pulse-heat-readout", attr: { "aria-live": "polite" } });
+    const describeDay = (date) => heatDaySummary(date, this.plugin.store.daily[date], { inRange: visibleDates.has(date), included: !!this.plugin.store.daily[date] && this.plugin.recordMatchesScope(this.plugin.store.daily[date], date, this.currentScope) });
+    const showDay = (date) => { readout.textContent = describeDay(date); };
+    showDay(this.selectedDate);
+    const dayAt = (event) => event.target?.closest?.("[data-date]")?.dataset.date;
+    weeksGrid.addEventListener("mouseover", (event) => { const date = dayAt(event); if (date) showDay(date); });
+    weeksGrid.addEventListener("focusin", (event) => { const date = dayAt(event); if (date) showDay(date); });
+    weeksGrid.addEventListener("mouseleave", () => showDay(this.selectedDate));
+    if (this.heatLevelFilter !== null && this.heatLevelFilter !== undefined) weeksGrid.dataset.filterLevel = String(this.heatLevelFilter);
 
-    const legend = footer.createDiv({ cls: "crisp-pulse-legend" });
+    const legend = footer.createDiv({ cls: "crisp-pulse-legend", attr: { "aria-label": tr(`完整 53 周 · 统计：${rangeLabel} · 区间外淡化 · 范围: ${REVIEW_SCOPE_LABELS[this.currentScope] || REVIEW_SCOPE_LABELS.all} · 强度基于个人近期分位数`, `Full 53 weeks · stats: ${rangeLabel} · days outside are faded · scope: ${REVIEW_SCOPE_LABELS[this.currentScope] || REVIEW_SCOPE_LABELS.all} · intensity by your recent percentiles`), "data-tooltip-position": "top" } });
     legend.createSpan({ text: tr("少 ", "Less ") });
+    const levelLabels = [tr("高亮没有数据的日子", "Highlight days with no data"), tr("高亮强度最低的 25%", "Highlight the lowest 25%"), tr("高亮强度 25–50% 的日子", "Highlight days at 25–50%"), tr("高亮强度 50–75% 的日子", "Highlight days at 50–75%"), tr("高亮强度 75–90% 的日子", "Highlight days at 75–90%"), tr("高亮强度最高的 10%", "Highlight the top 10%")];
+    const swatches = [];
     for (let l = 0; l <= 5; l++) {
-      const legCell = legend.createDiv({ cls: "crisp-pulse-legend-cell crisp-pulse-cell" });
+      const legCell = legend.createEl("button", { cls: "crisp-pulse-legend-cell crisp-pulse-cell", attr: { type: "button", "aria-label": levelLabels[l], "aria-pressed": String(this.heatLevelFilter === l), "data-tooltip-position": "top" } });
       legCell.dataset.level = String(l);
+      swatches.push(legCell);
+      // 只切网格上的标记，不重绘看板，当前焦点和滚动位置都不动
+      legCell.addEventListener("click", () => {
+        this.heatLevelFilter = this.heatLevelFilter === l ? null : l;
+        if (this.heatLevelFilter === null) delete weeksGrid.dataset.filterLevel;
+        else weeksGrid.dataset.filterLevel = String(l);
+        swatches.forEach((swatch, level) => swatch.setAttr("aria-pressed", String(this.heatLevelFilter === level)));
+      });
     }
     legend.createSpan({ text: tr(" 多", " More") });
   }
@@ -14374,7 +14449,7 @@ module.exports.ICON_BLOCKS_WAVE_SVG = ICON_BLOCKS_WAVE_SVG;
 module.exports.ICON_BLOCKS_WAVE_REGISTERED_SVG = ICON_BLOCKS_WAVE_REGISTERED_SVG;
 module.exports.CRISP_PULSE_ICON_ID = CRISP_PULSE_ICON_ID;
 module.exports.CrispPulseView = CrispPulseView;
-module.exports.dashboardHelpers = { activeDayShare, paceReading, todayKey: () => getTodayKey() };
+module.exports.dashboardHelpers = { activeDayShare, paceReading, heatDayFolder, heatDaySummary, heatMetricSummary, heatMoveTarget, todayKey: () => getTodayKey() };
 
 module.exports.getReviewDrilldown = getReviewDrilldown;
 module.exports.generateReviewReport = generateReviewReport;

@@ -77,3 +77,52 @@ test('未激活只显示分数和连续，不多放开当天明细', () => {
   assert.ok(text.includes('4.4') && text.includes('连续 3 天'));
   assert.ok(!text.includes('88') && !text.includes('25 '));
 });
+
+test('摘要行只在确实集中时才说主要在哪个目录', () => {
+  const { heatDayFolder } = Pulse.dashboardHelpers;
+  assert.equal(heatDayFolder({ 'Topics/a/x/1.md': { wordsAdded: 80 }, 'Topics/a/y.md': { wordsAdded: 20 }, 'Core/z.md': { wordsAdded: 10 } }), 'Topics/a');
+  assert.equal(heatDayFolder({ 'Topics/a/1.md': { wordsAdded: 50 }, 'Core/b/2.md': { wordsAdded: 50 }, 'Now/c/3.md': { wordsAdded: 50 } }), null, '没有过半的目录');
+  assert.equal(heatDayFolder({ 'root.md': { wordsAdded: 90 } }), null, '库根目录不算');
+  assert.equal(heatDayFolder({ 'Topics/a/1.md': { wordsAdded: 0 } }), null);
+  assert.equal(heatDayFolder(undefined), null);
+});
+
+test('摘要行区分有记录、未记录和不在范围', () => {
+  const { heatDaySummary } = Pulse.dashboardHelpers;
+  const rec = { quality: 'recorded', contribution: { score: 86, wordsAdded: 1200 }, activity: { focusMinutes: 25 }, files: { 'Topics/a/1.md': { wordsAdded: 1200 } } };
+  const full = heatDaySummary('2026-10-05', rec, { inRange: true, included: true });
+  for (const part of ['10月5日', '贡献 86 分', '新增 1,200 词', '专注 25 分钟', '主要在 Topics/a']) assert.ok(full.includes(part), `${part} in ${full}`);
+  assert.ok(heatDaySummary('2026-10-05', null, { inRange: true, included: true }).includes('未记录'));
+  assert.ok(heatDaySummary('2026-10-05', { ...rec, quality: 'none' }, { inRange: true, included: true }).includes('未记录'));
+  assert.ok(heatDaySummary('2026-10-05', rec, { inRange: true, included: false }).includes('不在当前数据范围'));
+  assert.ok(heatDaySummary('2026-10-05', rec, { inRange: false, included: true }).includes('统计区间外'));
+});
+
+test('标题总量跟着指标变，只算范围内且符合口径的日子', () => {
+  const { heatMetricSummary } = Pulse.dashboardHelpers;
+  const daily = { a: { contribution: { score: 10.5, wordsAdded: 13023 }, activity: { activeMinutes: 90 } }, b: { contribution: { score: 2, wordsAdded: 7 } }, c: { contribution: { score: 99, wordsAdded: 99 } } };
+  const dates = ['a', 'b', 'missing'];
+  assert.equal(heatMetricSummary(daily, dates, () => true, 'words'), '新增 13,030 词');
+  assert.equal(heatMetricSummary(daily, dates, () => true, 'contribution'), '贡献 12.5 分');
+  assert.equal(heatMetricSummary(daily, dates, () => true, 'activity'), '交互 1.5 小时');
+  assert.equal(heatMetricSummary(daily, dates, (_, key) => key === 'b', 'words'), '新增 7 词');
+});
+
+test('方向键跨周连续移动，Home/End 跳到首尾', () => {
+  const { heatMoveTarget } = Pulse.dashboardHelpers;
+  const at = (...args) => ({ ...heatMoveTarget(...args) });
+  assert.deepEqual(at('ArrowUp', 3, 0), { week: 2, day: 6 });
+  assert.deepEqual(at('ArrowDown', 3, 6), { week: 4, day: 0 });
+  assert.deepEqual(at('ArrowUp', 3, 2), { week: 3, day: 1 });
+  assert.deepEqual(at('ArrowLeft', 3, 2), { week: 2, day: 2 });
+  assert.deepEqual(at('Home', 3, 2), { edge: 'first' });
+  assert.deepEqual(at('End', 3, 2), { edge: 'last' });
+  assert.equal(heatMoveTarget('a', 3, 2), null);
+});
+
+test('今天条的入口只有图标，读屏仍能读到名称', () => {
+  const button = all(strip({ record }).parent).find((n) => n.tag === 'button');
+  assert.equal(button.text, '');
+  assert.equal(button.attrs['aria-label'], '看明细');
+  assert.ok(button.innerHTML.includes('<svg'));
+});
