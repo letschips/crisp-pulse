@@ -36,7 +36,7 @@ const PULSE_ZH = /^zh\b/i.test(PULSE_LANGUAGE);
 const PULSE_HANT = PULSE_ZH && /^zh[-_](tw|hk|mo|hant)\b/i.test(PULSE_LANGUAGE);
 /* 繁体文案由简体文案转出来（OpenCC s2twp：台湾正体 + 台湾用语），表由 scripts/gen-hant.cjs 生成，只收源码里用到的字词。
    分两段按最长匹配替换：s 简→繁，t 台湾用语。插值进来的内容（文件名、标签）也会被转，只影响显示。 */
-const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"ab29efbd860e2c22","s":"一只 一隻|一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|头 頭|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|方向 方向|无 無|日历 日曆|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栋 棟|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|楼 樓|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|江面 江面|沉淀 沉澱|没 沒|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|游 遊|游船 遊船|湖面 湖面|满 滿|灯 燈|点 點|烟 煙|烟花 煙花|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记了 記了|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|超出 超出|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風|黄 黃","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
+const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"092f288025525e61","s":"一只 一隻|一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|头 頭|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|方向 方向|无 無|日历 日曆|日子里 日子裏|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栋 棟|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|楼 樓|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|江面 江面|沉淀 沉澱|没 沒|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|游 遊|游船 遊船|湖面 湖面|满 滿|灯 燈|点 點|烟 煙|烟花 煙花|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记了 記了|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|超出 超出|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風|黄 黃","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
 let pulseHantStages = null;
 function pulseHant(text) {
   if (typeof text !== "string" || !/\p{Script=Han}/u.test(text)) return text;
@@ -4589,6 +4589,18 @@ const PACE_FIELDS = {
 
 // This month's running total against the same day of last month. A last-month day past this month's length
 // keeps its total; days without an included record add nothing and are counted separately, never invented.
+/** 活跃率只在有记录的日子里算：未记录不等于没产出。 */
+function activeDayShare(activeDays, recordedDays) {
+  return { denominator: recordedDays, share: recordedDays ? Math.min(1, activeDays / recordedDays) : 0 };
+}
+
+const PULSE_PACE_SETTLED_DAY = 7;
+/** 月初样本太少：第 7 天之前只报累计，不判断落后，也不推算月底。 */
+function paceReading(pace) {
+  const settled = pace.today >= PULSE_PACE_SETTLED_DAY;
+  return { settled, behind: settled && pace.deltaPct !== null && pace.deltaPct < 0, showProjection: settled && pace.projection !== null && pace.today < pace.days };
+}
+
 function buildMonthPace(daily, todayKey, includeRecord, field) {
   const read = PACE_FIELDS[field];
   const [y, m, today] = todayKey.split('-').map(Number);
@@ -7156,11 +7168,12 @@ class CrispPulseView extends ItemView {
       const head = row.createDiv({ cls: 'pulse-pace-head' });
       head.createSpan({ cls: 'pulse-pace-label', text: label });
       const ratio = pace.baselineTotal > 0 ? pace.actualToDate / pace.baselineTotal : null;
+      const reading = paceReading(pace);
       head.createSpan({
         cls: 'pulse-pace-share',
-        text: ratio === null ? `${number(pace.actualToDate)} ${unit}` : ratio >= 1 ? tr(`已超过上月全月 · ${number(pace.actualToDate)} ${unit}`, `Past all of last month · ${number(pace.actualToDate)} ${unit}`) : tr(`上月全月的 ${Math.round(ratio * 100)}%`, `${Math.round(ratio * 100)}% of last month’s total`)
+        text: ratio === null || !reading.settled ? `${number(pace.actualToDate)} ${unit}` : ratio >= 1 ? tr(`已超过上月全月 · ${number(pace.actualToDate)} ${unit}`, `Past all of last month · ${number(pace.actualToDate)} ${unit}`) : tr(`上月全月的 ${Math.round(ratio * 100)}%`, `${Math.round(ratio * 100)}% of last month’s total`)
       });
-      const behind = pace.deltaPct !== null && pace.deltaPct < 0;
+      const { behind } = reading;
       const track = row.createDiv({ cls: `pulse-pace-track${behind ? ' is-behind' : ''}` });
       track.setAttr('role', 'img');
       if (ratio !== null) {
@@ -7177,8 +7190,9 @@ class CrispPulseView extends ItemView {
         track.setAttr('aria-label', tr(`${label}：上月没有可对照的记录`, `${label}: no records last month to compare against`));
       }
       const foot = row.createDiv({ cls: 'pulse-pace-foot' });
-      const delta = foot.createSpan({ cls: `pulse-pace-delta${behind ? ' is-behind' : pace.deltaPct > 0 ? ' is-ahead' : ''}` });
-      if (pace.deltaPct === null) {
+      const delta = foot.createSpan({ cls: `pulse-pace-delta${behind ? ' is-behind' : reading.settled && pace.deltaPct > 0 ? ' is-ahead' : ''}` });
+      if (!reading.settled && pace.baseline) delta.setText(tr(`第 ${PULSE_PACE_SETTLED_DAY} 天起和上月对照`, `Compared with last month from day ${PULSE_PACE_SETTLED_DAY}`));
+      else if (pace.deltaPct === null) {
         // Last month's records may start mid-month; say so rather than imply nothing happened.
         const late = pace.baseline && pace.prevFirstDay > pace.today;
         delta.setText(!pace.baseline ? tr('上月没有可对照的记录', 'No records last month to compare against') : late ? tr(`${pace.prevMonth} 月 ${pace.prevFirstDay} 日才开始有记录，${pace.month} 月 ${pace.prevFirstDay} 日起可对照`, `Records only start on ${pulseMonthDay(pace.prevMonth, pace.prevFirstDay)}; comparable from ${pulseMonthDay(pace.month, pace.prevFirstDay)}`) : tr('上月同期还是 0', 'Still 0 at this point last month'));
@@ -7186,7 +7200,7 @@ class CrispPulseView extends ItemView {
       else if (pace.deltaPct === 0) delta.setText(tr('与上月同期持平', 'Level with the same point last month'));
       else delta.setText(tr(`比上月同期${pace.deltaPct > 0 ? '多' : '少'} ${Math.abs(pace.deltaPct)}%`, `${Math.abs(pace.deltaPct)}% ${pace.deltaPct > 0 ? 'ahead of' : 'behind'} the same point last month`));
       let outlook = '';
-      if (pace.projection !== null && pace.today < pace.days) outlook = tr(`照最近节奏，月底约 ${number(pace.projection)} ${unit}`, `At the recent pace, about ${number(pace.projection)} ${unit} by month end`);
+      if (reading.showProjection) outlook = tr(`照最近节奏，月底约 ${number(pace.projection)} ${unit}`, `At the recent pace, about ${number(pace.projection)} ${unit} by month end`);
       if (behind && pace.needPerDay !== null) {
         const remaining = pace.days - pace.today;
         const needDays = Math.ceil(pace.baselineTotal - pace.actualToDate);
@@ -7197,13 +7211,14 @@ class CrispPulseView extends ItemView {
     }
     this.renderPaceChart(card, paces);
     const note = paces[0].pace.missingDays ? tr(`本月有 ${paces[0].pace.missingDays} 天没有纳入的记录，按 0 累计。`, `${plural(paces[0].pace.missingDays, 'day')} this month ${paces[0].pace.missingDays === 1 ? 'has' : 'have'} no included records and ${paces[0].pace.missingDays === 1 ? 'counts' : 'count'} as 0. `) : '';
-    card.createDiv({ cls: 'crisp-pulse-analytics-readout pulse-pace-note', text: `${note}${tr('预测用最近 7 天里有记录的日子求平均，只是估算。', 'Projections average the recorded days in the last 7 days and are only estimates.')}` });
+    card.createDiv({ cls: 'crisp-pulse-analytics-readout pulse-pace-note', text: `${note}${paceReading(paces[0].pace).settled ? tr('预测用最近 7 天里有记录的日子求平均，只是估算。', 'Projections average the recorded days in the last 7 days and are only estimates.') : ''}` });
   }
 
   renderPaceChart(card, paces) {
     if (!paces.some(p => p.pace.baseline || p.pace.actualToDate > 0)) return;
     const field = paces.some(p => p.field === this.paceField) ? this.paceField : 'score';
     const { pace, unit, label } = paces.find(p => p.field === field);
+    const { showProjection } = paceReading(pace);
     const seg = card.createDiv({ cls: 'pulse-v2-seg pulse-pace-seg' });
     seg.setAttr('role', 'tablist');
     for (const p of paces) {
@@ -7218,7 +7233,7 @@ class CrispPulseView extends ItemView {
     const left = 58, right = width - 16, top = 14, bottom = height - 30;
     const n = pace.days;
     const x = day => left + (day - 1) / Math.max(1, n - 1) * (right - left);
-    const top_ = Math.max(pace.baselineTotal, pace.projection || 0, pace.actualToDate);
+    const top_ = Math.max(pace.baselineTotal, showProjection ? pace.projection : 0, pace.actualToDate);
     // Active days count whole days: the month length is the ceiling, ticks every 10 days.
     const scale = field === 'active' ? { max: n, ticks: [0, 10, 20, 30].filter(t => t <= n) } : analyticsScale(top_);
     const y = v => bottom - v / scale.max * (bottom - top);
@@ -7236,21 +7251,21 @@ class CrispPulseView extends ItemView {
       draw('path', { d: area, class: 'pulse-pace-area' });
       draw('path', { d: path(pace.actual), fill: 'none', class: 'pulse-pace-actual' });
     }
-    if (pace.projection !== null && pace.today < n) draw('path', { d: `M${x(pace.today).toFixed(1)},${y(pace.actualToDate).toFixed(1)} L${x(n).toFixed(1)},${y(pace.projection).toFixed(1)}`, fill: 'none', class: 'pulse-pace-projection' });
+    if (showProjection) draw('path', { d: `M${x(pace.today).toFixed(1)},${y(pace.actualToDate).toFixed(1)} L${x(n).toFixed(1)},${y(pace.projection).toFixed(1)}`, fill: 'none', class: 'pulse-pace-projection' });
     draw('line', { x1: x(pace.today), x2: x(pace.today), y1: top, y2: bottom, class: 'pulse-pace-today' });
     draw('circle', { cx: x(pace.today), cy: y(pace.actualToDate), r: 3.5, class: 'pulse-pace-dot' });
     const cursor = draw('line', { x1: 0, x2: 0, y1: top, y2: bottom, class: 'pulse-chart-cursor', visibility: 'hidden' });
     const number = v => Number(v).toLocaleString(PULSE_NUMBER_LOCALE, { maximumFractionDigits: 1 });
-    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: tr('实线本月累计，虚线上月同期，点线推算到月底。', 'Solid: this month. Dashed: last month. Dotted: projected to month end.') });
+    const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: showProjection ? tr('实线本月累计，虚线上月同期，点线推算到月底。', 'Solid: this month. Dashed: last month. Dotted: projected to month end.') : tr('实线本月累计，虚线上月同期。', 'Solid: this month. Dashed: last month.') });
     readout.setAttr('aria-live', 'polite');
     const legend = card.createDiv({ cls: 'crisp-pulse-analytics-legend' });
-    for (const [cls, text] of [['pulse-pace-key-actual', tr('本月累计', 'This month')], ['pulse-pace-key-baseline', tr('上月同期', 'Last month')], ['pulse-pace-key-projection', tr('推算', 'Projected')]]) {
+    for (const [cls, text] of [['pulse-pace-key-actual', tr('本月累计', 'This month')], ['pulse-pace-key-baseline', tr('上月同期', 'Last month')], ...(showProjection ? [['pulse-pace-key-projection', tr('推算', 'Projected')]] : [])]) {
       const item = legend.createSpan(); item.createSpan({ cls: `pulse-pace-key ${cls}` }); item.createSpan({ text });
     }
     const describe = day => {
       const base = pace.baseline ? pace.baseline[day - 1] : null;
       const baseText = base === null ? (pace.baseline ? tr('未记录', 'not recorded') : '—') : `${number(base)} ${unit}`;
-      if (day > pace.today) return `${pulseMonthDay(pace.month, day)} · ${tr('上月同日累计', 'last month same day')} ${baseText}${pace.projection !== null ? ` · ${tr('推算约', 'projected about')} ${number(pace.actualToDate + pace.recentRate * (day - pace.today))} ${unit}` : ''}`;
+      if (day > pace.today) return `${pulseMonthDay(pace.month, day)} · ${tr('上月同日累计', 'last month same day')} ${baseText}${showProjection ? ` · ${tr('推算约', 'projected about')} ${number(pace.actualToDate + pace.recentRate * (day - pace.today))} ${unit}` : ''}`;
       const now = pace.actual[day - 1];
       const diff = base === null ? '' : tr(` · ${now >= base ? '多' : '少'} ${number(Math.abs(now - base))} ${unit}`, ` · ${number(Math.abs(now - base))} ${unit} ${now >= base ? 'ahead' : 'behind'}`);
       return `${pulseMonthDay(pace.month, day)} · ${tr('本月累计', 'this month')} ${number(now)} ${unit} · ${tr('上月同日', 'last month same day')} ${baseText}${diff}`;
@@ -7600,7 +7615,7 @@ class CrispPulseView extends ItemView {
     const centerTop = center.createDiv({ cls: 'crisp-pulse-analytics-label' });
     const centerMain = center.createDiv({ cls: 'crisp-pulse-ring-year' });
     const centerSub = center.createDiv({ cls: 'crisp-pulse-ring-sub' });
-    const resetCenter = () => { centerTop.textContent = profile.year ? tr(`${profile.year} 年`, String(profile.year)) : weekly ? tr(`${n} 周`, plural(n, 'week')) : tr(`${n} 天`, plural(n, 'day')); centerMain.textContent = String(profile.activeDays); centerSub.textContent = tr('天活跃', 'active days'); };
+    const resetCenter = () => { centerTop.textContent = profile.year ? tr(`${profile.year} 年`, String(profile.year)) : weekly ? tr(`${n} 周`, plural(n, 'week')) : tr(`有记录 ${profile.recordedDays} 天`, `${plural(profile.recordedDays, 'recorded day')}`); centerMain.textContent = String(profile.activeDays); centerSub.textContent = tr('天活跃', 'active days'); };
     resetCenter();
     const readout = card.createDiv({ cls: 'crisp-pulse-analytics-readout', text: weekly ? tr('悬停查看某周，点击打开当周最高的一天。', 'Hover to see a week; click to open its top day.') : tr('悬停查看某天，点击打开明细。', 'Hover to see a day; click to open details.') });
     readout.setAttr('aria-live', 'polite');
@@ -8734,14 +8749,16 @@ class CrispPulseView extends ItemView {
   }
 
   renderDashboardV2(wrapper) {
-    this.renderRangeBar(wrapper, [['7d', tr('近 7 天', '7 days')], ['30d', tr('近 30 天', '30 days')], ['90d', tr('近 90 天', '90 days')], ['ytd', tr('今年', 'This year')], ['year', tr('近一年', 'Past year')]], this.currentDateRange, value => { this.currentDateRange = value; this.rememberChoice('defaultDateRange', value); this.render(); }, tr('看板时间范围', 'Dashboard time range'));
+    const entitled = pulseEntitled(this.plugin);
     const stats = this.plugin.calcStats(this.currentScope, this.currentDateRange);
+    // 今天不受时间范围影响，放在范围控件上面
+    this.renderTodayStrip(wrapper, stats, entitled);
+    this.renderRangeBar(wrapper, [['7d', tr('近 7 天', '7 days')], ['30d', tr('近 30 天', '30 days')], ['90d', tr('近 90 天', '90 days')], ['ytd', tr('今年', 'This year')], ['year', tr('近一年', 'Past year')]], this.currentDateRange, value => { this.currentDateRange = value; this.rememberChoice('defaultDateRange', value); this.render(); }, tr('看板时间范围', 'Dashboard time range'));
     const scopeLabel = REVIEW_SCOPE_LABELS[this.currentScope] || this.currentScope;
     const rangeLabel = PULSE_RANGE_LABELS[this.currentDateRange] || PULSE_RANGE_LABELS.year;
-    const overview = this.trayCard(wrapper, { icon: 'activity', title: tr('知识脉冲概览', 'Pulse overview'), subtitle: `${rangeLabel} · ${scopeLabel}`, pill: stats.currentStreak > 0 ? tr(`连续 ${stats.currentStreak} 天`, `Streak: ${plural(stats.currentStreak, 'day')}`) : tr('今天还没开始', 'Not started today'), pillMuted: !(stats.currentStreak > 0) });
+    const overview = this.trayCard(wrapper, { icon: 'activity', title: tr('知识脉冲概览', 'Pulse overview'), subtitle: `${rangeLabel} · ${scopeLabel}` });
     this.renderOverviewHero(overview, stats);
 
-    const entitled = pulseEntitled(this.plugin);
     if (!entitled) this.selectedMetric = 'contribution';
     const metricLabel = this.getMetricLabel(this.selectedMetric);
     const heat = this.trayCard(wrapper, { icon: 'calendar-days', title: tr('年度知识活跃脉冲', 'Yearly activity'), pill: tr(`${stats.activeDays} 天活跃`, `${plural(stats.activeDays, 'active day')}`), pillMuted: true, cls: 'pulse-v2-heat' });
@@ -8749,7 +8766,7 @@ class CrispPulseView extends ItemView {
     seg.setAttr('role', 'tablist');
     // 「番茄」只在装了带番茄钟的 Crisp Focus、或者已经有番茄记录时出现
     const hasPomodoro = !!this.pomodoroFocus() || Object.values(this.plugin.store.daily || {}).some((r) => dayPomodoros(r).done > 0);
-    for (const m of [['contribution', tr('贡献分', 'Score')], ['activity', tr('交互活跃', 'Active')], ['focus', tr('深度专注', 'Focus')], ...(hasPomodoro ? [['pomodoro', tr('番茄', 'Pomodoros')]] : []), ['words', tr('新增字数', 'Words')], ['notes', tr('新建笔记', 'Notes')], ['tasks', tr('完成任务', 'Tasks')]]) {
+    for (const m of [['contribution', tr('贡献分', 'Score')], ['activity', tr('交互活跃', 'Active')], ['focus', tr('深度专注', 'Focus')], ...(hasPomodoro ? [['pomodoro', tr('番茄', 'Pomodoros')]] : []), ['words', tr('新增词数', 'Words')], ['notes', tr('新建笔记', 'Notes')], ['tasks', tr('完成任务', 'Tasks')]]) {
       const b = seg.createEl('button', { text: m[1] });
       b.setAttr('role', 'tab');
       b.setAttr('aria-selected', String(this.selectedMetric === m[0]));
@@ -8768,6 +8785,33 @@ class CrispPulseView extends ItemView {
     const detail = this.trayCard(wrapper, { icon: 'file-text', title: tr(`${formatDateDisplay(this.selectedDate)} 明细`, `${formatDateDisplay(this.selectedDate)} details`), subtitle: `${quality}${info.level > 0 ? tr(` · 强度第 ${info.percentile}% 分位`, ` · ${info.percentile}th percentile`) : ''}`, pill: `${(rec.contribution?.score || 0).toFixed(1)} ${tr('分', 'pts')}`, pillMuted: !(rec.contribution?.score > 0), cls: 'pulse-v2-detail' });
     if (entitled) this.renderDayDetailCard(detail);
     else this.renderLockedNote(detail, 'dayDetail', tr('激活后查看这一天的贡献分构成、24 小时节奏、各项指标和当天写过的笔记。', 'Activate to see how the day’s score breaks down, its 24-hour rhythm, each metric and the notes you worked on.'));
+  }
+
+  /** 今天条：打开看板先回答今天怎么样。未激活只显示分数和连续，当天明细仍需激活。 */
+  renderTodayStrip(wrapper, stats, entitled) {
+    const todayKey = getTodayKey();
+    const rec = this.plugin.store.daily?.[todayKey];
+    const score = rec?.contribution?.score || 0;
+    const strip = wrapper.createDiv({ cls: 'pulse-today', attr: { role: 'group', 'aria-label': tr('今天', 'Today') } });
+    strip.createSpan({ cls: 'pulse-today-label', text: tr('今天', 'Today') });
+    const value = strip.createDiv({ cls: 'pulse-today-value' });
+    if (score > 0) {
+      value.createSpan({ text: Number(score).toLocaleString(PULSE_NUMBER_LOCALE, { maximumFractionDigits: 1 }) });
+      value.createSpan({ cls: 'pulse-today-unit', text: tr('分', 'pts') });
+    } else value.createSpan({ cls: 'pulse-today-empty', text: tr('还没开始', 'Not started') });
+    const facts = strip.createDiv({ cls: 'pulse-today-facts' });
+    const fact = text => facts.createSpan({ cls: 'pulse-today-fact', text });
+    if (entitled && rec) {
+      const words = rec.contribution?.wordsAdded || 0, focusMinutes = rec.activity?.focusMinutes || 0;
+      if (words > 0) fact(tr(`新增 ${Number(words).toLocaleString(PULSE_NUMBER_LOCALE)} 词`, `${Number(words).toLocaleString(PULSE_NUMBER_LOCALE)} words`));
+      if (focusMinutes > 0) fact(tr(`专注 ${formatPulseMinutes(focusMinutes)} 分钟`, `${formatPulseMinutes(focusMinutes)} min focus`));
+    }
+    const focus = entitled && this.plugin.settings.enableCrispFocusSync ? this.pomodoroFocus() : null;
+    const snap = focus?.getPomodoroSnapshot();
+    if (snap?.entitled) fact(tr(`番茄 ${dayPomodoros(rec).done} / ${snap.goal}`, `Pomodoros ${dayPomodoros(rec).done} / ${snap.goal}`));
+    if (stats.currentStreak > 0) fact(tr(`连续 ${stats.currentStreak} 天`, `${plural(stats.currentStreak, 'day')} streak`));
+    const open = strip.createEl('button', { cls: 'pulse-today-open', text: tr('看明细 →', 'Details →'), attr: { type: 'button' } });
+    open.addEventListener('click', () => this.openAnalyticsDay(todayKey));
   }
 
   /** 卡片内的小锁：一句说明和「前往激活」。 */
@@ -8938,14 +8982,14 @@ class CrispPulseView extends ItemView {
     // 活跃天数：圆环
     const active = tile('is-active-days', tr('活跃天数', 'Active days'), tr('有贡献分或至少一次有效编辑的日子', 'Days with a score or at least one meaningful edit'), prev ? stats.activeDays - prev.activeDays : null, tr(' 天', 'd'));
     const ringRow = active.createDiv({ cls: 'pulse-hero-ring-row' });
-    const share = model.rangeDays ? Math.min(1, stats.activeDays / model.rangeDays) : 0;
+    const { denominator, share } = activeDayShare(stats.activeDays, model.recordedDays);
     const ring = this.analyticsSvg(ringRow, 44, 44);
     ring.draw('circle', { cx: 22, cy: 22, r: 18, class: 'pulse-hero-ring-track' });
     if (share > 0) ring.draw('circle', { cx: 22, cy: 22, r: 18, class: 'pulse-hero-ring-fill', 'stroke-dasharray': `${(share * 2 * Math.PI * 18).toFixed(2)} ${(2 * Math.PI * 18).toFixed(2)}`, transform: 'rotate(-90 22 22)' });
     const ringText = ringRow.createDiv();
     const ringValue = ringText.createDiv({ cls: 'pulse-hero-tile-value' });
-    ringValue.createSpan({ text: String(stats.activeDays) }); ringValue.createSpan({ cls: 'pulse-hero-tile-of', text: ` / ${model.rangeDays}` });
-    ringText.createDiv({ cls: 'pulse-hero-tile-sub', text: tr(`${Math.round(share * 100)}% 的日子有产出`, `${Math.round(share * 100)}% of days`) });
+    ringValue.createSpan({ text: String(stats.activeDays) }); ringValue.createSpan({ cls: 'pulse-hero-tile-of', text: ` / ${denominator}` });
+    ringText.createDiv({ cls: 'pulse-hero-tile-sub', text: !denominator ? tr('这段时间没有记录', 'No records in this range') : denominator < model.rangeDays ? tr(`有记录的日子里 ${Math.round(share * 100)}% 有产出`, `${Math.round(share * 100)}% of recorded days`) : tr(`${Math.round(share * 100)}% 的日子有产出`, `${Math.round(share * 100)}% of days`) });
     // 连续：当前对比最长
     const streak = tile('is-streak', tr('当前连续', 'Current streak'), tr('连续有产出的天数，按全部历史计算，不受时间范围影响', 'Consecutive productive days, counted over all history regardless of the range'));
     const streakValue = streak.createDiv({ cls: `pulse-hero-tile-value${stats.currentStreak > 0 ? ' is-accent' : ''}` });
@@ -14074,7 +14118,7 @@ class CrispPulseSettingTab extends PluginSettingTab {
           .addOption("contribution", tr("贡献得分 (Contribution)", "Contribution score"))
           .addOption("activity", tr("交互活跃 (Active Time)", "Active time"))
           .addOption("focus", tr("深度专注 (Focus Time)", "Focus time"))
-          .addOption("words", tr("新增字数 (Words)", "Words added"))
+          .addOption("words", tr("新增词数 (Words)", "Words added"))
           .addOption("notes", tr("新建笔记 (Notes)", "Notes created"))
           .addOption("tasks", tr("完成任务 (Tasks)", "Tasks completed"))
           .setValue(this.plugin.settings.defaultMetric)
@@ -14330,6 +14374,7 @@ module.exports.ICON_BLOCKS_WAVE_SVG = ICON_BLOCKS_WAVE_SVG;
 module.exports.ICON_BLOCKS_WAVE_REGISTERED_SVG = ICON_BLOCKS_WAVE_REGISTERED_SVG;
 module.exports.CRISP_PULSE_ICON_ID = CRISP_PULSE_ICON_ID;
 module.exports.CrispPulseView = CrispPulseView;
+module.exports.dashboardHelpers = { activeDayShare, paceReading, todayKey: () => getTodayKey() };
 
 module.exports.getReviewDrilldown = getReviewDrilldown;
 module.exports.generateReviewReport = generateReviewReport;
