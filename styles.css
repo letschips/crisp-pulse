@@ -3192,3 +3192,13 @@ input.is-invalid[aria-invalid="true"] { border-color: var(--text-error); box-sha
   margin-bottom: 1.25rem;
   line-height: 1.45;
 }
+
+/* Phone: the 44px touch-target rule must not stretch 10px legend swatches, and the readout's
+   240px flex-basis becomes a height once the footer stacks into a column. */
+.is-mobile .crisp-pulse-view .crisp-pulse-legend button.crisp-pulse-legend-cell { min-height: 0; }
+@container (max-width: 500px) {
+  .crisp-pulse-view .crisp-pulse-heatmap-footer > .crisp-pulse-heat-readout { flex: 0 0 auto; width: 100%; }
+  .crisp-pulse-view .pulse-range-bar { justify-content: stretch; }
+  .crisp-pulse-view.pulse-v2 .pulse-v2-seg.pulse-range-seg { display: flex; flex-wrap: nowrap; width: 100%; }
+  .crisp-pulse-view.pulse-v2 .pulse-v2-seg.pulse-range-seg button { flex: 1 1 0; min-width: 0; padding-inline: 4px; white-space: nowrap; }
+}
