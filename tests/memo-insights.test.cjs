@@ -54,7 +54,8 @@ test('review counts each memo once and reads task completion from Tempo', () => 
   assert.equal(r.converted, 4, 'A 同时转了笔记和任务，只算一条');
   assert.equal(r.toTasks, 3, 'A 重新转过一次任务，仍算一条');
   assert.equal(r.tasksDone, 1); assert.equal(r.tasksOpen, 1); assert.equal(r.tasksMissing, 1);
-  assert.equal(r.toNotes, 1); assert.equal(r.toNow, 1); assert.equal(r.transcribed, 1);
+  // C 是旧版「加入 Now 行动」留下的回链：仍算已转化（converted 里有它），但不算笔记
+  assert.equal(r.toNotes, 1); assert.equal(r.toNow, undefined); assert.equal(r.transcribed, 1);
   same(r.results.map((x) => x.link || x.task.id).sort(), ['t2', '笔记 A']);
   const noTempo = memoConversionReview(memos, '2026-10-01', '2026-10-09', null);
   assert.equal(noTempo.tasksUnknown, 3);

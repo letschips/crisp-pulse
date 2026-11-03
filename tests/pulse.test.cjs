@@ -1573,10 +1573,10 @@ test('exported report carries the memo summary, and says so when memos could not
  const report=p.constructor.generateReviewReport;
  const model=p.getReviewModel('2026-09-02','2026-09-08','all');
  assert.doesNotMatch(report(model),/速记与转化/);
- model.memos={total:4,converted:2,toTasks:1,tasksDone:1,tasksOpen:0,tasksMissing:0,tasksUnknown:0,toNotes:2,toNow:0,pending:[]};
+ model.memos={total:4,converted:2,toTasks:1,tasksDone:1,tasksOpen:0,tasksMissing:0,tasksUnknown:0,toNotes:2,pending:[]};
  const text=report(model);assert.match(text,/## 速记与转化/);assert.match(text,/本期记下 4 条，已转化 2 条/);assert.match(text,/转为任务 1 条（完成 1，未完成 0）/);
  model.memos={error:'disk'};assert.match(report(model),/速记读取失败，未计入/);
- model.memos={total:2,converted:1,toTasks:1,tasksDone:0,tasksOpen:0,tasksMissing:0,tasksUnknown:1,toNotes:0,toNow:0,pending:[]};assert.match(report(model),/完成情况未知/);
+ model.memos={total:2,converted:1,toTasks:1,tasksDone:0,tasksOpen:0,tasksMissing:0,tasksUnknown:1,toNotes:0,pending:[]};assert.match(report(model),/完成情况未知/);
 });
 
 // 1.7: source provenance, cross-period actions, cited review evidence.
@@ -3007,7 +3007,7 @@ test('cursor movement and non-editing shortcuts are not writing evidence; real e
   assert.equal(p.hasWritingEvidence(file.path), true);
 });
 
-/* 1.19.8。失败模式：模板或说明文档的代码块里贴了转换凭据 / Now 行动标记的示例，
+/* 1.19.8。失败模式：模板或说明文档的代码块里贴了转换凭据的示例，
    转换时把示例文档当成已转换的目标：不建新笔记、打开示例、回链指向示例。 */
 function conversionStubs(p, files) {
   const linked = [];const opened = [];const created = [];
@@ -3034,17 +3034,6 @@ test('a conversion receipt shown inside a code block is an example, not the conv
   const again = await p.finishMemoDocument({ id: 'memo-a', path: 'Daily/2026-10-12.md' }, 'note', { path: 'Output/另一个.md', content: 'x' });
   assert.equal(again.path, 'Output/真实想法.md');
   assert.deepEqual(created, ['Output/真实想法.md']);
-});
-
-test('a Now action marker shown inside a code block does not stop the memo being added', async () => {
-  const { p } = setup();await p.loadPluginData();
-  const files = { 'Now/行动.md': '# 行动\n```\n- [ ] 示例 ^pulse-memo-memo-a\n```\n' };
-  const { linked } = conversionStubs(p, files);
-  await p.convertMemoToNow({ path: 'Daily/2026-10-12.md', startLine: 3, text: '真实想法' });
-  assert.match(files['Now/行动.md'], /```\n- \[ \] 真实想法 \[\[Daily\/2026-10-12\]\] \^pulse-memo-memo-a\n$/);
-  assert.deepEqual(linked, ['Now/行动#^pulse-memo-memo-a']);
-  await p.convertMemoToNow({ path: 'Daily/2026-10-12.md', startLine: 3, text: '真实想法' });
-  assert.equal(files['Now/行动.md'].split('^pulse-memo-memo-a').length - 1, 2, '再点一次不重复加（示例 1 处 + 真实 1 处）');
 });
 
 test('the current streak does not depend on the selected date range', async () => {

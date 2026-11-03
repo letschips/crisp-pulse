@@ -23,7 +23,7 @@ function fixture(t){
  const app={vault:{getAbstractFileByPath:p=>files.get(p)||(folders.has(p)?{path:p,children:[]}:null),getMarkdownFiles:()=>[...files.values()].filter(f=>f.path.endsWith('.md')),read:async f=>read(f),cachedRead:async f=>read(f),create:async(p,c)=>{assert(!files.has(p),'destination overwrite');return put(p,c);},createFolder:async p=>{folders.add(p);fs.mkdirSync(path.join(root,p),{recursive:true});},process:(f,fn)=>{const job=(queues.get(f.path)||Promise.resolve()).then(()=>{const c=fn(read(f));put(f.path,c);return c;});queues.set(f.path,job.catch(()=>{}));return job;},adapter:{exists:async p=>fs.existsSync(path.join(root,p)),read:async p=>fs.readFileSync(path.join(root,p),'utf8')}},metadataCache:{getFileCache:f=>({frontmatter:{memo_date:'2026-10-08',topic:f.path.split('/')[1]}})},internalPlugins:{getPluginById:()=>({enabled:true,instance:{options:{folder:'Daily',format:'YYYY-MM-DD'}}})},fileManager:{getNewFileParent:()=>({path:'Notes'})},workspace:{getLeaf:()=>({openFile:async()=>{}})}};
  const settings={memoMode:'anks',memoAnksTopic:'self-media'};
  put('Topics/main-business/raw/inbox/scratch/2026-10-08 速记.md','> [!memo] 10:00\n> 供应链问题 #工作\n');
- put('Topics/self-media/raw/inbox/other.md','other');put('Now/行动.md','# 行动\n');
+ put('Topics/self-media/raw/inbox/other.md','other');
  put('Sidecar/tools/capture-metadata/contract.json',JSON.stringify({contract:'test',routing:{'pulse-memo':{inbox_type:'scratch'}}}));
  const make=()=>{const p=Object.create(P.prototype);p.app=app;p.settings=settings;p.memoStore=new H.MemoStore(app,()=>settings);return p;};
  const source=files.get('Topics/main-business/raw/inbox/scratch/2026-10-08 速记.md');
@@ -54,11 +54,6 @@ test('note backlink failure retries after plugin recreation without creating ano
  await assert.rejects(f.p.convertMemoToNote(stale));assert.equal([...f.files.keys()].filter(p=>p.startsWith('Notes/')).length,1);
  fail=false;const reloaded=f.make();await reloaded.convertMemoToNote(f.memo());
  assert.equal([...f.files.keys()].filter(p=>p.startsWith('Notes/')).length,1);assert.equal(f.memo().links.length,1);observations.push('partial conversion recovered across plugin recreation');
-});
-test('Now conversion is idempotent, remains converted, and preserves completed tasks on retry',async t=>{
- const f=fixture(t);const stale=f.memo();await Promise.all([f.p.convertMemoToNow(stale),f.p.convertMemoToNow(stale)]);
- const now=f.files.get('Now/行动.md');assert.equal((f.read(now).match(/^- \[ \]/gm)||[]).length,1);assert.equal(H.filterMemos([f.memo()],{converted:true}).length,1);
- f.put(now.path,f.read(now).replace('- [ ]','- [x]'));await f.make().convertMemoToNow(f.memo());assert.equal((f.read(now).match(/^- \[/gm)||[]).length,1);assert(f.read(now).includes('- [x]'));assert(/\[\[Now\/行动#\^/.test(f.read(f.source)));observations.push('Now retry preserves one completed task and backlink');
 });
 test('edited source is rejected before creating a note and cannot be partially deleted',async t=>{
  const f=fixture(t);const stale=f.memo();f.put(f.source.path,f.read(f.source)+'> 新追加内容\n');
