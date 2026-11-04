@@ -1,5 +1,10 @@
 # Changelog - Crisp Pulse
 
+## [1.42.0] - 2026-11-04
+
+### Added
+- 只读接口 `getRecentDays(days)`：最近若干天每天的贡献分、专注、完成任务等，口径同看板当前数据范围，没记录的日子为 `null`。Crisp Launchpad 0.8.0 复盘页的「近期节奏」用它。
+
 ## [1.41.0] - 2026-11-03
 
 ### Removed

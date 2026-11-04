@@ -2281,6 +2281,38 @@ class CrispPulsePlugin extends Plugin {
     return { ...state, memos };
   }
 
+  /** 最近 days 天（含今天，1–370）每天的数据，给其他插件读（Crisp Launchpad 复盘页），只读。
+      口径同看板当前的数据范围；没有记录或不在范围内的日子 recorded 为 false、数值为 null，不当成 0。 */
+  async getRecentDays(days = 30) {
+    const count = Math.min(370, Math.max(1, Math.floor(Number(days)) || 30));
+    const scope = this.settings.dataQualityScope || "reliable";
+    const daily = this.store?.daily || {};
+    const out = [];
+    const cursor = new Date();
+    cursor.setHours(12, 0, 0, 0);
+    cursor.setDate(cursor.getDate() - (count - 1));
+    for (let i = 0; i < count; i++) {
+      const key = dateKey(cursor);
+      const record = daily[key];
+      const recorded = !!record && this.recordMatchesScope(record, key, scope);
+      const c = recorded ? record.contribution || {} : null;
+      const a = recorded ? record.activity || {} : null;
+      out.push({
+        date: key,
+        recorded,
+        active: recorded && isRecordActive(record),
+        score: c ? c.score || 0 : null,
+        focusMinutes: a ? a.focusMinutes || 0 : null,
+        activeMinutes: a ? a.activeMinutes || 0 : null,
+        wordsAdded: c ? c.wordsAdded || 0 : null,
+        notesCreated: c ? c.notesCreated || 0 : null,
+        tasksCompleted: c ? c.tasksCompleted || 0 : null,
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return { apiVersion: PULSE_STATE_API_VERSION, scope, streak: this.todayState().streak, days: out };
+  }
+
   /** 今天的分数、连续天数或活跃状态变了才发事件；速记有变化时 reason 为 memos，条数要再调 getTodaySnapshot 读。 */
   emitPulseState(reason, state = null) {
     const payload = { apiVersion: PULSE_STATE_API_VERSION, reason };

@@ -3417,3 +3417,22 @@ test('a damaged focus ledger is reset to empty without touching the days', () =>
   const migrated = helpers.validateAndRepairStore({ version: 1, settings: {}, daily: { '2026-09-08': old } });
   assert.equal(migrated.store.focusLedger.seen['from-1340'], new Date(2026, 8, 8).getTime());
 });
+
+/* getRecentDays（给 Launchpad 复盘页）。失败模式：没记录的日子被当成 0 分；不在数据范围的旧日子混进来；
+   今天不在最后一位；天数参数异常时返回空或上千天。 */
+test('getRecentDays returns one entry per day ending today, null for unrecorded days', async () => {
+  const {p,helpers}=setup();await p.loadPluginData();
+  const day=(date,score,extra={})=>{const r=helpers.createEmptyDailyRecord(date,'recorded');r.contribution.score=score;r.contribution.meaningfulEdits=score>0?1:0;Object.assign(r.activity,extra);return r;};
+  p.store.daily={'2026-09-08':day('2026-09-08',20,{focusMinutes:25}),'2026-09-06':day('2026-09-06',0),'2026-09-05':Object.assign(day('2026-09-05',30),{quality:'estimated'})};
+  p.settings.dataQualityScope='reliable';
+  const r=await p.getRecentDays(4);
+  assert.equal(r.days.map((d)=>d.date).join(','),'2026-09-05,2026-09-06,2026-09-07,2026-09-08');
+  const [est,zero,missing,today]=r.days;
+  assert.equal(est.recorded,false,'估算的旧日子不在可靠范围');assert.equal(est.score,null);
+  assert.equal(zero.recorded,true);assert.equal(zero.score,0);assert.equal(zero.active,false);
+  assert.equal(missing.recorded,false);assert.equal(missing.score,null);assert.equal(missing.focusMinutes,null);
+  assert.equal(today.score,20);assert.equal(today.focusMinutes,25);assert.equal(today.active,true);
+  assert.equal((await p.getRecentDays('x')).days.length,30);
+  assert.equal((await p.getRecentDays(99999)).days.length,370);
+  assert.equal((await p.getRecentDays(-3)).days.length,1);
+});
