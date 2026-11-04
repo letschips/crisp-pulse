@@ -3436,3 +3436,16 @@ test('getRecentDays returns one entry per day ending today, null for unrecorded 
   assert.equal((await p.getRecentDays(99999)).days.length,370);
   assert.equal((await p.getRecentDays(-3)).days.length,1);
 });
+
+/* getMemoBacklog（给 Launchpad 今天一行、待你判断）。失败模式：7 天以前的速记也算进待处理；
+   已转任务或笔记的仍算待处理；读不到速记时返回 0 而不是 null。 */
+test('getMemoBacklog counts memos without an outcome in the last N days only', async () => {
+  const {p}=setup();await p.loadPluginData();
+  const memo=(date,extra={})=>({id:date+Math.random(),date,time:'10:00',path:'m.md',text:'x',links:[],tempoTasks:[],...extra});
+  p.memoStore={list:async()=>[memo('2026-09-08'),memo('2026-09-07',{links:['Note']}),memo('2026-09-03',{tempoTasks:['t1']}),memo('2026-09-02'),memo('2026-09-01')]};
+  const r=await p.getMemoBacklog(7);
+  assert.equal(r.from,'2026-09-02');assert.equal(r.to,'2026-09-08');
+  assert.equal(r.total,4);assert.equal(r.pending,2,'09-08 和 09-02 没去处；09-01 在窗口外');
+  p.memoStore={list:async()=>{throw new Error('unreadable');}};
+  assert.equal(await p.getMemoBacklog(7),null);
+});

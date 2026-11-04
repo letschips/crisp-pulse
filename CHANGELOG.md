@@ -1,5 +1,10 @@
 # Changelog - Crisp Pulse
 
+## [1.43.0] - 2026-11-04
+
+### Added
+- 只读接口 `getMemoBacklog(days)`：最近若干天（默认 7）还没转成任务或笔记的速记条数，读不到速记时为 `null`。Crisp Launchpad 0.9.0 的「速记待处理」用它，点开直接进速记面板看这些。
+
 ## [1.42.0] - 2026-11-04
 
 ### Added
