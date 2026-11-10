@@ -514,11 +514,208 @@ const ICON_MEMO_PEN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 
   + '<path d="M3.38388 14.6147C2.15528 13.5762 1.82266 12.6569 1.76096 11.9801C1.56696 9.8401 3.95698 8.6991 3.94098 6.3111C3.93098 4.7791 2.93497 3.54109 2.12397 2.75009"/>'
   + '</svg>';
 
+// Card-header artwork from IconMCP (https://iconmcp.com, MIT), retrieved 2026-11-10.
+// Copyright (c) 2026 UI8. Full third-party permission notice follows below.
+// Embedded locally; artwork is scaled from 16 units to Obsidian addIcon's 100-unit canvas.
+const PULSE_SECTION_ICONS = {
+  "activity": { name: "activity", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <path d="M1.75 8 L4.5 8 L6.25 3 L9.75 13 L11.5 8 L14.25 8"/>
+  </g>
+</g>` },
+  "calendar-days": { name: "calendar-heatmap", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <rect x="2.25" y="3.25" width="11.5" height="10.5" rx="2"/>
+    <line x1="5.5" y1="1.75" x2="5.5" y2="4.5"/>
+    <line x1="10.5" y1="1.75" x2="10.5" y2="4.5"/>
+    <line x1="2.25" y1="7" x2="13.75" y2="7"/>
+    <rect x="4.5" y="9.625" width="1.25" height="1.25" rx="0"/>
+    <circle cx="5.125" cy="10.25" r="0.88" fill="currentColor" stroke="none"/>
+    <circle cx="8" cy="10.25" r="0.88" fill="currentColor" stroke="none"/>
+    <rect x="10.25" y="9.625" width="1.25" height="1.25" rx="0"/>
+    <circle cx="10.875" cy="10.25" r="0.88" fill="currentColor" stroke="none"/>
+  </g>
+</g>` },
+  "timer": { name: "pomodoro", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <path d="M8 4.5 C11.5 4.25 14 6 14 9 C14 12 11.25 13.75 8 13.75 C4.75 13.75 2 12 2 9 C2 6 4.5 4.25 8 4.5 Z"/>
+    <path d="M5.25 3.25 L7.752 4.387 C7.909 4.459 8.091 4.459 8.248 4.387 L10.75 3.25"/>
+    <line x1="8" y1="4.5" x2="8" y2="1.75"/>
+    <path d="M8 6.75 L8 9.25 L10 10.25"/>
+  </g>
+</g>` },
+  "file-text": { name: "file-text", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <path d="M5.25 2 L9 2 L12.75 5.75 L12.75 12 C12.75 13.105 11.855 14 10.75 14 L5.25 14 C4.145 14 3.25 13.105 3.25 12 L3.25 4 C3.25 2.895 4.145 2 5.25 2 Z"/>
+    <path d="M9 2 L9 4.75 C9 5.302 9.448 5.75 10 5.75 L12.75 5.75"/>
+    <line x1="5.5" y1="5.75" x2="7" y2="5.75"/>
+    <line x1="5.5" y1="8.5" x2="10.5" y2="8.5"/>
+    <line x1="5.5" y1="11" x2="10.5" y2="11"/>
+  </g>
+</g>` },
+  "notebook-pen": { name: "notebook-pen", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <path d="M7 14 L5.625 14 C4.866 14 4.25 13.384 4.25 12.625 L4.25 4 C4.25 2.895 5.145 2 6.25 2 L11 2 C12.105 2 13 2.895 13 4 L13 6.75"/>
+    <line x1="2.25" y1="5" x2="5.25" y2="5"/>
+    <line x1="2.25" y1="8" x2="5.25" y2="8"/>
+    <line x1="2.25" y1="11" x2="5.25" y2="11"/>
+    <path d="M12.674 8.924 L13.576 9.826 C13.81 10.06 13.81 10.44 13.576 10.674 L10.676 13.574 C10.563 13.687 10.411 13.75 10.251 13.75 L8.75 13.75 L8.75 12.249 C8.75 12.089 8.813 11.937 8.926 11.824 L11.826 8.924 C12.06 8.69 12.44 8.69 12.674 8.924 Z"/>
+  </g>
+</g>` },
+  "lightbulb": { name: "lightbulb", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <path d="M6.25 9.25 C6.25 8.6 5.8 8.1 5.25 7.6 C4.45 6.9 4 6.4 4 5.75 A4 4 0 0 1 12 5.75 C12 6.4 11.55 6.9 10.75 7.6 C10.2 8.1 9.75 8.6 9.75 9.25"/>
+    <line x1="6" y1="11.75" x2="10" y2="11.75"/>
+    <line x1="7" y1="14.25" x2="9" y2="14.25"/>
+  </g>
+</g>` },
+  "git-compare": { name: "git-compare", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <circle cx="4.25" cy="4" r="1.75"/>
+    <circle cx="11.75" cy="12" r="1.75"/>
+    <path d="M8 4 L9.875 4 C10.911 4 11.75 4.839 11.75 5.875 L11.75 10.25"/>
+    <path d="M10 2 L8 4 L10 6"/>
+    <path d="M8 12 L6.125 12 C5.089 12 4.25 11.161 4.25 10.125 L4.25 5.75"/>
+    <path d="M6 10 L8 12 L6 14"/>
+  </g>
+</g>` },
+  "folder-tree": { name: "folder-tree", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <path d="M8.5 2.25 L9.086 2.25 C9.351 2.25 9.605 2.355 9.793 2.543 L10.207 2.957 C10.395 3.145 10.649 3.25 10.914 3.25 L13 3.25 C13.552 3.25 14 3.698 14 4.25 L14 6 C14 6.552 13.552 7 13 7 L8.5 7 C7.948 7 7.5 6.552 7.5 6 L7.5 3.25 C7.5 2.698 7.948 2.25 8.5 2.25 Z"/>
+    <path d="M8.5 9.5 L9.086 9.5 C9.351 9.5 9.605 9.605 9.793 9.793 L10.207 10.207 C10.395 10.395 10.649 10.5 10.914 10.5 L13 10.5 C13.552 10.5 14 10.948 14 11.5 L14 13 C14 13.552 13.552 14 13 14 L8.5 14 C7.948 14 7.5 13.552 7.5 13 L7.5 10.5 C7.5 9.948 7.948 9.5 8.5 9.5 Z"/>
+    <path d="M3 1.75 L3 9.75 C3 10.855 3.895 11.75 5 11.75 L7.5 11.75"/>
+    <line x1="3" y1="4.75" x2="7.5" y2="4.75"/>
+  </g>
+</g>` },
+  "crisp-pulse-memo": { name: "workflow-nodes", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <rect x="2.25" y="2.25" width="4.25" height="4.25" rx="1"/>
+    <rect x="9.5" y="9.5" width="4.25" height="4.25" rx="1"/>
+    <path d="M6.5 4.375 L10.625 4.375 C11.177 4.375 11.625 4.823 11.625 5.375 L11.625 9.5"/>
+    <path d="M4.375 6.5 L4.375 10.625 C4.375 11.177 4.823 11.625 5.375 11.625 L9.5 11.625"/>
+  </g>
+</g>` },
+  "pen-line": { name: "pen", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <path d="M11.849 3.099 L12.901 4.151 C13.37 4.62 13.37 5.38 12.901 5.849 L6 12.75 L2.25 13.75 L3.25 10 L10.151 3.099 C10.62 2.63 11.38 2.63 11.849 3.099 Z"/>
+    <line x1="9.25" y1="4" x2="12" y2="6.75"/>
+  </g>
+</g>` },
+  "scroll-text": { name: "scroll", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <path d="M4.5 10.5 V4 A2 2 0 0 1 6.5 2 H12 A1.75 1.75 0 0 1 12 5.5 H11.5 V12 A2 2 0 0 1 9.5 14 H4 A1.75 1.75 0 0 1 4 10.5 Z"/>
+    <line x1="6.75" y1="6.75" x2="9.25" y2="6.75"/>
+    <line x1="6.75" y1="9.5" x2="9.25" y2="9.5"/>
+  </g>
+</g>` },
+  "gauge": { name: "gauge", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <path d="M2.8 11.75 A6 6 0 1 1 13.2 11.75"/>
+    <line x1="8" y1="8.75" x2="10.5" y2="6.25"/>
+    <circle cx="8" cy="8.75" r="0.88" fill="currentColor" stroke="none"/>
+  </g>
+</g>` },
+  "bar-chart-3": { name: "bar-chart", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <rect x="2.25" y="8.5" width="2" height="5" rx="0.6"/>
+    <rect x="7" y="2.5" width="2" height="11" rx="0.6"/>
+    <rect x="11.75" y="5.5" width="2" height="8" rx="0.6"/>
+  </g>
+</g>` },
+  "layout-grid": { name: "heatmap", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <rect x="2.25" y="2.25" width="11.5" height="11.5" rx="2"/>
+    <line x1="8" y1="2.25" x2="8" y2="13.75"/>
+    <line x1="2.25" y1="8" x2="13.75" y2="8"/>
+    <rect x="4.375" y="4.375" width="1.5" height="1.5" rx="0"/>
+    <circle cx="5.125" cy="5.125" r="0.88" fill="currentColor" stroke="none"/>
+    <rect x="10.125" y="10.125" width="1.5" height="1.5" rx="0"/>
+    <circle cx="10.875" cy="10.875" r="0.88" fill="currentColor" stroke="none"/>
+    <circle cx="10.875" cy="5.125" r="0.88" fill="currentColor" stroke="none"/>
+  </g>
+</g>` },
+  "line-chart": { name: "line-chart", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <path d="M2.25 2.25 L2.25 12.75 C2.25 13.302 2.698 13.75 3.25 13.75 L13.75 13.75"/>
+    <path d="M5 10 L7.75 7 L9.75 9 L13.25 5"/>
+  </g>
+</g>` },
+  "clock": { name: "clock", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <circle cx="8" cy="8" r="6"/>
+    <path d="M8 4.75 L8 8 L10.5 9.5"/>
+  </g>
+</g>` },
+  "clock-4": { name: "clock-24", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <path d="M12.066 3.934 A5.75 5.75 0 1 1 3.934 3.934"/>
+    <path d="M2.184 3.934 L3.934 3.934 L3.934 5.684"/>
+    <path d="M4.875 7.125 A1.075 1.075 0 0 1 7.025 7.125 C7.025 8.125 4.875 8.5 4.875 9.625 H7.125"/>
+    <path d="M10.5 9.75 L10.5 6.125 L8.875 8.625 L11.125 8.625"/>
+  </g>
+</g>` },
+  "orbit": { name: "orbit", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <circle cx="8" cy="8" r="2.25"/>
+    <path d="M13.23 6.3 A5.5 5.5 0 1 1 9.7 2.77"/>
+    <circle cx="11.875" cy="4.125" r="1.5"/>
+  </g>
+</g>` },
+  "fingerprint": { name: "fingerprint", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <path d="M2.36 10.55 A6 6 0 1 1 13.64 10.55"/>
+    <path d="M4.5 12.75 V8.5 A3.5 3.5 0 0 1 11.5 8.5 V9.75 C11.5 11.5 11 12.85 10.25 14"/>
+    <path d="M8 8.5 V10.5 C8 12 7.4 13.1 6.5 14"/>
+  </g>
+</g>` },
+  "moon": { name: "lunar-calendar", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <rect x="2.25" y="3.25" width="11.5" height="10.5" rx="2"/>
+    <line x1="5.5" y1="1.75" x2="5.5" y2="4.5"/>
+    <line x1="10.5" y1="1.75" x2="10.5" y2="4.5"/>
+    <path d="M10.75 9.5 A2.875 2.875 0 1 1 7.25 6 A2.5 2.5 0 0 0 10.75 9.5 Z"/>
+  </g>
+</g>` },
+  "layers": { name: "geology", svg: `<g transform="scale(6.25)" fill="none" stroke="currentColor" stroke-width="1.333" stroke-linecap="round" stroke-linejoin="round">
+  <g>
+    <rect x="2" y="2.5" width="12" height="11" rx="2"/>
+    <path d="M2 6 C4.5 4.75 6 7.25 8.5 6 C10.5 5 12 5.75 14 5"/>
+    <path d="M2 10 C4 9 5.5 10.75 8 9.75 C10.5 8.75 12 9.75 14 9"/>
+  </g>
+</g>` }
+};
+
+/* IconMCP artwork — MIT License
+
+Copyright (c) 2026 UI8
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+ */
+
 function crispPulseRegisterIcons() {
   try {
     if (typeof addIcon === "function") {
       addIcon(CRISP_PULSE_ICON_ID, ICON_BLOCKS_WAVE_REGISTERED_SVG);
       addIcon(CRISP_PULSE_MEMO_ICON_ID, ICON_MEMO_PEN_SVG);
+      for (const { name, svg } of Object.values(PULSE_SECTION_ICONS)) {
+        addIcon(`crisp-pulse-section-${name}`, svg);
+      }
     }
   } catch (e) {
     console.warn("[Crisp Pulse] Failed to register custom icon:", e);
@@ -9020,7 +9217,9 @@ class CrispPulseView extends ItemView {
     const tray = parent.createDiv({ cls: `pulse-v2-tray ${cls}`.trim() });
     const head = tray.createDiv({ cls: 'pulse-v2-tray-head' });
     const iconEl = head.createDiv({ cls: 'pulse-v2-tray-icon' });
-    setIcon(iconEl, icon);
+    const sectionIcon = PULSE_SECTION_ICONS[icon];
+    setIcon(iconEl, sectionIcon ? `crisp-pulse-section-${sectionIcon.name}` : icon);
+    iconEl.setAttr('aria-hidden', 'true');
     const text = head.createDiv({ cls: 'pulse-v2-tray-text' });
     text.createDiv({ cls: 'pulse-v2-tray-title', text: title });
     if (subtitle) text.createDiv({ cls: `pulse-v2-tray-sub${wrap ? ' is-wrap' : ''}`, text: subtitle });
