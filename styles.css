@@ -2634,8 +2634,9 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 .crisp-pulse-view .pulse-trace-legend > span { min-width: 0; }
 .crisp-pulse-view .pulse-trace-legend-name { min-width: 0; max-width: 16em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crisp-pulse-view .pulse-trace-axis, .crisp-pulse-view .pulse-trace-row { display: grid; grid-template-columns: var(--pulse-trace-cols); align-items: center; column-gap: 10px; }
-.crisp-pulse-view .pulse-trace-axis { margin-top: 16px; color: var(--text-faint); font-family: var(--font-monospace); font-size: 10.5px; font-variant-numeric: tabular-nums; }
-.crisp-pulse-view .pulse-trace-axis-ends { grid-column: 4; display: flex; justify-content: space-between; }
+/* 列宽里有 em，轴行的字号要和专注行一致，列才对得齐；小字只给刻度本身 */
+.crisp-pulse-view .pulse-trace-axis { margin-top: 16px; font-size: var(--font-ui-small); }
+.crisp-pulse-view .pulse-trace-axis-ends { grid-column: 4; display: flex; justify-content: space-between; color: var(--text-faint); font-family: var(--font-monospace); font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .crisp-pulse-view .pulse-trace-rows { gap: 0; margin-top: 2px; }
 .crisp-pulse-view .pulse-trace-row { min-height: 30px; font-size: var(--font-ui-small); flex-shrink: 0; }
 .crisp-pulse-view .pulse-trace-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
