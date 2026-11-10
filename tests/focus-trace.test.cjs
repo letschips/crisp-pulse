@@ -137,3 +137,31 @@ test('跨零点的专注：分钟照旧整段计入，时间轴上只画零点�
   assert.equal(trace.total, 50);
   assert.deepEqual(plain(trace.strip.map((x) => [x.kind, x.minutes])), [['focus', 5], ['rest', 5], ['focus', 25]]);
 });
+
+// 专注归到哪篇笔记：开始时开着的那篇只是兜底，专注期间真动手写得最多的那篇优先。
+// 容易出错的地方：打字的事件太密把一篇刷成第一、专注前后的编辑被算进来、系统文件抢走归属、没写字时丢掉兜底。
+test('专注归到期间编辑分钟数最多的笔记，按分钟计、只看专注期间', () => {
+  const { pushFocusEdit, pickFocusNote } = load().focusNoteHelpers;
+  const m = (min) => Date.UTC(2026, 10, 10, 7, min); // 15:00 + min
+  const log = [];
+  // 演示.md 在 3 个不同的分钟里写过；另一篇一分钟里敲了很多下，只算 1 分钟
+  for (const t of [m(1), m(1) + 5000, m(4), m(9)]) pushFocusEdit(log, 'Topics/a/演示.md', t);
+  for (let i = 0; i < 50; i++) pushFocusEdit(log, 'Topics/a/别的.md', m(5) + i * 100);
+  // 专注之前、之后写的不算；系统文件和非 md 不算
+  for (const min of [-30, -20, -10, 40, 41, 42]) pushFocusEdit(log, 'Topics/a/之外.md', m(min));
+  for (const min of [2, 3, 6, 7]) pushFocusEdit(log, 'Sidecar/logs/x.md', m(min));
+  for (const min of [2, 3, 6, 7]) pushFocusEdit(log, 'Topics/a/图.canvas', m(min));
+  assert.equal(log.filter((e) => e.path === 'Topics/a/别的.md').length, 1, '同一分钟同一篇只记一次');
+  assert.equal(pickFocusNote(log, m(0), m(25), null), 'Topics/a/演示.md');
+  // 没写字就用开始时开着的那篇
+  assert.equal(pickFocusNote(log, m(100), m(125), 'Topics/a/开着的.md'), 'Topics/a/开着的.md');
+  assert.equal(pickFocusNote(log, m(100), m(125), null), null);
+  // 分钟数一样时取最后写的那篇
+  const tie = [];
+  pushFocusEdit(tie, 'a.md', m(1)); pushFocusEdit(tie, 'b.md', m(2));
+  assert.equal(pickFocusNote(tie, m(0), m(25), null), 'b.md');
+  // 日志有上限，不会一直涨
+  const big = [];
+  for (let i = 0; i < 5000; i++) pushFocusEdit(big, `n${i % 7}.md`, m(0) + i * 60000);
+  assert.ok(big.length <= 2000);
+});
