@@ -2747,6 +2747,18 @@ test('a completed pomodoro is recorded and scored; an interrupted one is recorde
   assert.equal(today.activity.focusSessions[1].minutes, 12);
 });
 
+test('a paused pomodoro keeps its pause minutes for the timeline only; without the event time no pause is guessed', async () => {
+  const { p } = setup();await p.loadPluginData();
+  p.settings.enableCrispFocusSync = true;
+  const start = new Date(2026, 8, 8, 11, 30).getTime();
+  // 11:30 开始，专注 25 分钟、暂停 10 分钟，11:65=12:05 结束
+  await p.handleFocusSessionEvent(focusEvent('complete', { id: 'p1', completed: true, elapsedMs: 25 * 60000, at: start + 35 * 60000 }));
+  const [x] = p.getOrCreateTodayRecord().activity.focusSessions;
+  assert.equal(x.minutes, 25);
+  assert.equal(x.paused, 10);
+  assert.equal(p.getOrCreateTodayRecord().activity.focusMinutes, 25, '暂停不算专注');
+});
+
 test('break events never score and drive the memo prompt', async () => {
   const { p } = setup();await p.loadPluginData();
   p.settings.enableCrispFocusSync = true;

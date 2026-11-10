@@ -78,7 +78,7 @@ test('任务改名后仍是同一段，用最新的名字；行按开始时刻�
 test('超过四件事时，其余并成一段灰色，行也用灰色', () => {
   const trace = buildFocusTrace(['a', 'b', 'c', 'd', 'e', 'f'].map((id, i) => s(`${String(9 + i).padStart(2, '0')}:00`, 30 - i, { taskId: id, taskTitle: id.toUpperCase() })));
   assert.deepEqual(plain(trace.segments.map((g) => [g.kind, g.title, g.minutes, g.color, g.count || 0])), [
-    ['task', 'A', 30, 'orange', 0], ['task', 'B', 29, 'blue', 0], ['task', 'C', 28, 'teal', 0], ['task', 'D', 27, 'purple', 0], ['rest', '', 51, 'gray', 2],
+    ['task', 'A', 30, 'orange', 0], ['task', 'B', 29, 'blue', 0], ['task', 'C', 28, 'teal', 0], ['task', 'D', 27, 'purple', 0], ['others', '', 51, 'gray', 2],
   ]);
   assert.deepEqual(plain(trace.rows.map((r) => r.color)), ['orange', 'blue', 'teal', 'purple', 'gray', 'gray']);
 });
@@ -164,4 +164,57 @@ test('专注归到期间编辑分钟数最多的笔记，按分钟计、只看�
   const big = [];
   for (let i = 0; i < 5000; i++) pushFocusEdit(big, `n${i % 7}.md`, m(0) + i * 60000);
   assert.ok(big.length <= 2000);
+});
+
+// 审查 2026-11-10：暂停、同一分钟的编辑、重命名。
+test('暂停过的专注：时间轴画到真正结束的时刻，暂停单独一段、不算专注也不算休息', () => {
+  // 09:00 开始，专注 25 分钟、中间暂停 10 分钟，09:35 结束；09:40 下一段
+  const trace = buildFocusTrace([s('09:00', 25, { paused: 10 }), s('09:40', 25)]);
+  assert.deepEqual(plain(trace.rows.map((r) => [r.start, r.end])), [[540, 575], [580, 605]]);
+  assert.deepEqual(plain(trace.strip.map((x) => [x.kind, x.minutes])), [['focus', 25], ['paused', 10], ['rest', 5], ['focus', 25]]);
+  assert.equal(trace.rest, 5, '暂停不算进休息');
+  assert.equal(trace.total, 50, '暂停不算进专注');
+});
+
+test('正在进行的专注：暂停期间已专注的分钟不涨，条画到现在', () => {
+  // 09:00 开始，已专注 10 分钟、暂停到 09:15
+  const live = { start: 540, elapsed: 10, wall: 15, planned: 25, pomodoro: true, paused: true };
+  const trace = buildFocusTrace([], live);
+  const row = trace.rows[0];
+  assert.deepEqual(plain([row.start, row.end, row.minutes, row.planned, row.paused]), [540, 555, 10, 25, true]);
+  assert.equal(row.plannedEnd, 570, '剩下的 15 分钟接在现在后面');
+  // 没有开始时刻（旧版 Focus）时照旧按已专注的分钟画
+  const old = buildFocusTrace([], { start: 545, elapsed: 10, planned: 25 }).rows[0];
+  assert.deepEqual(plain([old.start, old.end, old.minutes]), [545, 555, 10]);
+});
+
+test('同一分钟里的编辑：跨过专注开始也算，平局按真正最后一次编辑', () => {
+  const { pushFocusEdit, pickFocusNote } = load().focusNoteHelpers;
+  const at = (sec) => Date.UTC(2026, 10, 10, 7, 0, sec);
+  const a = [];
+  pushFocusEdit(a, 'a.md', at(5)); pushFocusEdit(a, 'a.md', at(45));
+  assert.equal(a.length, 1, '同一分钟仍只记一条');
+  assert.equal(pickFocusNote(a, at(30), at(30) + 25 * 60000, 'fallback.md'), 'a.md');
+  // 只在开始前写过的那一分钟不算
+  const before = [];
+  pushFocusEdit(before, 'a.md', at(5)); pushFocusEdit(before, 'a.md', at(20));
+  assert.equal(pickFocusNote(before, at(30), at(30) + 25 * 60000, 'fallback.md'), 'fallback.md');
+  const b = [];
+  pushFocusEdit(b, 'a.md', at(5)); pushFocusEdit(b, 'b.md', at(10)); pushFocusEdit(b, 'a.md', at(55));
+  assert.equal(pickFocusNote(b, at(0), at(0) + 25 * 60000, null), 'a.md');
+});
+
+test('重命名：专注记录和编辑日志里的路径跟着改，整个文件夹也一样', () => {
+  const { migrateFocusPaths } = load().focusNoteHelpers;
+  const daily = {
+    '2026-11-10': { activity: { focusSessions: [s('09:00', 25, { note: 'old.md' }), s('10:00', 25, { note: 'dir/x.md' }), s('11:00', 25, { note: 'other.md' })] } },
+    '2026-11-09': { activity: {} },
+  };
+  const log = [{ path: 'old.md', minute: 1, at: 1, last: 1 }, { path: 'dir/y.md', minute: 2, at: 2, last: 2 }];
+  const file = (from, to, isFolder) => (p) => (p === from || (isFolder && p.startsWith(`${from}/`)) ? to + p.slice(from.length) : p);
+  assert.equal(migrateFocusPaths(daily, log, file('old.md', 'new.md', false)), true);
+  assert.equal(migrateFocusPaths(daily, log, file('dir', 'moved', true)), true);
+  assert.deepEqual(plain(daily['2026-11-10'].activity.focusSessions.map((x) => x.note)), ['new.md', 'moved/x.md', 'other.md']);
+  assert.deepEqual(plain(log.map((e) => e.path)), ['new.md', 'moved/y.md']);
+  assert.equal(migrateFocusPaths(daily, log, file('none.md', 'z.md', false)), false, '没变化就不标脏');
 });

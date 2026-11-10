@@ -36,7 +36,7 @@ const PULSE_ZH = /^zh\b/i.test(PULSE_LANGUAGE);
 const PULSE_HANT = PULSE_ZH && /^zh[-_](tw|hk|mo|hant)\b/i.test(PULSE_LANGUAGE);
 /* 繁体文案由简体文案转出来（OpenCC s2twp：台湾正体 + 台湾用语），表由 scripts/gen-hant.cjs 生成，只收源码里用到的字词。
    分两段按最长匹配替换：s 简→繁，t 台湾用语。插值进来的内容（文件名、标签）也会被转，只影响显示。 */
-const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"1675b22966fb63cd","s":"一只 一隻|一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|头 頭|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|断了 斷了|方向 方向|无 無|日历 日曆|日子里 日子裏|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栋 棟|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|楼 樓|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|江面 江面|沉淀 沉澱|没 沒|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|游 遊|游船 遊船|湖面 湖面|满 滿|灯 燈|点 點|烟 煙|烟花 煙花|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记了 記了|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|超出 超出|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風|黄 黃","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
+const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"88997878be070e43","s":"一只 一隻|一周 一週|一致 一致|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|头 頭|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|断了 斷了|方向 方向|无 無|日历 日曆|日子里 日子裏|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栋 棟|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|楼 樓|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|江面 江面|沉淀 沉澱|没 沒|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|游 遊|游船 遊船|湖面 湖面|满 滿|灯 燈|点 點|烟 煙|烟花 煙花|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记了 記了|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|超出 超出|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風|黄 黃","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
 let pulseHantStages = null;
 function pulseHant(text) {
   if (typeof text !== "string" || !/\p{Script=Han}/u.test(text)) return text;
@@ -1130,8 +1130,9 @@ function pushFocusEdit(log, path, at = Date.now()) {
   if (typeof path !== 'string' || !/\.md$/i.test(path) || isSystemArtifact(path)) return log;
   const minute = Math.floor(at / 60000);
   // 最近几条里已经有这一分钟的同一篇就不再记，连续打字不会把日志刷满
-  for (let i = log.length - 1; i >= 0 && log[i].minute === minute; i--) if (log[i].path === path) return log;
-  log.push({ path, minute, at });
+  // 同一分钟里留下第一次（at）和最后一次（last），专注开始、结束落在这一分钟中间也判断得出
+  for (let i = log.length - 1; i >= 0 && log[i].minute === minute; i--) if (log[i].path === path) { log[i].last = Math.max(log[i].last ?? log[i].at, at); return log; }
+  log.push({ path, minute, at, last: at });
   if (log.length > FOCUS_EDIT_LOG_MAX) log.splice(0, log.length - FOCUS_EDIT_LOG_MAX);
   return log;
 }
@@ -1139,14 +1140,32 @@ function pushFocusEdit(log, path, at = Date.now()) {
 function pickFocusNote(log, from, to, fallback = null) {
   const tally = new Map();
   for (const e of Array.isArray(log) ? log : []) {
-    if (!(e.at >= from && e.at <= to)) continue;
+    const last = e.last ?? e.at;
+    // 这一分钟的编辑和专注时段有交集才算
+    if (!(last >= from && e.at <= to)) continue;
     const t = tally.get(e.path) || { minutes: 0, last: 0 };
-    t.minutes++; t.last = Math.max(t.last, e.at);
+    t.minutes++; t.last = Math.max(t.last, Math.min(last, to));
     tally.set(e.path, t);
   }
   let best = null, bestT = null;
   for (const [path, t] of tally) if (!bestT || t.minutes > bestT.minutes || (t.minutes === bestT.minutes && t.last > bestT.last)) { best = path; bestT = t; }
   return best || fallback;
+}
+/** 笔记改名或移动：专注记录里的笔记路径和内存里的编辑日志跟着改。有改动返回 true。 */
+function migrateFocusPaths(daily, log, migratePath) {
+  let changed = false;
+  for (const record of Object.values(daily || {})) {
+    for (const x of Array.isArray(record?.activity?.focusSessions) ? record.activity.focusSessions : []) {
+      if (typeof x?.note !== 'string') continue;
+      const next = migratePath(x.note);
+      if (next !== x.note) { x.note = next; changed = true; }
+    }
+  }
+  for (const e of Array.isArray(log) ? log : []) {
+    const next = migratePath(e.path);
+    if (next !== e.path) e.path = next;
+  }
+  return changed;
 }
 function recordSourceWords(fileRecord, path, words, capture) {
   if (!(words > 0)) return;
@@ -1569,6 +1588,11 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
           for (const x of valid) {
             if (x.carry === undefined || (Number.isInteger(x.carry) && x.carry > 0 && x.carry <= x.minutes)) continue;
             delete x.carry;
+            repairedCount++;
+          }
+          for (const x of valid) {
+            if (x.paused === undefined || (Number.isInteger(x.paused) && x.paused > 0 && x.paused <= 240)) continue;
+            delete x.paused;
             repairedCount++;
           }
           // 会话 id（Pulse 1.34.0 起）用来去重补记；坏了只去掉 id，专注本身保留
@@ -2498,10 +2522,13 @@ class CrispPulsePlugin extends Plugin {
       at: sameDay ? `${String(started.getHours()).padStart(2, "0")}:${String(started.getMinutes()).padStart(2, "0")}` : "00:00",
       minutes: Math.min(240, minutes), completed, pomodoro: !!event.pomodoro,
       // 专注期间写得最多的那篇优先，没写字才用开始时开着的那篇
-      note: pickFocusNote(this.focusEditLog, started.getTime(), endedAt.getTime(), typeof event.notePath === "string" ? event.notePath : null),
+      note: pickFocusNote(this.focusEditLog, started.getTime(), endedAt.getTime(), typeof event.notePath === "string" ? (this.focusRenames || []).reduce((p, migrate) => migrate(p), event.notePath) : null),
       ...(sessionId ? { sessionId } : null),
       // 零点前的分钟：分钟数照旧整段计入，只是画时间轴时不从 00:00 多画出去
       ...(carry > 0 ? { carry } : null),
+      // 中途暂停的分钟：Focus 事件里的结束时刻减开始时刻、再减专注分钟，只用来画时间轴。
+      // 只认事件自带的 at：Pulse 晚一点才处理事件时，按处理时刻算会把延迟当成暂停
+      ...(() => { const at = Number(event.at); const paused = sameDay && at > started.getTime() ? Math.min(240, Math.round((at - started.getTime()) / 60000) - Math.min(240, minutes)) : 0; return paused >= 1 ? { paused } : null; })(),
       // Focus 1.7.0（apiVersion 2）起事件带任务；只认 Tempo 的任务，点开时交给 Tempo 定位
       ...(Number(event.apiVersion) >= 2 && event.task?.source === "crisp-tempo" ? focusSessionTask(event.task.id, event.task.title, { clip: true }) : null),
     });
@@ -2936,6 +2963,10 @@ class CrispPulsePlugin extends Plugin {
             if (next !== action.outcomePath) { action.originalOutcomePath ||= action.outcomePath;action.outcomePath = next;this.dirty = true; }
           }
         }
+        // 专注记录里的笔记、专注期间的编辑日志；Focus 交回的开始时笔记是旧路径时，结束时按这里换成新的
+        if (migrateFocusPaths(this.store.daily, this.focusEditLog, migratePath)) this.dirty = true;
+        (this.focusRenames ||= []).push(migratePath);
+        if (this.focusRenames.length > 50) this.focusRenames.shift();
         const banner = this.settings.headerBannerImage;
         if (banner && migratePath(banner) !== banner) { this.settings.headerBannerImage = migratePath(banner);this.dirty = true; }
         for (const record of Object.values(this.store.daily)) {
@@ -5208,13 +5239,18 @@ function buildFocusTrace(sessions, live = null) {
     const start = Math.min(1439, Number(s.at.slice(0, 2)) * 60 + Number(s.at.slice(3, 5)));
     // 跨零点的专注整段记在结束那天、从 00:00 画起；carry 是零点前的分钟，画的时候去掉
     const carry = Number.isFinite(s.carry) && s.carry > 0 ? Math.min(s.carry, s.minutes) : 0;
-    rows.push({ start, end: Math.min(1440, start + s.minutes - carry), minutes: s.minutes, interrupted: !s.completed, pomodoro: !!s.pomodoro, taskId: s.taskId || "", taskTitle: s.taskTitle || "", note: typeof s.note === "string" ? s.note : "", live: false });
+    // paused：专注中途暂停的分钟，只让条画到真正结束的时刻，不算专注
+    const paused = Number.isInteger(s.paused) && s.paused > 0 ? s.paused : 0;
+    rows.push({ start, end: Math.min(1440, start + Math.max(0, s.minutes + paused - carry)), focusLen: Math.max(0, s.minutes - carry), paused, minutes: s.minutes, interrupted: !s.completed, pomodoro: !!s.pomodoro, taskId: s.taskId || "", taskTitle: s.taskTitle || "", note: typeof s.note === "string" ? s.note : "", live: false });
   }
   rows.sort((a, b) => a.start - b.start);
   const liveRow = live && Number.isFinite(live.start) && live.planned > 0 ? (() => {
+    // wall：开始到现在的分钟（含暂停）；旧版 Focus 不给开始时刻，就只有已专注的分钟
     const start = Math.max(0, Math.min(1439, Math.round(live.start)));
-    const end = Math.min(1440, start + Math.max(0, Math.round(live.elapsed || 0)));
-    return { start, end, plannedEnd: Math.min(1440, Math.max(end, start + Math.round(live.planned))), minutes: end - start, interrupted: false, pomodoro: !!live.pomodoro, taskId: live.taskId || "", taskTitle: live.taskTitle || "", note: "", live: true };
+    const elapsed = Math.max(0, Math.round(live.elapsed || 0));
+    const planned = Math.round(live.planned);
+    const end = Math.min(1440, start + Math.max(elapsed, Math.round(live.wall ?? elapsed)));
+    return { start, end, plannedEnd: Math.min(1440, Math.max(end, end + planned - elapsed)), minutes: elapsed, focusLen: elapsed, planned, paused: !!live.paused, interrupted: false, pomodoro: !!live.pomodoro, taskId: live.taskId || "", taskTitle: live.taskTitle || "", note: "", live: true };
   })() : null;
   if (!rows.length && !liveRow) return null;
 
@@ -5238,8 +5274,9 @@ function buildFocusTrace(sessions, live = null) {
   const ranked = [...groups.values()].sort((a, b) => b.minutes - a.minutes);
   const segments = ranked.slice(0, FOCUS_TRACE_COLORS.length).map((group, i) => ({ ...group, color: FOCUS_TRACE_COLORS[i] }));
   const rest = ranked.slice(FOCUS_TRACE_COLORS.length);
-  if (rest.length) segments.push({ kind: "rest", taskId: "", title: "", minutes: rest.reduce((sum, g) => sum + g.minutes, 0), color: "gray", count: rest.length });
-  const colorOf = new Map(segments.filter(g => g.kind !== "rest").map(g => [g.key, g.color]));
+  // 颜色用完后的几件合成「其他 N 件」；kind 和休息分开，免得图例当成休息
+  if (rest.length) segments.push({ kind: "others", taskId: "", title: "", minutes: rest.reduce((sum, g) => sum + g.minutes, 0), color: "gray", count: rest.length });
+  const colorOf = new Map(segments.filter(g => g.kind !== "others").map(g => [g.key, g.color]));
   if (interrupted > 0) segments.push({ kind: "interrupted", taskId: "", title: "", minutes: interrupted, color: "gray" });
   const total = ranked.reduce((sum, g) => sum + g.minutes, 0);
   for (const row of rows) row.color = colorOf.get(row.group) || "gray";
@@ -5260,8 +5297,11 @@ function buildFocusTrace(sessions, live = null) {
       else strip.push({ kind: "away", minutes: gap, color: "gray", from: cursor, to: row.start });
     }
     const from = Math.max(row.start, cursor ?? 0);
-    const minutes = Math.max(0, row.end - from);
-    if (minutes > 0 || row.live) strip.push({ kind: row.live ? "live" : row.interrupted ? "interrupted" : "focus", minutes, color: row.color, from, to: row.end, row });
+    const span = Math.max(0, row.end - from);
+    // 专注在前、暂停在后（暂停具体落在哪几分钟不知道，只知道有多久）
+    const minutes = Math.min(span, row.focusLen ?? span);
+    if (minutes > 0 || row.live) strip.push({ kind: row.live ? "live" : row.interrupted ? "interrupted" : "focus", minutes, color: row.color, from, to: from + minutes, row });
+    if (span - minutes >= 1) strip.push({ kind: "paused", minutes: span - minutes, color: "gray", from: from + minutes, to: row.end, row });
     cursor = Math.max(cursor ?? 0, row.end);
   }
   return { rows, segments, strip, rest: restMinutes, from, to, total, interrupted, lead: top && (top.kind === "task" || top.kind === "note") && top.minutes * 2 > total ? top : null, now: liveRow ? liveRow.end : null };
@@ -9839,7 +9879,12 @@ class CrispPulseView extends ItemView {
     const now = new Date();
     const elapsed = Math.max(0, (snap.plannedMs - snap.remainingMs) / 60000);
     const task = snap.task?.source === "crisp-tempo" ? focusSessionTask(snap.task.id, snap.task.title, { clip: true }) : null;
-    return { start: now.getHours() * 60 + now.getMinutes() - elapsed, elapsed, planned: snap.plannedMs / 60000, pomodoro: !!snap.pomodoro, ...task };
+    const nowMin = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+    // Focus 1.9.3 起快照带开始时刻：暂停过也从真正开始的时刻画到现在；旧版只能按已专注的分钟往回推
+    const startedAt = Number(snap.startedAt);
+    const sameDay = startedAt > 0 && dateKey(new Date(startedAt)) === getTodayKey();
+    const wall = sameDay ? Math.max(elapsed, (now.getTime() - startedAt) / 60000) : elapsed;
+    return { start: nowMin - wall, elapsed, wall, planned: snap.plannedMs / 60000, paused: snap.status === "paused", pomodoro: !!snap.pomodoro, ...task };
   }
 
   /* 当天的专注：上面一条占比条（专注给了哪几件事，中断的画斜纹、不计时长），
@@ -9854,7 +9899,7 @@ class CrispPulseView extends ItemView {
       return h ? tr(`${h} 小时${rest ? ` ${rest} 分` : ""}`, `${h} h${rest ? ` ${rest} min` : ""}`) : tr(`${rest} 分钟`, `${rest} min`);
     };
     const kindWord = row => (row.pomodoro ? tr("番茄", "Pomodoro") : tr("单次专注", "Single session"));
-    const segmentWord = g => g.kind === "task" || g.kind === "note" ? g.title : g.kind === "rest" ? tr(`其他 ${g.count} 件`, `${g.count} more`) : g.kind === "interrupted" ? tr("中断", "Interrupted") : kindWord({ pomodoro: g.kind === "pomodoro" });
+    const segmentWord = g => g.kind === "task" || g.kind === "note" ? g.title : g.kind === "others" ? tr(`其他 ${g.count} 件`, `${g.count} more`) : g.kind === "interrupted" ? tr("中断", "Interrupted") : kindWord({ pomodoro: g.kind === "pomodoro" });
     const tone = (el, color) => el.style.setProperty("--c", `var(--pulse-chart-${color})`);
     const noteName = path => path.slice(path.lastIndexOf("/") + 1).replace(/\.md$/i, "");
     // 一段专注叫什么：任务名，没有任务看归到的笔记，再没有就是番茄 / 单次专注
@@ -9862,8 +9907,9 @@ class CrispPulseView extends ItemView {
     const rowLabel = r => [
       `${clock(r.start)}–${clock(r.live ? r.plannedEnd : r.end)}`,
       r.live ? tr(`已专注 ${span(r.minutes)}`, `${span(r.minutes)} so far`) : span(r.minutes),
+      !r.live && r.paused > 0 ? tr(`中途暂停 ${span(r.paused)}`, `paused ${span(r.paused)}`) : "",
       r.taskTitle || r.note ? `${kindWord(r)}${r.taskTitle ? "" : tr("，专注时主要在这篇笔记", ", mostly in this note")}` : kindWord(r),
-      r.live ? tr("进行中", "In progress") : r.interrupted ? tr("中断，不计时长", "Interrupted, not counted") : "",
+      r.live ? (r.paused ? tr("已暂停", "Paused") : tr("进行中", "In progress")) : r.interrupted ? tr("中断，不计时长", "Interrupted, not counted") : "",
     ].filter(Boolean).join(" · ");
 
     const wrap = card.createDiv({ cls: "crisp-pulse-file-list-wrap pulse-day-focus pulse-trace" });
@@ -9880,11 +9926,13 @@ class CrispPulseView extends ItemView {
       const legendWord = g => (g.kind === "rest" ? tr("休息", "Breaks") : segmentWord(g));
       const bar = wrap.createDiv({ cls: "pulse-trace-bar", attr: { role: "img", "aria-label": legendItems.map(g => `${legendWord(g)} ${span(g.minutes)}`).join(tr("，", ", ")) } });
       for (const part of trace.strip) {
-        const seg = bar.createDiv({ cls: `pulse-trace-seg ${{ focus: "is-focus", rest: "is-rest", away: "is-away", live: "is-live", interrupted: "is-hatched" }[part.kind]}` });
+        const seg = bar.createDiv({ cls: `pulse-trace-seg ${{ focus: "is-focus", rest: "is-rest", away: "is-away", live: "is-live", interrupted: "is-hatched", paused: "is-paused" }[part.kind]}` });
         if (part.kind !== "away") seg.style.flexGrow = String(Math.max(part.minutes, 0.01));
         tone(seg, part.color);
         const when = `${clock(part.from)}–${clock(part.to)}`;
-        seg.setAttr("aria-label", part.row
+        seg.setAttr("aria-label", part.kind === "paused"
+          ? tr(`暂停 ${span(part.minutes)} · ${rowName(part.row)}中途暂停，不算专注也不算休息`, `Paused ${span(part.minutes)} · during ${rowName(part.row)}, not counted as focus or break`)
+          : part.row
           ? (part.row.taskTitle || part.row.note ? `${rowName(part.row)} · ${rowLabel(part.row)}` : rowLabel(part.row))
           : part.kind === "rest" ? tr(`休息 · ${when} · ${span(part.minutes)}`, `Break · ${when} · ${span(part.minutes)}`)
           : tr(`${when} 没有专注 · 超过一小时，不算休息`, `${when} no focus · over an hour, not a break`));
@@ -9931,8 +9979,9 @@ class CrispPulseView extends ItemView {
         link.addEventListener("click", () => this.app.workspace.openLinkText(r.note, ""));
       } else name.createSpan({ cls: "pulse-day-focus-task", text: r.taskTitle || (r.note ? r.note.slice(r.note.lastIndexOf("/") + 1).replace(/\.md$/i, "") : kindWord(r)) });
       const track = row.createSpan({ cls: "pulse-trace-track" });
+      let plan = null;
       if (r.live) {
-        const plan = track.createSpan({ cls: "pulse-trace-plan" });
+        plan = track.createSpan({ cls: "pulse-trace-plan" });
         plan.style.left = pct(r.start);
         plan.style.width = `${(r.plannedEnd - r.start) / width * 100}%`;
       }
@@ -9940,8 +9989,8 @@ class CrispPulseView extends ItemView {
       const fill = track.createSpan({ cls: "pulse-trace-fill", attr: { "aria-label": rowLabel(r), "data-tooltip-position": "top" } });
       fill.style.left = pct(r.start);
       fill.style.width = `${(r.end - r.start) / width * 100}%`;
-      const minutes = row.createSpan({ cls: "pulse-trace-min", text: r.live ? `${Math.round(r.minutes)} / ${span(r.plannedEnd - r.start)}` : span(r.minutes) });
-      if (r.live) liveEls = { row: r, fill, minutes };
+      const minutes = row.createSpan({ cls: "pulse-trace-min", text: r.live ? `${Math.round(r.minutes)} / ${span(r.planned)}` : span(r.minutes) });
+      if (r.live) liveEls = { row: r, fill, minutes, plan };
     }
     this.foldDayList(list, "focus");
 
@@ -9952,10 +10001,15 @@ class CrispPulseView extends ItemView {
       this.traceTicker = window.setInterval(() => {
         const live = list.isConnected ? this.liveFocusTrace() : null;
         if (!live) { window.clearInterval(this.traceTicker); this.traceTicker = null; return; }
-        const end = Math.min(liveEls.row.plannedEnd, Math.max(liveEls.row.start, Math.round(live.start + live.elapsed)));
-        liveEls.fill.style.width = `${(end - liveEls.row.start) / width * 100}%`;
-        liveEls.minutes.setText(`${end - liveEls.row.start} / ${span(liveEls.row.plannedEnd - liveEls.row.start)}`);
-        liveEls.fill.setAttr("aria-label", rowLabel({ ...liveEls.row, end, minutes: end - liveEls.row.start }));
+        // 已专注的分钟只看 Focus 报的 elapsed，暂停时不涨；条和「现在」的竖线照实际时间往前走
+        const r = liveEls.row;
+        const elapsed = Math.round(live.elapsed);
+        const end = Math.min(1440, r.start + Math.max(elapsed, Math.round(live.wall ?? live.elapsed)));
+        const plannedEnd = Math.min(1440, Math.max(end, end + r.planned - elapsed));
+        liveEls.fill.style.width = `${(end - r.start) / width * 100}%`;
+        if (liveEls.plan) liveEls.plan.style.width = `${(plannedEnd - r.start) / width * 100}%`;
+        liveEls.minutes.setText(`${elapsed} / ${span(r.planned)}`);
+        liveEls.fill.setAttr("aria-label", rowLabel({ ...r, end, plannedEnd, minutes: elapsed, paused: live.paused }));
         list.style.setProperty("--now", pct(end));
       }, 30000);
     }
@@ -14739,7 +14793,7 @@ module.exports.ICON_BLOCKS_WAVE_SVG = ICON_BLOCKS_WAVE_SVG;
 module.exports.ICON_BLOCKS_WAVE_REGISTERED_SVG = ICON_BLOCKS_WAVE_REGISTERED_SVG;
 module.exports.CRISP_PULSE_ICON_ID = CRISP_PULSE_ICON_ID;
 module.exports.CrispPulseView = CrispPulseView;
-module.exports.focusNoteHelpers = { pushFocusEdit, pickFocusNote };
+module.exports.focusNoteHelpers = { pushFocusEdit, pickFocusNote, migrateFocusPaths };
 module.exports.dashboardHelpers = { activeDayShare, paceReading, heatDayFolder, heatDaySummary, heatMetricSummary, heatMoveTarget, buildFocusTrace, buildMonthPace, countWritingWords: (s) => countWords(writingText(s)), todayKey: () => getTodayKey() };
 
 module.exports.getReviewDrilldown = getReviewDrilldown;

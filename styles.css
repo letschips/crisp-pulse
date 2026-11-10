@@ -2629,6 +2629,7 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 /* 休息：平涂的浅绿，和专注的散点靠质感也分得开；离开太久的地方只留一个断点 */
 .crisp-pulse-view .pulse-trace-seg.is-rest, .crisp-pulse-view .pulse-trace-swatch.is-rest { background: color-mix(in srgb, var(--pulse-chart-green) 42%, transparent); }
 .crisp-pulse-view .pulse-trace-seg.is-live { opacity: .6; }
+.crisp-pulse-view .pulse-trace-seg.is-paused { background: color-mix(in srgb, var(--text-faint) 28%, transparent); }
 .crisp-pulse-view .pulse-trace-seg.is-away { flex: none; width: 9px; min-width: 9px; background: radial-gradient(circle, var(--text-faint) .8px, transparent 1.1px) center / 3px 3px repeat-x; }
 .crisp-pulse-view .pulse-trace-swatch { flex: none; width: 9px; height: 9px; border-radius: 2.5px; }
 .crisp-pulse-view .pulse-trace-legend > span { min-width: 0; }
