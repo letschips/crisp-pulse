@@ -502,7 +502,6 @@
 .pulse-day-focus-time { color: var(--text-faint); font-variant-numeric: tabular-nums; flex: none; }
 .pulse-day-focus-main { display: flex; align-items: baseline; gap: 6px; min-width: 0; flex: 1; color: var(--text-normal); }
 .pulse-day-focus-main > span:first-child { flex: none; font-variant-numeric: tabular-nums; }
-.pulse-day-focus-sep { color: var(--text-faint); flex: none; }
 .pulse-day-focus-task { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 button.pulse-day-focus-task.is-link {
   all: unset;
@@ -517,7 +516,6 @@ button.pulse-day-focus-task.is-link {
 button.pulse-day-focus-task.is-link:hover { text-decoration: underline; }
 button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; border-radius: 2px; }
 .pulse-day-focus-kind { font-size: 11px; color: var(--text-faint); white-space: nowrap; flex: none; }
-.pulse-day-focus-item.is-interrupted .pulse-day-focus-main > span:first-child { color: var(--text-muted); }
 @container (max-width: 500px) {
   /* 窄面板：番茄/中断挪到第二行，给任务名留出整行 */
   .pulse-day-focus-item { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; column-gap: 10px; row-gap: 2px; }
@@ -2592,6 +2590,73 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 .crisp-pulse-view .pulse-day-tile.is-zero .pulse-day-tile-value { color: var(--text-faint); }
 .crisp-pulse-view .pulse-day-file-track { display: block; flex-basis: 100%; height: 3px; margin-top: 2px; border-radius: 999px; background: color-mix(in srgb, var(--text-normal) 5%, transparent); overflow: hidden; }
 .crisp-pulse-view .pulse-day-file-fill { display: block; height: 100%; border-radius: 999px; background: var(--pulse-chart-purple); opacity: .7; }
+/* 当日专注轨迹：占比条（点状＝完成的专注，斜纹＝中断）+ 每段专注在当天时间轴上的位置。--c 是所属任务的颜色 */
+.crisp-pulse-view .pulse-trace { --c: var(--pulse-chart-gray); --pulse-trace-cols: 7px 2.9em minmax(0, 1fr) clamp(96px, 36%, 260px) 5.4em; gap: 0; margin-bottom: 18px; }
+.crisp-pulse-view .pulse-trace-head { font-size: 15px; font-weight: 500; color: var(--text-normal); }
+.crisp-pulse-view .pulse-trace-lead { font-weight: 400; color: var(--text-muted); }
+.crisp-pulse-view .pulse-trace-bar { display: flex; gap: 2px; height: 12px; margin: 12px 0 10px; }
+.crisp-pulse-view .pulse-trace-seg, .crisp-pulse-view .pulse-trace-swatch {
+  /* 四组周期互质的散点叠在一起，近看是噪点、不成行列 */
+  background-color: color-mix(in srgb, var(--c) 22%, transparent);
+  background-image:
+    radial-gradient(circle at 5.0px 3.8px, color-mix(in srgb, var(--c) 85%, transparent) .6px, transparent .95px),
+    radial-gradient(circle at 5.0px 5.6px, var(--c) .6px, transparent .95px),
+    radial-gradient(circle at 2.4px 3.6px, color-mix(in srgb, var(--c) 70%, transparent) .6px, transparent .95px),
+    radial-gradient(circle at 6.6px 1.7px, color-mix(in srgb, var(--c) 85%, transparent) .6px, transparent .95px),
+    radial-gradient(circle at 3.6px 1.1px, color-mix(in srgb, var(--c) 70%, transparent) .6px, transparent .95px),
+    radial-gradient(circle at 8.1px 6.4px, color-mix(in srgb, var(--c) 85%, transparent) .6px, transparent .95px),
+    radial-gradient(circle at 12.0px 7.0px, color-mix(in srgb, var(--c) 70%, transparent) .6px, transparent .95px),
+    radial-gradient(circle at 8.3px 6.7px, color-mix(in srgb, var(--c) 70%, transparent) .6px, transparent .95px),
+    radial-gradient(circle at 1.3px 0.9px, var(--c) .6px, transparent .95px),
+    radial-gradient(circle at 7.7px 8.2px, color-mix(in srgb, var(--c) 85%, transparent) .6px, transparent .95px),
+    radial-gradient(circle at 5.8px 8.9px, color-mix(in srgb, var(--c) 70%, transparent) .6px, transparent .95px),
+    radial-gradient(circle at 2.0px 4.1px, var(--c) .6px, transparent .95px),
+    radial-gradient(circle at 4.4px 6.0px, color-mix(in srgb, var(--c) 85%, transparent) .6px, transparent .95px),
+    radial-gradient(circle at 3.0px 7.1px, var(--c) .6px, transparent .95px),
+    radial-gradient(circle at 4.7px 4.3px, var(--c) .6px, transparent .95px),
+    radial-gradient(circle at 8.7px 0.7px, color-mix(in srgb, var(--c) 70%, transparent) .6px, transparent .95px),
+    radial-gradient(circle at 12.7px 2.1px, color-mix(in srgb, var(--c) 85%, transparent) .6px, transparent .95px),
+    radial-gradient(circle at 6.7px 4.2px, color-mix(in srgb, var(--c) 70%, transparent) .6px, transparent .95px),
+    radial-gradient(circle at 0.6px 1.4px, var(--c) .6px, transparent .95px);
+  background-size: 11px 7px, 11px 7px, 11px 7px, 11px 7px, 11px 7px, 13px 11px, 13px 11px, 13px 11px, 13px 11px, 13px 11px, 13px 11px, 7px 13px, 7px 13px, 7px 13px, 7px 13px, 17px 5px, 17px 5px, 17px 5px, 17px 5px;
+}
+.crisp-pulse-view .pulse-trace-seg { min-width: 4px; flex-basis: 0; border-radius: 3px; }
+.crisp-pulse-view .pulse-trace-seg.is-hatched, .crisp-pulse-view .pulse-trace-swatch.is-hatched, .crisp-pulse-view .pulse-trace-row.is-interrupted .pulse-trace-fill {
+  background-color: color-mix(in srgb, var(--c) 12%, transparent);
+  background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 85%, transparent) 0 1px, transparent 1px 4px);
+  background-size: auto;
+}
+/* 休息：平涂的浅绿，和专注的散点靠质感也分得开；离开太久的地方只留一个断点 */
+.crisp-pulse-view .pulse-trace-seg.is-rest, .crisp-pulse-view .pulse-trace-swatch.is-rest { background: color-mix(in srgb, var(--pulse-chart-green) 42%, transparent); }
+.crisp-pulse-view .pulse-trace-seg.is-live { opacity: .6; }
+.crisp-pulse-view .pulse-trace-seg.is-away { flex: none; width: 9px; min-width: 9px; background: radial-gradient(circle, var(--text-faint) .8px, transparent 1.1px) center / 3px 3px repeat-x; }
+.crisp-pulse-view .pulse-trace-swatch { flex: none; width: 9px; height: 9px; border-radius: 2.5px; }
+.crisp-pulse-view .pulse-trace-legend > span { min-width: 0; }
+.crisp-pulse-view .pulse-trace-legend-name { min-width: 0; max-width: 16em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crisp-pulse-view .pulse-trace-axis, .crisp-pulse-view .pulse-trace-row { display: grid; grid-template-columns: var(--pulse-trace-cols); align-items: center; column-gap: 10px; }
+.crisp-pulse-view .pulse-trace-axis { margin-top: 16px; color: var(--text-faint); font-family: var(--font-monospace); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.crisp-pulse-view .pulse-trace-axis-ends { grid-column: 4; display: flex; justify-content: space-between; }
+.crisp-pulse-view .pulse-trace-rows { gap: 0; margin-top: 2px; }
+.crisp-pulse-view .pulse-trace-row { min-height: 30px; font-size: var(--font-ui-small); flex-shrink: 0; }
+.crisp-pulse-view .pulse-trace-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.crisp-pulse-view .pulse-trace-row.is-interrupted .pulse-trace-dot { background: none; box-shadow: inset 0 0 0 1.5px var(--c); }
+.crisp-pulse-view .pulse-trace-name { display: flex; min-width: 0; color: var(--text-normal); }
+.crisp-pulse-view .pulse-trace-row.is-interrupted .pulse-trace-name, .crisp-pulse-view .pulse-trace-row.is-interrupted .pulse-trace-min { color: var(--text-muted); }
+.crisp-pulse-view .pulse-trace-track { position: relative; height: 14px; }
+.crisp-pulse-view .pulse-trace-track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--background-modifier-border); }
+.crisp-pulse-view .pulse-trace-fill, .crisp-pulse-view .pulse-trace-plan { position: absolute; top: 3px; height: 8px; min-width: 3px; border-radius: 2.5px; }
+.crisp-pulse-view .pulse-trace-fill { background: var(--c); }
+.crisp-pulse-view .pulse-trace-plan { background: color-mix(in srgb, var(--c) 18%, var(--background-primary)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 35%, transparent); }
+.crisp-pulse-view .pulse-trace-rows.has-now .pulse-trace-track::after { content: ""; position: absolute; left: var(--now, 100%); top: -8px; bottom: -8px; width: 1px; background: color-mix(in srgb, var(--pulse-ui-accent, var(--interactive-accent)) 55%, transparent); }
+.crisp-pulse-view .pulse-trace-min { text-align: right; color: var(--text-muted); font-family: var(--font-monospace); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@container (max-width: 500px) {
+  /* 窄面板：时间轴挪到任务名下面一行 */
+  .crisp-pulse-view .pulse-trace { --pulse-trace-cols: 7px 2.9em minmax(0, 1fr) auto; }
+  .crisp-pulse-view .pulse-trace-row { padding: 5px 0 3px; row-gap: 2px; }
+  .crisp-pulse-view .pulse-trace-track { grid-row: 2; grid-column: 3 / -1; }
+  .crisp-pulse-view .pulse-trace-min { grid-row: 1; grid-column: 4; }
+  .crisp-pulse-view .pulse-trace-axis-ends { grid-column: 3 / -1; }
+}
 @container (max-width: 760px) {
   .crisp-pulse-view .pulse-day-top { grid-template-columns: minmax(0, 1fr); }
   .crisp-pulse-view .pulse-day-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }

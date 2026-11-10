@@ -3299,7 +3299,7 @@ test('sessions missed while Pulse was off are caught up from the Focus log, once
   assert.equal(sep8.activity.focusMinutes, 50, '补记的完成番茄计入它结束那天');
   assert.ok(sep8.contribution.score > scoreBefore, '那天的贡献分重算');
   const sep9 = p.store.daily['2026-09-09'];
-  assert.deepEqual(JSON.parse(JSON.stringify(sep9.activity.focusSessions)), [{ at: '00:00', minutes: 9, completed: false, pomodoro: true, note: null, sessionId: 'M2' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(sep9.activity.focusSessions)), [{ at: '00:00', minutes: 9, completed: false, pomodoro: true, note: null, sessionId: 'M2', carry: 5 }]);
   assert.equal(sep9.activity.focusMinutes || 0, 0, '中断的只记录不计分');
 
   assert.equal(await p.catchUpFocusSessions(), 0, '补记两遍不会多记');
@@ -3448,4 +3448,42 @@ test('getMemoBacklog counts memos without an outcome in the last N days only', a
   assert.equal(r.total,4);assert.equal(r.pending,2,'09-08 和 09-02 没去处；09-01 在窗口外');
   p.memoStore={list:async()=>{throw new Error('unreadable');}};
   assert.equal(await p.getMemoBacklog(7),null);
+});
+
+/* 外部工具先删后建同一路径（同步、切分支、整目录重装）时，不能把整篇再算一遍「不是你输入的」；
+   速记自动建的当天文件是容器，不算新建笔记。 */
+test('a file deleted and re-created by an external tool only adds its growth to externalWords', async () => {
+  const { p, advance } = setup();await p.loadPluginData();p.realEvidence();
+  const file = { path: 'Sidecar/skills/a/SKILL.md', extension: 'md', content: 'one two three four five' };
+  p.rememberDeletedWords(file.path, 5);
+  advance(2000);
+  await p.handleFileCreation(file);
+  assert.equal(p.getOrCreateTodayRecord().contribution.externalWords || 0, 0, '内容没变，不重复计');
+  p.fileSnapshots.delete(file.path);p.rememberDeletedWords(file.path, 5);
+  file.content += ' six seven';
+  await p.handleFileCreation(file);
+  assert.equal(p.getOrCreateTodayRecord().contribution.externalWords, 2, '只算多出来的');
+  // 过了十分钟再建回来的，当成新文件
+  p.fileSnapshots.delete(file.path);p.rememberDeletedWords(file.path, 7);
+  advance(11 * 60000);
+  await p.handleFileCreation(file);
+  assert.equal(p.getOrCreateTodayRecord().contribution.externalWords, 9);
+  // 一个全新的外部文件照常整篇计入
+  await p.handleFileCreation({ path: 'notes/agent.md', extension: 'md', content: 'a b c' });
+  assert.equal(p.getOrCreateTodayRecord().contribution.externalWords, 12);
+});
+
+test('the daily memo file Pulse creates itself is not a new note, but its words still count', async () => {
+  const { p } = setup();await p.loadPluginData();
+  const file = { path: 'Daily/2026-09-08.md', extension: 'md', content: '> [!memo] 12:00\n> 一条速记' };
+  (p.memoContainers ||= new Set()).add(file.path);
+  await p.handleFileCreation(file);
+  const today = p.getOrCreateTodayRecord();
+  assert.equal(today.contribution.notesCreated, 0);
+  assert.equal(today.files[file.path].created, false);
+  assert.equal(today.contribution.wordsAdded, 4);
+  // 标记只用一次：之后手动在同一路径新建的笔记照常算
+  p.fileSnapshots.delete(file.path);
+  await p.handleFileCreation(file);
+  assert.equal(p.getOrCreateTodayRecord().contribution.notesCreated, 1);
 });
