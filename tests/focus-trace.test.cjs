@@ -218,3 +218,49 @@ test('重命名：专注记录和编辑日志里的路径跟着改，整个文�
   assert.deepEqual(plain(log.map((e) => e.path)), ['new.md', 'moved/y.md']);
   assert.equal(migrateFocusPaths(daily, log, file('none.md', 'z.md', false)), false, '没变化就不标脏');
 });
+
+test('补记时：这一分钟最后一次编辑在结束之后，不拿结束时刻顶替，平局归结束前真正最后写的那篇', () => {
+  const { pushFocusEdit, pickFocusNote } = load().focusNoteHelpers;
+  const at = (min, sec) => Date.UTC(2026, 10, 10, 7, min, sec);
+  const log = [];
+  pushFocusEdit(log, 'a.md', at(0, 5)); pushFocusEdit(log, 'b.md', at(0, 20)); pushFocusEdit(log, 'a.md', at(0, 55));
+  assert.equal(pickFocusNote(log, at(0, 30) - 25 * 60000, at(0, 30), null), 'b.md');
+});
+
+test('跨零点又暂停过：时间轴画到真正结束的时刻；零点前暂停比专注还长也不多画', () => {
+  // 23:50 开始、专注 25 分钟、暂停 10 分钟，00:25 结束
+  const a = buildFocusTrace([s('00:00', 25, { carry: 10, paused: 10 })]).rows[0];
+  assert.deepEqual(plain([a.start, a.end]), [0, 25]);
+  // 23:20 开始，零点前大多在暂停（零点前 40 分钟），专注 25、暂停 40，00:25 结束
+  const b = buildFocusTrace([s('00:00', 25, { carry: 40, paused: 40 })]).rows[0];
+  assert.deepEqual(plain([b.start, b.end]), [0, 25]);
+});
+
+function plugin() {
+  const P = load();
+  const p = Object.create(P.prototype);
+  p.store = { daily: {} }; p.focusEditLog = [];
+  p.getOrCreateRecord = (day) => (p.store.daily[day] ||= { files: {}, activity: {} });
+  return p;
+}
+
+test('记一段跨零点的专注：暂停分钟也存下，零点前的分钟含暂停', () => {
+  const p = plugin();
+  const start = new Date(2026, 10, 9, 23, 50).getTime(), end = new Date(2026, 10, 10, 0, 25).getTime();
+  const saved = p.appendFocusSession({ type: 'complete', plannedMinutes: 25, startedAt: start, at: end, apiVersion: 3, pomodoro: true }, new Date(end));
+  const x = saved.record.activity.focusSessions[0];
+  assert.deepEqual(plain([x.at, x.minutes, x.carry, x.paused]), ['00:00', 25, 10, 10]);
+  assert.equal(buildFocusTrace([x]).rows[0].end, 25);
+});
+
+test('开始前的改名不作用到后来同名的新笔记；开始之后的改名照常跟过去', () => {
+  const p = plugin();
+  const t = (h, m) => new Date(2026, 10, 10, h, m).getTime();
+  const rename = (from, to, at) => ({ at, migrate: (x) => (x === from ? to : x) });
+  p.focusRenames = [rename('a.md', 'archive.md', t(15, 0))];
+  const one = p.appendFocusSession({ type: 'complete', plannedMinutes: 25, startedAt: t(16, 0), at: t(16, 25), notePath: 'a.md', pomodoro: true }, new Date(t(16, 25)));
+  assert.equal(one.record.activity.focusSessions[0].note, 'a.md');
+  p.focusRenames.push(rename('a.md', 'b.md', t(17, 10)));
+  const two = p.appendFocusSession({ type: 'complete', plannedMinutes: 25, startedAt: t(17, 0), at: t(17, 25), notePath: 'a.md', pomodoro: true }, new Date(t(17, 25)));
+  assert.equal(two.record.activity.focusSessions[1].note, 'b.md');
+});

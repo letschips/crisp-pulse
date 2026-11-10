@@ -1144,7 +1144,9 @@ function pickFocusNote(log, from, to, fallback = null) {
     // 这一分钟的编辑和专注时段有交集才算
     if (!(last >= from && e.at <= to)) continue;
     const t = tally.get(e.path) || { minutes: 0, last: 0 };
-    t.minutes++; t.last = Math.max(t.last, Math.min(last, to));
+    // 这一分钟最后一次编辑落在结束之后时，结束前真正的最后一次不知道，只能确定第一次（at）在专注里；
+    // 不能拿结束时刻顶替，那会凭空造出一个比别的笔记都晚的编辑
+    t.minutes++; t.last = Math.max(t.last, last <= to ? last : e.at);
     tally.set(e.path, t);
   }
   let best = null, bestT = null;
@@ -1586,7 +1588,9 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
             && (x.note === undefined || x.note === null || typeof x.note === "string")).slice(-200);
           if (valid.length !== rec.activity.focusSessions.length) { rec.activity.focusSessions = valid; repairedCount++; }
           for (const x of valid) {
-            if (x.carry === undefined || (Number.isInteger(x.carry) && x.carry > 0 && x.carry <= x.minutes)) continue;
+            // carry 是零点前的墙钟分钟，含暂停，所以上限是专注加暂停
+            const pausedOk = Number.isInteger(x.paused) && x.paused > 0 && x.paused <= 240 ? x.paused : 0;
+            if (x.carry === undefined || (Number.isInteger(x.carry) && x.carry > 0 && x.carry <= x.minutes + pausedOk)) continue;
             delete x.carry;
             repairedCount++;
           }
@@ -2517,18 +2521,21 @@ class CrispPulsePlugin extends Plugin {
     const sessionId = typeof event.id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(event.id) ? event.id : null;
     // 跨零点的专注记在结束那天，开始时刻按当天 00:00 记，免得排到当天深夜
     const sameDay = dateKey(started) === day;
-    const carry = sameDay ? 0 : Math.min(Math.min(240, minutes), Math.max(0, Math.round((new Date(endedAt.getFullYear(), endedAt.getMonth(), endedAt.getDate()).getTime() - started.getTime()) / 60000)));
+    // 中途暂停的分钟：Focus 事件里的结束时刻减开始时刻、再减专注分钟，只用来画时间轴（跨零点也算）。
+    // 只认事件自带的 at：Pulse 晚一点才处理事件时，按处理时刻算会把延迟当成暂停
+    const eventAt = Number(event.at);
+    const paused = eventAt > started.getTime() ? Math.max(0, Math.min(240, Math.round((eventAt - started.getTime()) / 60000) - Math.min(240, minutes))) : 0;
+    // carry：零点前的墙钟分钟（含暂停），画时间轴时从 00:00 起扣掉；不超过专注加暂停的总长
+    const carry = sameDay ? 0 : Math.min(240, Math.min(240, minutes) + paused, Math.max(0, Math.round((new Date(endedAt.getFullYear(), endedAt.getMonth(), endedAt.getDate()).getTime() - started.getTime()) / 60000)));
     record.activity.focusSessions.push({
       at: sameDay ? `${String(started.getHours()).padStart(2, "0")}:${String(started.getMinutes()).padStart(2, "0")}` : "00:00",
       minutes: Math.min(240, minutes), completed, pomodoro: !!event.pomodoro,
       // 专注期间写得最多的那篇优先，没写字才用开始时开着的那篇
-      note: pickFocusNote(this.focusEditLog, started.getTime(), endedAt.getTime(), typeof event.notePath === "string" ? (this.focusRenames || []).reduce((p, migrate) => migrate(p), event.notePath) : null),
+      note: pickFocusNote(this.focusEditLog, started.getTime(), endedAt.getTime(), typeof event.notePath === "string" ? (this.focusRenames || []).filter(r => r.at >= started.getTime()).reduce((p, r) => r.migrate(p), event.notePath) : null),
       ...(sessionId ? { sessionId } : null),
       // 零点前的分钟：分钟数照旧整段计入，只是画时间轴时不从 00:00 多画出去
       ...(carry > 0 ? { carry } : null),
-      // 中途暂停的分钟：Focus 事件里的结束时刻减开始时刻、再减专注分钟，只用来画时间轴。
-      // 只认事件自带的 at：Pulse 晚一点才处理事件时，按处理时刻算会把延迟当成暂停
-      ...(() => { const at = Number(event.at); const paused = sameDay && at > started.getTime() ? Math.min(240, Math.round((at - started.getTime()) / 60000) - Math.min(240, minutes)) : 0; return paused >= 1 ? { paused } : null; })(),
+      ...(paused >= 1 ? { paused } : null),
       // Focus 1.7.0（apiVersion 2）起事件带任务；只认 Tempo 的任务，点开时交给 Tempo 定位
       ...(Number(event.apiVersion) >= 2 && event.task?.source === "crisp-tempo" ? focusSessionTask(event.task.id, event.task.title, { clip: true }) : null),
     });
@@ -2965,7 +2972,8 @@ class CrispPulsePlugin extends Plugin {
         }
         // 专注记录里的笔记、专注期间的编辑日志；Focus 交回的开始时笔记是旧路径时，结束时按这里换成新的
         if (migrateFocusPaths(this.store.daily, this.focusEditLog, migratePath)) this.dirty = true;
-        (this.focusRenames ||= []).push(migratePath);
+        // 记下改名时刻：只换专注开始之后发生的改名，之后又建了同名新笔记时不会被旧规则改走
+        (this.focusRenames ||= []).push({ at: Date.now(), migrate: migratePath });
         if (this.focusRenames.length > 50) this.focusRenames.shift();
         const banner = this.settings.headerBannerImage;
         if (banner && migratePath(banner) !== banner) { this.settings.headerBannerImage = migratePath(banner);this.dirty = true; }
@@ -5238,9 +5246,10 @@ function buildFocusTrace(sessions, live = null) {
     if (!s || typeof s.at !== "string" || !/^\d{2}:\d{2}$/.test(s.at) || !Number.isFinite(s.minutes) || s.minutes < 0) continue;
     const start = Math.min(1439, Number(s.at.slice(0, 2)) * 60 + Number(s.at.slice(3, 5)));
     // 跨零点的专注整段记在结束那天、从 00:00 画起；carry 是零点前的分钟，画的时候去掉
-    const carry = Number.isFinite(s.carry) && s.carry > 0 ? Math.min(s.carry, s.minutes) : 0;
     // paused：专注中途暂停的分钟，只让条画到真正结束的时刻，不算专注
     const paused = Number.isInteger(s.paused) && s.paused > 0 ? s.paused : 0;
+    // carry 含零点前的暂停，上限是专注加暂停
+    const carry = Number.isFinite(s.carry) && s.carry > 0 ? Math.min(s.carry, s.minutes + paused) : 0;
     rows.push({ start, end: Math.min(1440, start + Math.max(0, s.minutes + paused - carry)), focusLen: Math.max(0, s.minutes - carry), paused, minutes: s.minutes, interrupted: !s.completed, pomodoro: !!s.pomodoro, taskId: s.taskId || "", taskTitle: s.taskTitle || "", note: typeof s.note === "string" ? s.note : "", live: false });
   }
   rows.sort((a, b) => a.start - b.start);
@@ -10006,6 +10015,12 @@ class CrispPulseView extends ItemView {
         const elapsed = Math.round(live.elapsed);
         const end = Math.min(1440, r.start + Math.max(elapsed, Math.round(live.wall ?? live.elapsed)));
         const plannedEnd = Math.min(1440, Math.max(end, end + r.planned - elapsed));
+        // 暂停久了，条超出最初的时间轴：刻度和每一行的位置都要按新范围重排，整块重画
+        if (plannedEnd > trace.to) {
+          window.clearInterval(this.traceTicker); this.traceTicker = null;
+          this.plugin.refreshViewsAfterFocus();
+          return;
+        }
         liveEls.fill.style.width = `${(end - r.start) / width * 100}%`;
         if (liveEls.plan) liveEls.plan.style.width = `${(plannedEnd - r.start) / width * 100}%`;
         liveEls.minutes.setText(`${elapsed} / ${span(r.planned)}`);

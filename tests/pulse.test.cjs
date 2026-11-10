@@ -3311,7 +3311,7 @@ test('sessions missed while Pulse was off are caught up from the Focus log, once
   assert.equal(sep8.activity.focusMinutes, 50, '补记的完成番茄计入它结束那天');
   assert.ok(sep8.contribution.score > scoreBefore, '那天的贡献分重算');
   const sep9 = p.store.daily['2026-09-09'];
-  assert.deepEqual(JSON.parse(JSON.stringify(sep9.activity.focusSessions)), [{ at: '00:00', minutes: 9, completed: false, pomodoro: true, note: null, sessionId: 'M2', carry: 5 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(sep9.activity.focusSessions)), [{ at: '00:00', minutes: 9, completed: false, pomodoro: true, note: null, sessionId: 'M2', carry: 5, paused: 1 }]); // 跨零点也存暂停：墙钟 10 分钟、专注 9 分钟，条才画到 00:05
   assert.equal(sep9.activity.focusMinutes || 0, 0, '中断的只记录不计分');
 
   assert.equal(await p.catchUpFocusSessions(), 0, '补记两遍不会多记');
