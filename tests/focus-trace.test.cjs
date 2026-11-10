@@ -111,6 +111,9 @@ test('占比条按先后排：专注之间不超过一小时的空当算休息�
   ]);
   assert.equal(trace.rest, 54);
   assert.equal(trace.total, 75, '休息不算进专注时长');
+  // 每一段带起止时刻，专注段带对应的那一行，悬停时各说各的
+  assert.deepEqual(plain(trace.strip.map((x) => [x.from, x.to])), [[540, 565], [565, 570], [570, 595], [595, 644], [644, 669], [669, 780], [780, 805]]);
+  assert.deepEqual(plain(trace.strip.map((x) => (x.row ? x.row.start : null))), [540, null, 570, null, 644, null, 780]);
   // 正在进行的一段接在最后，前面的空当照样算休息
   const live = buildFocusTrace([s('09:00', 25)], { start: 570, elapsed: 4, planned: 25, pomodoro: true });
   assert.deepEqual(plain(live.strip.map((x) => [x.kind, x.minutes])), [['focus', 25], ['rest', 5], ['live', 4]]);
