@@ -125,7 +125,7 @@ function tempoView(tempo) {
   const rendered = [];
   const row = { isConnected: true };
   v.memoClosed = false; v.memoTempoRows = new Map([[row, { id: 'm1' }]]);
-  v.plugin = { memoTempo: () => tempo };
+  v.plugin = { memoTempo: () => tempo, memoTempoDueDates: async () => ({}) };
   v.renderTempoChip = (_row, _m, snapshots, opts) => rendered.push({ status: snapshots?.['crisp-pulse:m1']?.status, stale: !!opts?.stale });
   return { v, rendered };
 }

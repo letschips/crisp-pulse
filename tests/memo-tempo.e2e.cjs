@@ -15,7 +15,7 @@ function load(){
  const obs={Plugin,TFile,ItemView:class{},PluginSettingTab:class{},Setting:class{},Modal:class{},Notice:class{},Platform:{isMobile:false,isDesktop:true},normalizePath:p=>p,addIcon(){},setIcon(){},requestUrl:()=>Promise.reject(new Error('offline in test'))};
  const base={require:n=>n==='obsidian'?obs:require(n),console,Date,Blob,setTimeout,clearTimeout,setInterval,clearInterval,window:{setTimeout,clearTimeout,setInterval,clearInterval},document:{hidden:false},crypto:globalThis.crypto,TextEncoder,TextDecoder,Buffer,atob,btoa,AbortController,URL,structuredClone};
  const pulseCtx={...base,module:{exports:{}}};vm.runInNewContext(fs.readFileSync(process.env.PULSE_RUNTIME||path.join(__dirname,'../main.js'),'utf8'),pulseCtx);
- const build=esbuild.buildSync({stdin:{contents:'export { default as Tempo } from "./src/main"; export { TempoStore } from "./src/core/store";',resolveDir:tempoRoot,loader:'ts'},bundle:true,write:false,platform:'node',format:'cjs',external:['obsidian'],jsx:'automatic',jsxImportSource:'preact',logLevel:'silent'});
+ const build=esbuild.buildSync({stdin:{contents:'export { default as Tempo } from "./src/main"; export { TempoStore } from "./src/core/store";',resolveDir:tempoRoot,loader:'ts'},bundle:true,write:false,platform:'node',format:'cjs',external:['obsidian'],alias:{'tempo-apple-helper':path.join(__dirname,'fixtures/tempo-apple-helper.stub.js')},jsx:'automatic',jsxImportSource:'preact',logLevel:'silent'});
  const tempoCtx={...base,module:{exports:{}}};vm.runInNewContext('(function(){'+build.outputFiles[0].text+'})()',{...tempoCtx,exports:tempoCtx.module.exports,module:tempoCtx.module});
  return {Pulse:pulseCtx.module.exports,...tempoCtx.module.exports};
 }
@@ -140,4 +140,37 @@ test('without Tempo, with an older one or with bad data, Pulse shows no Tempo li
  assert.deepEqual(JSON.parse(JSON.stringify((await f.pulse.tempoCompletedOn('2026-10-28')).map(r=>r.id))),['ok'],'坏条目丢掉');
  f.app.plugins.plugins['crisp-tempo']={getCompletedOn:async()=>{throw new Error('reloading');}};
  assert.deepEqual(JSON.parse(JSON.stringify(await f.pulse.tempoCompletedOn('2026-10-28'))),[]);
+});
+
+/* 速记卡片上的截止倒计时（Pulse 1.46.0，读 Tempo 0.13.0 起的 getActionOverview）。失败模式：
+ * - 已完成、已取消、已删除的任务还在倒计时；没有截止日期或日期格式不对时显示成「还剩 NaN 天」。
+ * - 今天、明天落成「还剩 0 天」「还剩 1 天」；逾期和快到期用同一种颜色；跨月、夏令时差一天。
+ * - Tempo 旧版没有这个接口、接口抛错或给了坏数据时，卡片连任务状态也不显示了。
+ * - 拿到了别的任务（不是这条速记转出来的）的截止日期。
+ */
+test('the countdown follows the task due date and stops once the task is closed',()=>{
+ const {memoTempoDue}=load().Pulse.memoHelpers;const T='2026-11-11';const open={id:'t',status:'todo',title:'x'};
+ assert.deepEqual({...memoTempoDue(open,'2026-11-09',T)},{text:'逾期 2 天',tone:'is-overdue'});
+ assert.deepEqual({...memoTempoDue(open,'2026-11-11',T)},{text:'今天截止',tone:'is-soon'});
+ assert.deepEqual({...memoTempoDue(open,'2026-11-12',T)},{text:'明天截止',tone:'is-soon'});
+ assert.deepEqual({...memoTempoDue({...open,status:'waiting'},'2026-11-14',T)},{text:'还剩 3 天',tone:'is-soon'});
+ assert.deepEqual({...memoTempoDue({...open,status:'in_progress'},'2026-12-01',T)},{text:'还剩 20 天',tone:''});
+ assert.equal(memoTempoDue(open,'2026-11-02','2026-10-31').text,'还剩 2 天','美国夏令时结束那天不差一天');
+ for(const status of ['done','canceled'])assert.equal(memoTempoDue({...open,status},'2026-11-12',T),null);
+ assert.equal(memoTempoDue(undefined,'2026-11-12',T),null,'任务已删除');
+ for(const bad of [undefined,'','11/12','2026-13-40x',20261112])assert.equal(memoTempoDue(open,bad,T),null);
+});
+
+test('due dates come from Tempo for converted memos only, and a Tempo that cannot answer just gives none',async t=>{
+ const f=fixture(t);assert.deepEqual({...await f.pulse.memoTempoDueDates()},{}, '没有 Tempo');
+ await f.makeTempo();const task=await f.pulse.convertMemoToTempo(f.memos()[0]);const sourceId=f.tasks()[0].sourceId;
+ assert.deepEqual({...await f.pulse.memoTempoDueDates()},{}, '没设截止日期');
+ const store=f.TempoStore.get(f.tempo);
+ store.updateDatabase(db=>({...db,tasks:{...db.tasks,[task.id]:{...db.tasks[task.id],dueDate:'2026-11-20'},other:{...db.tasks[task.id],id:'other',sourceId:undefined,dueDate:'2026-11-12'},foreign:{...db.tasks[task.id],id:'foreign',sourceId:'crisp-annotations:abc',dueDate:'2026-11-13'}}}));
+ assert.deepEqual({...await f.pulse.memoTempoDueDates()},{[sourceId]:'2026-11-20'});
+ const real=f.tempo.getActionOverview;
+ f.tempo.getActionOverview=async()=>{throw new Error('boom');};assert.deepEqual({...await f.pulse.memoTempoDueDates()},{});
+ f.tempo.getActionOverview=async()=>({tasks:[null,{sourceId},{sourceId,dueDate:'soon'},'x']});assert.deepEqual({...await f.pulse.memoTempoDueDates()},{});
+ f.tempo.getActionOverview=undefined;assert.deepEqual({...await f.pulse.memoTempoDueDates()},{}, '旧版 Tempo');
+ f.tempo.getActionOverview=real;
 });

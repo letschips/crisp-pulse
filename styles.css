@@ -1663,6 +1663,14 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
   color: var(--text-success, var(--color-green));
 }
 
+.crisp-pulse-memo-view button.crisp-pulse-memo-tempo-chip.is-soon {
+  color: var(--text-warning, var(--color-orange));
+}
+
+.crisp-pulse-memo-view button.crisp-pulse-memo-tempo-chip.is-overdue {
+  color: var(--text-error, var(--color-red));
+}
+
 /* 回收站 */
 .crisp-pulse-memo-item.is-trashed .crisp-pulse-memo-text {
   color: var(--text-muted);
