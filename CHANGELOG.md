@@ -1,5 +1,11 @@
 # Changelog - Crisp Pulse
 
+## [1.48.0] - 2026-11-12
+
+### Added
+- 速记输入框可以直接记为 Tempo 任务：点工具栏的任务按钮，或按 ⌘⏎（Windows 为 Ctrl+Enter）。需要 Crisp Tempo 0.2.0 或更高版本。
+- 速记链接加 `task=1` 时，记下的速记直接转为 Tempo 任务。
+
 ## [1.47.1] - 2026-11-12
 
 ### Changed

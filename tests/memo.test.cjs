@@ -349,10 +349,10 @@ test('去年今日：按年分组列出往年同月同日，另给上月今日',
 });
 
 test('URL 入口：解析 text/tags/open 参数，空内容只打开视图', () => {
-  assert.deepEqual(plain(memo.parseMemoUrlParams({ action: 'crisp-pulse-memo', vault: 'X', text: '想法', tags: '阅读, 工作' })), { text: '想法 #阅读 #工作', open: false });
-  assert.deepEqual(plain(memo.parseMemoUrlParams({ text: '已有 #阅读', tags: '阅读' })), { text: '已有 #阅读', open: false });
-  assert.deepEqual(plain(memo.parseMemoUrlParams({ text: '  ', open: '1' })), { text: '', open: true });
-  assert.deepEqual(plain(memo.parseMemoUrlParams({})), { text: '', open: true });
+  assert.deepEqual(plain(memo.parseMemoUrlParams({ action: 'crisp-pulse-memo', vault: 'X', text: '想法', tags: '阅读, 工作' })), { text: '想法 #阅读 #工作', open: false, task: false });
+  assert.deepEqual(plain(memo.parseMemoUrlParams({ text: '已有 #阅读', tags: '阅读' })), { text: '已有 #阅读', open: false, task: false });
+  assert.deepEqual(plain(memo.parseMemoUrlParams({ text: '  ', open: '1' })), { text: '', open: true, task: false });
+  assert.deepEqual(plain(memo.parseMemoUrlParams({})), { text: '', open: true, task: false });
 });
 
 /* ---------- 相关笔记与随机漫步（纯本地，不接 AI，不依赖 ANKS） ---------- */

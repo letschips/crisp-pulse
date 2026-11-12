@@ -1213,6 +1213,13 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
   color: var(--text-muted);
 }
 
+/* 记为任务开关：打开时用强调色，和普通工具按钮区分开 */
+.crisp-pulse-memo-view button.crisp-pulse-memo-as-task.is-active,
+.crisp-pulse-memo-view button.crisp-pulse-memo-as-task.is-active:hover {
+  color: var(--interactive-accent);
+  background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+}
+
 .crisp-pulse-memo-toolbar-meta {
   margin-left: auto;
   margin-right: 4px;

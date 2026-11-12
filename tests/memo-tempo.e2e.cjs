@@ -174,3 +174,37 @@ test('due dates come from Tempo for converted memos only, and a Tempo that canno
  f.tempo.getActionOverview=undefined;assert.deepEqual({...await f.pulse.memoTempoDueDates()},{}, '旧版 Tempo');
  f.tempo.getActionOverview=real;
 });
+
+/* 记录时直接转为任务（输入框「记为任务」开关、⌘⏎、URL task=1）。失败模式：
+ * - 速记和任务各写一半：任务建了速记没回执，或回执写进了别的速记。
+ * - Tempo 拒绝（未激活、保存失败）时把用户刚写的速记也弄丢了。
+ * - 没装 Tempo 时照样写速记却悄悄不建任务，用户以为已经建好。
+ * - 转任务的速记不再算本人写作。 */
+test('capturing as a task writes one memo with its receipt and one Tempo task',async t=>{
+ const f=fixture(t);await f.makeTempo();const own=[];f.pulse.memoStore.onOwnWrite=p=>own.push(p);
+ const {memo,task}=await f.pulse.captureMemoAsTask('订一下周六的场地 #活动\n问清押金',new Date(2026,9,9,11,5));
+ assert.equal(memo.path,'Daily/2026-10-09.md');assert.deepEqual(own,['Daily/2026-10-09.md'],'算本人写作');
+ const all=f.memos();assert.equal(all.length,3,'原有两条不动');const m=all.find(x=>x.id===memo.id);
+ assert.equal(m.time,'11:05');assert.equal(m.text,'订一下周六的场地 #活动\n问清押金');assert.deepEqual(JSON.parse(JSON.stringify(m.tempoTasks)),[task.id]);
+ const [s]=f.tasks();assert.equal(f.tasks().length,1);assert.equal(s.title,'订一下周六的场地');assert.equal(s.sourceId,`crisp-pulse:${memo.id}`);
+});
+
+test('when Tempo refuses, the memo is still saved and can be converted later from its card',async t=>{
+ const f=fixture(t,{licensed:false});await f.makeTempo();
+ await assert.rejects(()=>f.pulse.captureMemoAsTask('给房东打电话',new Date(2026,9,9,12,0)),/已记下/);
+ const m=f.memos().find(x=>x.text==='给房东打电话');assert.ok(m,'速记没丢');assert.ok(m.id);assert.equal(f.tasks().length,0);assert.doesNotMatch(f.read('Daily/2026-10-09.md'),/crisp-pulse-tempo:/);
+ f.TempoStore.get(f.tempo).data.licenseStatus='valid';await f.pulse.convertMemoToTempo(m);assert.equal(f.tasks().length,1,'之后从卡片菜单转只建一条');
+});
+
+test('without Tempo, capturing as a task writes nothing and says why',async t=>{
+ const f=fixture(t);const before=f.read('Daily/2026-10-09.md');
+ await assert.rejects(()=>f.pulse.captureMemoAsTask('不该写进去',new Date(2026,9,9,12,0)),/Crisp Tempo 0\.2\.0/);
+ assert.equal(f.read('Daily/2026-10-09.md'),before);
+});
+
+test('the memo URL accepts task=1',()=>{
+ const {parseMemoUrlParams}=load().Pulse.memoHelpers;
+ assert.equal(parseMemoUrlParams({text:'买牛奶',task:'1'}).task,true);
+ assert.equal(parseMemoUrlParams({text:'买牛奶'}).task,false);
+ assert.equal(parseMemoUrlParams({task:'1'}).task,false,'没有正文时只打开面板');
+});
