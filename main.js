@@ -4380,7 +4380,8 @@ class CrispPulsePlugin extends Plugin {
       leaf = workspace.getRightLeaf(false) ?? workspace.getLeaf(true);
       await leaf.setViewState({ type: VIEW_TYPE_MEMO, active: true });
     }
-    workspace.revealLeaf(leaf);
+    // 重启后不在前台的面板是延迟加载的占位视图；revealLeaf 会换上真视图，等它完成后调用方才能用 focusMemo 等方法
+    await workspace.revealLeaf(leaf);
   }
 
   /** 打开速记面板并带上筛选条件（复盘页「看这 N 条」用）。 */

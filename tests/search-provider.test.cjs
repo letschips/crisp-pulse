@@ -65,6 +65,40 @@ test('choosing a result shows that memo in the panel; a memo that moved or is go
   assert.equal(focused.length, 2);
 });
 
+/* 速记面板在侧栏里但不是当前标签页时，Obsidian 重启或 Pulse 重载后它是延迟加载的占位视图，没有 focusMemo/focusMemoAt。
+   revealLeaf 是 async，接口只保证它完成时真视图已加载（最后一步 await loadIfDeferred()）。Obsidian 1.15.0 实测在同步阶段
+   就换上了真视图（2026-11-12），但 onOpen 还没跑完；这里按接口约定测：换视图慢于一个微任务时，调用方也要等到真视图再操作。 */
+function deferredWorkspace() {
+  const focused = [];
+  const real = { focusMemo: (id) => focused.push({ id }), focusMemoAt: (at) => focused.push(plain(at)), showQuery: (q) => focused.push({ q }) };
+  const leaf = { view: {} };
+  // 真实的 rerender 走 setViewState、等视图 onOpen 读完文件，远不止一个微任务。
+  leaf.loadIfDeferred = async () => { await new Promise((r) => setTimeout(r, 5)); leaf.view = real; };
+  const workspace = {
+    getLeavesOfType: () => [leaf],
+    revealLeaf: async (l) => { await l.loadIfDeferred(); },
+  };
+  return { workspace, focused };
+}
+
+test('a memo panel that is still deferred after a restart is loaded before the memo is shown', async () => {
+  for (const [name, run, want] of [
+    ['Search, memo with id', (p) => p.revealMemoEntry('id:abc-1'), [{ id: 'abc-1' }]],
+    ['Search, memo without id', (p) => p.revealMemoEntry('at:4:Daily/2026-11-10.md'), [{ path: 'Daily/2026-11-10.md', startLine: 4 }]],
+    ['Tempo back to its memo', (p) => p.revealMemo({ id: 'abc-1' }), [{ id: 'abc-1' }]],
+    ['review "see these memos"', (p) => p.openMemoQuery('#工作'), [{ q: '#工作' }]],
+  ]) {
+    const { workspace, focused } = deferredWorkspace();
+    const plugin = Object.assign(Object.create(Pulse.prototype), {
+      stopped: false,
+      app: { plugins: { plugins: {} }, workspace },
+      memoStore: { list: async () => memos.map((m) => ({ ...m })) },
+    });
+    await run(plugin);
+    assert.deepEqual(focused, want, name);
+  }
+});
+
 test('the panel can show one memo that has no id, and clears that with the other filters', () => {
   const v = Object.create(View.prototype);
   v.resetFilters();
