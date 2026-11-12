@@ -3499,3 +3499,33 @@ test('the daily memo file Pulse creates itself is not a new note, but its words 
   await p.handleFileCreation(file);
   assert.equal(p.getOrCreateTodayRecord().contribution.notesCreated, 1);
 });
+
+/* Crisp Mind 的导图编辑计入写作（Pulse 1.49.0 补上 Mind 一直在调的 trackActivity）。失败模式：
+   - 只用鼠标改导图（拖节点、右键菜单加删分支）时 Pulse 自己认不出是本人编辑，Mind 保存后算成外部写入；
+   - 任何插件随时调 trackActivity 就能给任意文件刷分（必须紧跟一次真实的点按或键入）；
+   - 参数不对时抛错，连带 Mind 的编辑流程出错。 */
+test('Crisp Mind reports a mouse edit right after a real action, and its save counts as writing', async () => {
+  const { p, advance } = setup();await p.loadPluginData();p.realEvidence();
+  const map = { path: 'maps/plan.mind.md', extension: 'md', content: '- 主题\n  - 分支' };
+  p.fileSnapshots.set(map.path, baseline(map.content));
+  p.noteWritingEvidence({ type: 'pointerdown', target: null });
+  assert.equal(p.hasWritingEvidence(map.path), false, '只有指针动作时 Pulse 自己认不出导图编辑');
+  advance(300);
+  assert.equal(p.activityApiVersion, 1);
+  assert.equal(p.trackActivity({ type: 'mindmap', file: map.path }), true);
+  advance(1500);
+  map.content += '\n  - 新分支 拖进来';await p.handleFileModification(map);
+  assert.ok(p.getOrCreateTodayRecord().contribution.wordsAdded > 0, 'Mind 防抖后保存仍算本人写作');
+});
+
+test('trackActivity long after any user action, or with bad input, is ignored and never throws', async () => {
+  const { p, advance } = setup();await p.loadPluginData();p.realEvidence();
+  p.noteWritingEvidence({ type: 'pointerdown', target: null });
+  advance(5000);
+  assert.equal(p.trackActivity({ type: 'mindmap', file: 'maps/plan.mind.md' }), false, '后台插件不能随时认领');
+  assert.equal(p.hasWritingEvidence('maps/plan.mind.md'), false);
+  p.noteWritingEvidence({ type: 'pointerdown', target: null });
+  for (const bad of [undefined, null, {}, { type: 'mindmap' }, { type: 'mindmap', file: 42 }, { type: '', file: 'a.md' }, { type: 'mindmap', file: '' }]) {
+    assert.equal(p.trackActivity(bad), false, JSON.stringify(bad));
+  }
+});

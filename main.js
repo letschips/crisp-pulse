@@ -3287,6 +3287,22 @@ class CrispPulsePlugin extends Plugin {
     if (path) { this.markWritingEvidence(path); this.noteFocusEdit(path); }
   }
 
+  /** 其他插件读这个版本号判断能否调用 trackActivity。 */
+  get activityApiVersion() { return 1; }
+
+  /** 其他插件报告「用户刚在这个文件里动了手」，比如 Crisp Mind 用鼠标拖节点、右键加删分支：这些只有指针动作，
+      Pulse 自己的键入判断认不出。必须紧跟一次真实的点按或键入（同 editor-change 的窗口），否则不认，
+      这样后台插件不能随时给文件刷分。返回是否记下；参数不对时返回 false，不抛错。 */
+  trackActivity(activity) {
+    const path = activity?.file;
+    if (typeof activity?.type !== "string" || !activity.type || typeof path !== "string" || !path) return false;
+    const at = this.lastUserActionAt;
+    if (at == null || Date.now() - at > EDITOR_INPUT_LINK_MS) return false;
+    this.markWritingEvidence(path);
+    this.noteFocusEdit(path);
+    return true;
+  }
+
   /** 本人在这篇笔记里动手了：留给专注结束时判断这段专注归到哪篇。插件自己写的文件不走这里。 */
   noteFocusEdit(path) {
     pushFocusEdit(this.focusEditLog ||= [], path);
