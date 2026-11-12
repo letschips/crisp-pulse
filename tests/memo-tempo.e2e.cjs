@@ -208,3 +208,21 @@ test('the memo URL accepts task=1',()=>{
  assert.equal(parseMemoUrlParams({text:'买牛奶'}).task,false);
  assert.equal(parseMemoUrlParams({task:'1'}).task,false,'没有正文时只打开面板');
 });
+
+/* 卡片上的倒计时取自这条任务自己的状态（1.48.1）。1.46.0 读的是 getActionOverview，它不含「将来也许」里的任务和子任务，
+   这些任务设了截止日期也不显示倒计时。Tempo 0.17.0 起 getTasksBySource 的快照里带 dueDate，直接用它；更旧的 Tempo 仍读概览。 */
+function chipRow(texts){
+ const el={disabled:false,addClass(){},toggleClass(){},setAttribute(){},addEventListener(){},createSpan(o={}){if(o.text)texts.push(o.text);return el;},createEl(){return el;}};
+ return {isConnected:true,empty(){texts.length=0;},createEl(){return el;}};
+}
+test('a converted memo shows its own task countdown, also when the task sits in Someday',async t=>{
+ const f=fixture(t);await f.makeTempo();const task=await f.pulse.convertMemoToTempo(f.memos()[0]);
+ const store=f.TempoStore.get(f.tempo);
+ store.updateDatabase(db=>({...db,tasks:{...db.tasks,[task.id]:{...db.tasks[task.id],availability:'someday',dueDate:'2099-01-01'}}}));
+ let overviewCalls=0;const real=f.tempo.getActionOverview.bind(f.tempo);f.tempo.getActionOverview=async()=>{overviewCalls++;return real();};
+ const texts=[];const v=Object.create(f.Pulse.CrispPulseMemoView.prototype);
+ Object.assign(v,{plugin:f.pulse,memoClosed:false,memoTempoRows:new Map([[chipRow(texts),f.memos()[0]]])});
+ await v.refreshTempoChips();
+ assert.match(texts.join(' '),/^Tempo · 待办 · 还剩 \d+ 天$/);
+ assert.equal(overviewCalls,0,'新版 Tempo 不再读概览');
+});

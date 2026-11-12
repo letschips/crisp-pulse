@@ -4340,12 +4340,20 @@ class CrispPulsePlugin extends Plugin {
     const gone = () => new Error(tr("这条速记已经不在原来的位置，请重新搜索", "This memo is no longer where it was; search again"));
     if (!target) throw gone();
     const memos = await this.memoStore.list();
-    const found = target.id ? memos.some((m) => m.id === target.id) : memos.some((m) => !m.id && m.path === target.path && m.startLine === target.startLine);
-    if (!found) throw gone();
+    let at = null;
+    if (target.id) {
+      if (!memos.some((m) => m.id === target.id)) throw gone();
+    } else {
+      // 同一文件里正文没变的那条；行号挪了也认，一模一样的几条取离原位置最近的。正文改过就不猜
+      const same = memos.filter((m) => !m.id && m.path === target.path && memoSearchFingerprint(m.text) === target.hash);
+      if (!same.length) throw gone();
+      const nearest = same.reduce((a, b) => (Math.abs(b.startLine - target.startLine) < Math.abs(a.startLine - target.startLine) ? b : a));
+      at = { path: nearest.path, startLine: nearest.startLine };
+    }
     await this.activateMemoView();
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MEMO)) {
       if (target.id) leaf.view?.focusMemo?.(target.id);
-      else leaf.view?.focusMemoAt?.(target);
+      else leaf.view?.focusMemoAt?.(at);
     }
   }
 
@@ -11635,22 +11643,27 @@ function memoTaskTitle(text, { date = "", time = "" } = {}) {
 
 /** 给 Crisp Search 的速记条目（它的结果提供方接口 v1）。有隐藏标识的按标识定位，没有的按所在文件和行号；
     只读取，不为了定位往笔记里写标识。标题取第一行有内容的文字，全文放进 text 供搜索。 */
+/** 没有隐藏标识的速记按「行号 + 正文指纹」认：面板开着时上面的速记被删或同步进来，行号会挪，同一行可能已是别的速记。 */
+function memoSearchFingerprint(text) {
+  return memoHash(String(text ?? "")).toString(36);
+}
+
 function memoSearchEntries(memos) {
   return (Array.isArray(memos) ? memos : []).map((m) => ({
-    id: m.id ? `id:${m.id}` : `at:${m.startLine}:${m.path}`,
+    id: m.id ? `id:${m.id}` : `at:${m.startLine}:${memoSearchFingerprint(m.text)}:${m.path}`,
     title: memoTaskTitle(m.text, { date: m.date, time: m.time }),
     text: String(m.text ?? ""),
     accessory: `${m.date} ${m.time}`.trim(),
   }));
 }
 
-/** 条目标识还原成定位条件：{ id } 或 { path, startLine }；认不出返回 null。 */
+/** 条目标识还原成定位条件：{ id } 或 { path, startLine, hash }；认不出返回 null。 */
 function memoSearchTarget(entryId) {
   const text = String(entryId ?? "");
   const byId = /^id:([a-zA-Z0-9-]+)$/.exec(text);
   if (byId) return { id: byId[1] };
-  const at = /^at:(\d+):(.+)$/.exec(text);
-  return at ? { path: at[2], startLine: Number(at[1]) } : null;
+  const at = /^at:(\d+):([0-9a-z]+):(.+)$/.exec(text);
+  return at ? { path: at[3], startLine: Number(at[1]), hash: at[2] } : null;
 }
 
 /** 卡片上 Tempo 任务的状态文字；任务在 Tempo 里删掉了也要说清楚。 */
@@ -14388,7 +14401,8 @@ class CrispPulseMemoView extends ItemView {
     if (tempo) {
       try { snapshots = await tempo.getTasksBySource([...rows.values()].map((m) => `crisp-pulse:${m.id}`)); }
       catch (error) { failed = true; console.warn("[Crisp Pulse] Tempo 任务状态读取失败", error); }
-      if (!failed) due = await this.plugin.memoTempoDueDates();
+      // Tempo 0.17.0 起（sourceTasksApiVersion 2）快照自带 dueDate；更旧的才读概览，概览不含「将来也许」和子任务
+      if (!failed && !(Number(tempo.sourceTasksApiVersion) >= 2)) due = await this.plugin.memoTempoDueDates();
     }
     if (generation !== this.tempoRefreshGeneration || this.memoClosed || rows !== this.memoTempoRows) return;
     if (failed) {
@@ -14413,7 +14427,7 @@ class CrispPulseMemoView extends ItemView {
     }
     const task = snapshots[key];
     const label = memoTempoLabel(task);
-    const due = memoTempoDue(task, this.tempoDue?.[key]);
+    const due = memoTempoDue(task, task?.dueDate ?? this.tempoDue?.[key]);
     if (due?.tone) chip.addClass(due.tone);
     chip.createSpan({ text: `Tempo · ${label}${due ? ` · ${due.text}` : ""}${stale ? tr("（读取失败，显示上次状态）", " (read failed, showing last status)") : ""}` });
     chip.toggleClass("is-done", task?.status === "done");

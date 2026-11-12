@@ -27,19 +27,22 @@ const memos = [
   { date: '2026-11-10', time: '09:00', path: 'Daily/2026-11-10.md', startLine: 4, text: '![[a.png]]\n- 整理照片' },
   { date: '2026-11-09', time: '08:00', path: 'Daily/2026-11-09.md', startLine: 7, text: '![[录音.webm]]' },
 ];
+const [, at4, at7] = memoSearchEntries(memos).map((e) => e.id);
 
 test('every memo becomes an entry, with or without a hidden id, and nothing is written', () => {
   const entries = plain(memoSearchEntries(memos));
-  assert.deepEqual(entries.map((e) => e.id), ['id:abc-1', 'at:4:Daily/2026-11-10.md', 'at:7:Daily/2026-11-09.md']);
+  assert.equal(entries[0].id, 'id:abc-1');
+  assert.match(entries[1].id, /^at:4:[0-9a-z]+:Daily\/2026-11-10\.md$/, '没有标识的按行号加正文指纹');
+  assert.match(entries[2].id, /^at:7:[0-9a-z]+:Daily\/2026-11-09\.md$/);
   assert.equal(entries[0].title, '搜索插件大改');
   assert.equal(entries[0].text, '**搜索**插件大改 #工作\n把任务和速记也接进来');
   assert.equal(entries[0].accessory, '2026-11-11 11:20');
   assert.equal(entries[1].title, '整理照片');
   assert.match(entries[2].title, /2026-11-09 08:00/, '只有录音的速记用时间当标题');
   assert.deepEqual(plain(memoSearchTarget('id:abc-1')), { id: 'abc-1' });
-  assert.deepEqual(plain(memoSearchTarget('at:4:Daily/2026-11-10.md')), { path: 'Daily/2026-11-10.md', startLine: 4 });
-  assert.deepEqual(plain(memoSearchTarget('at:4:目录/含:冒号.md')), { path: '目录/含:冒号.md', startLine: 4 });
-  for (const bad of ['', 'id:', 'id:has space', 'at:x:Daily/a.md', 'at:4:', 'other:1', null]) assert.equal(memoSearchTarget(bad), null, String(bad));
+  assert.deepEqual(plain(memoSearchTarget(at4)), { path: 'Daily/2026-11-10.md', startLine: 4, hash: at4.split(':')[2] });
+  assert.deepEqual(plain(memoSearchTarget('at:4:1k2:目录/含:冒号.md')), { path: '目录/含:冒号.md', startLine: 4, hash: '1k2' });
+  for (const bad of ['', 'id:', 'id:has space', 'at:x:1k2:Daily/a.md', 'at:4:1k2:', 'at:4:Daily/a.md', 'other:1', null]) assert.equal(memoSearchTarget(bad), null, String(bad));
 });
 
 function fakePulse({ search = null, list = async () => memos.map((m) => ({ ...m })) } = {}) {
@@ -57,9 +60,9 @@ function fakePulse({ search = null, list = async () => memos.map((m) => ({ ...m 
 test('choosing a result shows that memo in the panel; a memo that moved or is gone is reported', async () => {
   const { plugin, focused } = fakePulse();
   await plugin.revealMemoEntry('id:abc-1');
-  await plugin.revealMemoEntry('at:4:Daily/2026-11-10.md');
+  await plugin.revealMemoEntry(at4);
   assert.deepEqual(focused, [{ id: 'abc-1' }, { path: 'Daily/2026-11-10.md', startLine: 4 }]);
-  await assert.rejects(() => plugin.revealMemoEntry('at:99:Daily/2026-11-10.md'), /速记/);
+  await assert.rejects(() => plugin.revealMemoEntry(at4.replace('Daily/2026-11-10.md', 'Daily/2026-11-08.md')), /速记/);
   await assert.rejects(() => plugin.revealMemoEntry('id:not-there'), /速记/);
   await assert.rejects(() => plugin.revealMemoEntry('junk'), /速记/);
   assert.equal(focused.length, 2);
@@ -84,7 +87,7 @@ function deferredWorkspace() {
 test('a memo panel that is still deferred after a restart is loaded before the memo is shown', async () => {
   for (const [name, run, want] of [
     ['Search, memo with id', (p) => p.revealMemoEntry('id:abc-1'), [{ id: 'abc-1' }]],
-    ['Search, memo without id', (p) => p.revealMemoEntry('at:4:Daily/2026-11-10.md'), [{ path: 'Daily/2026-11-10.md', startLine: 4 }]],
+    ['Search, memo without id', (p) => p.revealMemoEntry(at4), [{ path: 'Daily/2026-11-10.md', startLine: 4 }]],
     ['Tempo back to its memo', (p) => p.revealMemo({ id: 'abc-1' }), [{ id: 'abc-1' }]],
     ['review "see these memos"', (p) => p.openMemoQuery('#工作'), [{ q: '#工作' }]],
   ]) {
@@ -133,10 +136,32 @@ test('Pulse registers with Crisp Search when it can, keeps memos out of the mixe
   assert.equal(provider.id, 'crisp-pulse');
   assert.equal(provider.label, '速记');
   assert.equal(provider.mixed, false);
-  assert.deepEqual((await provider.list()).map((e) => e.id), ['id:abc-1', 'at:4:Daily/2026-11-10.md', 'at:7:Daily/2026-11-09.md']);
+  assert.deepEqual((await provider.list()).map((e) => e.id), ['id:abc-1', at4, at7]);
   await provider.open('id:abc-1');
   assert.deepEqual(focused, [{ id: 'abc-1' }]);
   plugin.stopped = true;
   plugin.connectSearch();
   assert.equal(registered.length, 2, '停用后不再注册');
+});
+
+/* 没有隐藏标识的速记按「行号 + 正文指纹」认（1.48.1）。面板开着时同一文件里上面的速记被删、被改或同步进来，
+   行号会挪，同一行可能已经是别的速记。失败模式：
+   - 打开的是另一条速记，而且不提示（1.47.0 只按行号认，会这样）；
+   - 速记只是挪了几行，却报「已经不在」；
+   - 文件里有两条一模一样的速记时随便挑一条，而不是离原位置最近的那条。 */
+test('a memo without an id is found by its text after lines shift, and is never swapped for another', async () => {
+  const day = (startLine, text) => ({ date: '2026-11-12', time: '09:00', path: 'Daily/2026-11-12.md', startLine, text });
+  const picked = memoSearchEntries([day(2, '第一条'), day(5, '第二条'), day(8, '第三条')])[1].id;
+
+  const shifted = fakePulse({ list: async () => [day(2, '第二条'), day(5, '第三条')] });
+  await shifted.plugin.revealMemoEntry(picked);
+  assert.deepEqual(shifted.focused, [{ path: 'Daily/2026-11-12.md', startLine: 2 }], '上面一条删掉后，按正文找到挪到第 2 行的它');
+
+  const edited = fakePulse({ list: async () => [day(2, '第一条'), day(5, '第二条（改过）'), day(8, '第三条')] });
+  await assert.rejects(() => edited.plugin.revealMemoEntry(picked), /速记/);
+  assert.equal(edited.focused.length, 0, '正文改过就提示重新搜索，不显示别的');
+
+  const twins = fakePulse({ list: async () => [day(2, '第二条'), day(9, '第二条')] });
+  await twins.plugin.revealMemoEntry(picked);
+  assert.deepEqual(twins.focused, [{ path: 'Daily/2026-11-12.md', startLine: 2 }], '一模一样的两条取离原来第 5 行最近的');
 });
