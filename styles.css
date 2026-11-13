@@ -129,7 +129,7 @@
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s ease;
+  transition: background-color 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1)), border-color 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1)), color 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1)), transform 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1));
 }
 
 /* 未激活时进阶标签页保持可点，点进去是锁定说明；用较淡的文字提示它们需要激活。 */
@@ -276,14 +276,16 @@
   background-color: var(--background-modifier-border-hover, var(--background-tertiary));
   cursor: pointer;
   position: relative;
-  transition: transform 0.1s ease, outline 0.1s ease;
+  transition: transform 120ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1)), outline-color 120ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1));
   box-sizing: border-box;
 }
 
-.crisp-pulse-cell:hover {
-  transform: scale(1.25);
-  z-index: 5;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+@media (hover: hover) and (pointer: fine) {
+  .crisp-pulse-cell:hover {
+    transform: scale(1.12);
+    z-index: 5;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
+  }
 }
 
 .crisp-pulse-cell.is-selected {
@@ -416,10 +418,8 @@
 
 .crisp-pulse-file-list-title {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .crisp-pulse-file-list {
@@ -440,7 +440,7 @@
   border: 1px solid var(--background-modifier-border);
   font-size: var(--font-ui-small);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1)), border-color 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1)), color 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1)), transform 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1));
 }
 
 .crisp-pulse-file-item.is-deleted { cursor: default; }
@@ -565,7 +565,7 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
 
 .crisp-pulse-score-clickable {
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1)), border-color 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1)), color 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1)), transform 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1));
   position: relative;
 }
 
@@ -1763,10 +1763,10 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
   position: relative;
   margin: 0;
   padding: 6px 16px;
-  border: 1px solid var(--background-modifier-border);
+  border: 0.5px solid var(--background-modifier-border);
   border-radius: 22px;
   background: var(--background-primary);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.10), 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
 
 .crisp-pulse-memo-composer.is-docked.is-open {
@@ -1780,7 +1780,7 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
   border-radius: 18px;
   border-color: var(--background-modifier-border);
   transform: translateY(var(--memo-sheet-shift, 0px));
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.14), 0 6px 8px -4px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(0, 0, 0, 0.07);
 }
 
 .crisp-pulse-memo-composer.is-docked:is(:focus-within, .is-focused) {
@@ -2377,34 +2377,26 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
   pointer-events: none;
 }
 
-/* Native glass presentation. macOS supplies blur; charts stay filter-free. */
+/* Native glass presentation. macOS supplies blur; charts stay filter-free; no lit top edge. */
 body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view {
   --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 14%, transparent);
   --pulse-ui-soft: color-mix(in srgb, var(--text-normal) 5%, transparent);
   --pulse-ui-border: color-mix(in srgb, var(--text-normal) 13%, transparent);
-  --pulse-glass-rim: rgba(255, 255, 255, 0.16);
   --text-muted: color-mix(in srgb, var(--text-normal) 78%, transparent);
   --text-faint: color-mix(in srgb, var(--text-normal) 66%, transparent);
   background: transparent !important;
 }
-body.is-translucent.theme-light:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view {
-  --pulse-glass-rim: rgba(255, 255, 255, 0.65);
-}
 body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view
 :is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-analytics-card,.crisp-pulse-breakdown-card) {
-  box-shadow: inset 0 1px 0 var(--pulse-glass-rim), 0 4px 14px rgba(0, 0, 0, 0.04) !important;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 1px 2px 0 rgb(0 0 0 / .08), 0 3px 4px -2px rgb(0 0 0 / .05) !important;
+}
+body.theme-dark.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view
+:is(.crisp-pulse-heatmap-card,.crisp-pulse-detail-card,.crisp-pulse-analytics-card,.crisp-pulse-breakdown-card) {
+  box-shadow: 0 0 0 0.5px var(--pulse-ui-border), 0 1px 2px 0 rgb(0 0 0 / .45), 0 3px 4px -2px rgb(0 0 0 / .35) !important;
 }
 body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view
 :is(.crisp-pulse-heatmap-card,.crisp-pulse-analytics-card) {
   background: color-mix(in srgb, var(--background-primary) 28%, transparent);
-}
-body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view
-:is(button.crisp-pulse-tab-btn:not(.is-active):not(:disabled),select.crisp-pulse-scope-select) {
-  background-color: var(--pulse-ui-soft) !important;
-  box-shadow: inset 0 1px 0 var(--pulse-glass-rim) !important;
-}
-body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view button.crisp-pulse-tab-btn:not(.is-active):not(:disabled):hover {
-  background: color-mix(in srgb, var(--text-normal) 10%, transparent) !important;
 }
 
 /* Hide the page scrollbar while preserving wheel, touch and keyboard scrolling. */
@@ -2416,13 +2408,13 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 }
 
 /* Surface and text tokens per theme; translucent windows get glass variants. */
-.crisp-pulse-view { --pulse-ui-surface: var(--background-primary); --pulse-ui-soft: var(--background-secondary); --pulse-ui-border: var(--background-modifier-border); --pulse-ui-accent: var(--interactive-accent, #6b84bf); --pulse-glass-rim: rgba(255, 255, 255, 0.55); --text-muted: color-mix(in srgb, var(--text-normal) 78%, transparent); --text-faint: color-mix(in srgb, var(--text-normal) 55%, transparent); color: var(--text-normal); font-family: var(--font-interface); font-weight: 400; scrollbar-width: none; background: var(--pulse-ui-soft) !important; padding: 20px 28px 56px !important; }
+.crisp-pulse-view { --pulse-ui-surface: var(--background-primary); --pulse-ui-soft: var(--background-secondary); --pulse-ui-border: var(--background-modifier-border); --pulse-ui-accent: var(--interactive-accent, #6b84bf); --text-muted: color-mix(in srgb, var(--text-normal) 78%, transparent); --text-faint: color-mix(in srgb, var(--text-normal) 55%, transparent); color: var(--text-normal); font-family: var(--font-interface); font-weight: 400; scrollbar-width: none; background: var(--pulse-ui-soft) !important; padding: 20px 28px 56px !important; }
 .crisp-pulse-view::-webkit-scrollbar { display: none; }
-body.theme-dark.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 36%, transparent); --pulse-ui-soft: color-mix(in srgb, var(--background-primary) 22%, transparent); --pulse-ui-border: color-mix(in srgb, var(--text-normal) 14%, transparent); --pulse-glass-rim: rgba(255, 255, 255, 0.18); --text-normal: #f1f2f6; --text-muted: rgba(235, 240, 250, 0.80); --text-faint: rgba(220, 225, 235, 0.54); background: transparent !important; }
-body.theme-light.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 82%, transparent); --pulse-ui-soft: color-mix(in srgb, var(--background-secondary) 72%, transparent); --pulse-ui-border: rgba(0, 0, 0, 0.08); --pulse-glass-rim: rgba(255, 255, 255, 0.95); background: transparent !important; }
-body.theme-dark .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 92%, #ffffff); --pulse-ui-soft: var(--background-primary); --pulse-ui-border: color-mix(in srgb, var(--text-normal) 16%, transparent); --pulse-glass-rim: rgba(255, 255, 255, 0.10); --text-normal: #ecedf1; --text-muted: rgba(236, 237, 241, 0.78); --text-faint: rgba(236, 237, 241, 0.52); }
+body.theme-dark.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 36%, transparent); --pulse-ui-soft: color-mix(in srgb, var(--background-primary) 22%, transparent); --pulse-ui-border: color-mix(in srgb, var(--text-normal) 14%, transparent); --text-normal: #f1f2f6; --text-muted: rgba(235, 240, 250, 0.80); --text-faint: rgba(220, 225, 235, 0.54); background: transparent !important; }
+body.theme-light.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 82%, transparent); --pulse-ui-soft: color-mix(in srgb, var(--background-secondary) 72%, transparent); --pulse-ui-border: rgba(0, 0, 0, 0.08); background: transparent !important; }
+body.theme-dark .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 92%, #ffffff); --pulse-ui-soft: var(--background-primary); --pulse-ui-border: color-mix(in srgb, var(--text-normal) 16%, transparent); --text-normal: #ecedf1; --text-muted: rgba(236, 237, 241, 0.78); --text-faint: rgba(236, 237, 241, 0.52); }
 /* Light themes follow the host theme's colours (warm themes such as Still stay warm). */
-body.theme-light .crisp-pulse-view { --pulse-ui-surface: var(--background-primary); --pulse-ui-soft: var(--background-secondary, #f8f9fa); --pulse-ui-border: rgba(0, 0, 0, 0.08); --pulse-glass-rim: rgba(255, 255, 255, 0.9); background: var(--background-secondary, #f8f9fa) !important; }
+body.theme-light .crisp-pulse-view { --pulse-ui-surface: var(--background-primary); --pulse-ui-soft: var(--background-secondary, #f8f9fa); --pulse-ui-border: rgba(0, 0, 0, 0.08); background: var(--background-secondary, #f8f9fa) !important; }
 
 /* ==========================================================================
    Dashboard tray layout (pulse-v2): tray header on a soft surface, content on an
@@ -2552,7 +2544,7 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 .crisp-pulse-view .pulse-hero-peak-label.is-left { transform: translate(calc(-100% - 8px), -50%); }
 .crisp-pulse-view .pulse-hero-peak-label.is-right { transform: translate(10px, -50%); }
 .crisp-pulse-view .pulse-hero-tile > .pulse-hero-bar { flex: none; }
-.crisp-pulse-view .pulse-hero-bubble { position: absolute; z-index: 2; margin-left: 12px; transform: translateY(-110%); padding: 6px 10px; border-radius: 9px; background: var(--pulse-ui-surface, var(--background-primary)); box-shadow: 0 4px 14px rgba(0, 0, 0, .12), 0 0 0 1px color-mix(in srgb, var(--text-normal) 8%, transparent); opacity: 0; pointer-events: none; white-space: nowrap; transition: opacity .12s ease; }
+.crisp-pulse-view .pulse-hero-bubble { position: absolute; z-index: 2; margin-left: 12px; transform: translateY(-110%); padding: 6px 10px; border-radius: 8px; background: var(--pulse-ui-surface, var(--background-primary)); box-shadow: var(--pulse-shadow-menu, 0 0 0 1px color-mix(in srgb, var(--text-normal) 8%, transparent), 0 1px 2px 0 rgb(0 0 0 / .12), 0 4px 8px -4px rgb(0 0 0 / .16)); opacity: 0; pointer-events: none; white-space: nowrap; transition: opacity 120ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1)); }
 .crisp-pulse-view .pulse-hero-bubble.is-left { margin-left: -12px; transform: translate(-100%, -110%); }
 .crisp-pulse-view .pulse-hero-bubble.is-visible { opacity: 1; }
 .crisp-pulse-view .pulse-hero-bubble-date { color: var(--text-muted); font-size: 11px; }
@@ -2728,17 +2720,21 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 .crisp-pulse-view .pulse-hero-delta.is-down { color: var(--pulse-chart-rose); background: color-mix(in srgb, var(--pulse-chart-rose) 12%, transparent); }
 .crisp-pulse-view button.pulse-hero-inline-link { height: auto; padding: 0; margin: 0; border: 0; background: none; box-shadow: none; color: var(--pulse-ui-accent, var(--interactive-accent)); font-size: inherit; cursor: pointer; }
 .crisp-pulse-view button.pulse-hero-inline-link:hover { text-decoration: underline; }
-/* "Show as a table" under a chart: built on first open, newest day first. */
+/* "Show as a table" under a chart: one typeface, left-aligned tabular figures, 0.5px hairlines. */
 .crisp-pulse-view .pulse-data-table { margin-top: 10px; font-size: 12.5px; }
 .crisp-pulse-view .pulse-data-table > summary { width: max-content; color: var(--text-muted); cursor: pointer; border-radius: 6px; }
 .crisp-pulse-view .pulse-data-table > summary:hover { color: var(--text-normal); }
-.crisp-pulse-view .pulse-data-table-scroll { max-height: 280px; overflow: auto; margin-top: 8px; border-radius: 10px; border: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); }
-.crisp-pulse-view .pulse-data-table table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.crisp-pulse-view .pulse-data-table-scroll { max-height: 280px; overflow: auto; margin-top: 8px; border-radius: 8px; border: 0.5px solid var(--pulse-ui-border, var(--background-modifier-border)); box-shadow: var(--pulse-shadow-table, 0 1px 2px 0 rgb(0 0 0 / .10)); }
+.crisp-pulse-view .pulse-data-table table { width: 100%; border-collapse: collapse; font-family: var(--font-interface); font-variant-numeric: tabular-nums; }
 .crisp-pulse-view .pulse-data-table caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.crisp-pulse-view .pulse-data-table th, .crisp-pulse-view .pulse-data-table td { padding: 6px 12px; text-align: left; font-weight: 400; border-bottom: 1px solid color-mix(in srgb, var(--pulse-ui-border, var(--background-modifier-border)) 70%, transparent); white-space: nowrap; }
-.crisp-pulse-view .pulse-data-table thead th { position: sticky; top: 0; background: var(--pulse-ui-surface, var(--background-primary)); color: var(--text-muted); font-size: 11.5px; }
-.crisp-pulse-view .pulse-data-table .is-num { text-align: right; font-family: var(--font-monospace); }
-.crisp-pulse-view .pulse-data-table tbody tr:hover { background: var(--background-modifier-hover); }
+.crisp-pulse-view .pulse-data-table th, .crisp-pulse-view .pulse-data-table td { padding: 8px 12px; text-align: left; font-weight: 400; border-bottom: 0.5px solid color-mix(in srgb, var(--pulse-ui-border, var(--background-modifier-border)) 70%, transparent); white-space: nowrap; }
+.crisp-pulse-view .pulse-data-table thead th { position: sticky; top: 0; background: var(--pulse-ui-surface, var(--background-primary)); color: var(--text-normal); font-size: 12px; font-weight: 500; }
+.crisp-pulse-view .pulse-data-table tbody tr > th { color: var(--text-normal); }
+.crisp-pulse-view .pulse-data-table .is-num { text-align: left; font-family: var(--font-interface); font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.crisp-pulse-view .pulse-data-table tbody tr:last-child :is(th, td) { border-bottom: 0; }
+@media (hover: hover) and (pointer: fine) {
+  .crisp-pulse-view .pulse-data-table tbody tr:hover { background: var(--background-modifier-hover); }
+}
 
 /* Knowledge review: period bar, clue cards, then materials beside the review notebook. */
 .crisp-pulse-view .crisp-pulse-review-workspace button { cursor: pointer; }
@@ -3319,4 +3315,309 @@ input.is-invalid[aria-invalid="true"] { border-color: var(--text-error); box-sha
   .crisp-pulse-view .pulse-range-bar { justify-content: stretch; }
   .crisp-pulse-view.pulse-v2 .pulse-v2-seg.pulse-range-seg { display: flex; flex-wrap: nowrap; width: 100%; }
   .crisp-pulse-view.pulse-v2 .pulse-v2-seg.pulse-range-seg button { flex: 1 1 0; min-width: 0; padding-inline: 4px; white-space: nowrap; }
+}
+
+
+/* ==========================================================================
+   Tactile Design System Refinements (roles, crisp shadows, press, touch)
+   ========================================================================== */
+.crisp-pulse-view,
+.crisp-pulse-memo-view {
+  --pulse-ease-out: cubic-bezier(.23, 1, .32, 1);
+  --pulse-dur-hover: 150ms;
+  --pulse-hairline: 0.5px;
+  --pulse-control-bg: var(--background-primary, #ffffff);
+  --pulse-control-hover: color-mix(in srgb, var(--text-normal) 4%, var(--pulse-control-bg));
+  --pulse-track-bg: color-mix(in srgb, var(--text-normal) 6%, var(--pulse-ui-surface, var(--background-primary)));
+  --pulse-shadow-button: 0 1px 2px 0 rgb(0 0 0 / .10), 0 0 0 1px rgb(0 0 0 / .08);
+  --pulse-shadow-primary: 0 0 0 1px var(--pulse-control-bg), 0 1px 2px 0 rgb(0 0 0 / .10);
+  --pulse-shadow-card: 0 0 0 1px rgb(0 0 0 / .06), 0 1px 2px 0 rgb(0 0 0 / .08), 0 3px 4px -2px rgb(0 0 0 / .05);
+  --pulse-shadow-table: 0 1px 2px 0 rgb(0 0 0 / .10);
+  --pulse-shadow-menu: 0 0 0 1px rgb(0 0 0 / .08), 0 1px 2px 0 rgb(0 0 0 / .12), 0 4px 8px -4px rgb(0 0 0 / .14);
+  overscroll-behavior: none;
+}
+
+.theme-dark .crisp-pulse-view,
+.theme-dark .crisp-pulse-memo-view {
+  --pulse-control-bg: color-mix(in srgb, var(--text-normal) 9%, var(--pulse-ui-surface, var(--background-primary)));
+  --pulse-control-hover: color-mix(in srgb, var(--text-normal) 14%, var(--pulse-ui-surface, var(--background-primary)));
+  --pulse-track-bg: color-mix(in srgb, var(--text-normal) 6%, var(--pulse-ui-surface, var(--background-primary)));
+  --pulse-shadow-button: 0 0 0 0.5px color-mix(in srgb, var(--text-normal) 22%, transparent), 0 1px 2px 0 rgb(0 0 0 / .5);
+  --pulse-shadow-primary: 0 0 0 0.5px var(--text-normal), 0 1px 2px 0 rgb(0 0 0 / .5);
+  --pulse-shadow-card: 0 0 0 0.5px color-mix(in srgb, var(--text-normal) 16%, transparent), 0 1px 2px 0 rgb(0 0 0 / .5), 0 3px 4px -2px rgb(0 0 0 / .4);
+  --pulse-shadow-table: 0 1px 2px 0 rgb(0 0 0 / .5);
+  --pulse-shadow-menu: 0 0 0 0.5px color-mix(in srgb, var(--text-normal) 24%, transparent), 0 1px 2px 0 rgb(0 0 0 / .5), 0 4px 8px -4px rgb(0 0 0 / .5);
+}
+
+/* Raised cards inside dark trays step up one level for controls sitting on them. */
+.theme-dark .crisp-pulse-view.pulse-v2 .pulse-v2-inset,
+.theme-dark .crisp-pulse-view .pulse-today {
+  --pulse-control-bg: color-mix(in srgb, var(--text-normal) 12%, var(--pulse-ui-surface, var(--background-primary)));
+  --pulse-control-hover: color-mix(in srgb, var(--text-normal) 17%, var(--pulse-ui-surface, var(--background-primary)));
+  --pulse-shadow-button: 0 0 0 0.5px color-mix(in srgb, var(--text-normal) 26%, transparent), 0 1px 2px 0 rgb(0 0 0 / .5);
+}
+
+/* Hairline structure on v2 trays & cards (0.5px instead of heavy 1px). */
+.crisp-pulse-view.pulse-v2 .pulse-v2-tray,
+.crisp-pulse-view .pulse-today {
+  border-width: var(--pulse-hairline);
+}
+
+.crisp-pulse-view.pulse-v2 .pulse-v2-inset,
+.crisp-pulse-view.pulse-v2 .pulse-v2-tray > .pulse-v2-inset.crisp-pulse-analytics-card {
+  box-shadow: var(--pulse-shadow-card) !important;
+}
+
+.crisp-pulse-view .crisp-pulse-review-clue {
+  box-shadow: var(--pulse-shadow-card);
+}
+
+.crisp-pulse-view .crisp-pulse-review-change + .crisp-pulse-review-change,
+.crisp-pulse-view .crisp-pulse-review-file + .crisp-pulse-review-file,
+.crisp-pulse-view .crisp-pulse-review-step + .crisp-pulse-review-step,
+.crisp-pulse-view .crisp-pulse-review-footer,
+.crisp-pulse-view .pulse-today .pulse-goal,
+.crisp-pulse-view .pulse-pomo-foot {
+  border-top-width: var(--pulse-hairline);
+}
+
+.crisp-pulse-view .crisp-pulse-review-action,
+.crisp-pulse-view .crisp-pulse-review-notebook :is(textarea, input[type="text"]) {
+  border-width: var(--pulse-hairline);
+}
+
+/* Header view switcher: segmented well + raised tactile active pill (no loud accent block). */
+.crisp-pulse-view .crisp-pulse-title-group > .crisp-pulse-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--pulse-track-bg);
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--text-normal) 8%, transparent);
+}
+
+.crisp-pulse-view .crisp-pulse-title-group > .crisp-pulse-actions button.crisp-pulse-tab-btn {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 7px !important;
+  min-height: 30px;
+  height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-muted) !important;
+  transition: background-color var(--pulse-dur-hover) var(--pulse-ease-out), color var(--pulse-dur-hover) var(--pulse-ease-out), transform var(--pulse-dur-hover) var(--pulse-ease-out), box-shadow var(--pulse-dur-hover) var(--pulse-ease-out);
+}
+
+/* Phone: keep the 44px touch target the earlier mobile rule gave these tabs. */
+.is-mobile .crisp-pulse-view .crisp-pulse-title-group > .crisp-pulse-actions button.crisp-pulse-tab-btn {
+  min-height: 44px;
+  height: auto;
+  padding: 0 4px;
+}
+
+.crisp-pulse-view .crisp-pulse-title-group > .crisp-pulse-actions button.crisp-pulse-tab-btn.is-active {
+  background: var(--pulse-control-bg) !important;
+  color: var(--text-normal) !important;
+  box-shadow: var(--pulse-shadow-button) !important;
+  font-weight: 500;
+}
+
+/* All other segmented tracks adopt the same crisp raised active pill without border shift. */
+.crisp-pulse-view.pulse-v2 .pulse-v2-seg {
+  background: var(--pulse-track-bg);
+}
+
+.crisp-pulse-view.pulse-v2 .pulse-v2-seg button {
+  border: 0 !important;
+  border-radius: 7px;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+  transition: background-color var(--pulse-dur-hover) var(--pulse-ease-out), color var(--pulse-dur-hover) var(--pulse-ease-out), transform var(--pulse-dur-hover) var(--pulse-ease-out), box-shadow var(--pulse-dur-hover) var(--pulse-ease-out);
+}
+
+.crisp-pulse-view.pulse-v2 .pulse-v2-seg button[aria-selected="true"] {
+  background: var(--pulse-control-bg) !important;
+  color: var(--text-normal) !important;
+  box-shadow: var(--pulse-shadow-button) !important;
+}
+
+/* Tactile Secondary & Primary action button roles. */
+.crisp-pulse-view button.pulse-btn-secondary,
+.crisp-pulse-view select.crisp-pulse-scope-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 13px;
+  border: 0 !important;
+  border-radius: 6px !important;
+  background-color: var(--pulse-control-bg) !important;
+  color: var(--text-normal) !important;
+  box-shadow: var(--pulse-shadow-button) !important;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background-color var(--pulse-dur-hover) var(--pulse-ease-out), color var(--pulse-dur-hover) var(--pulse-ease-out), transform var(--pulse-dur-hover) var(--pulse-ease-out), box-shadow var(--pulse-dur-hover) var(--pulse-ease-out);
+}
+
+.crisp-pulse-view select.crisp-pulse-scope-select {
+  padding-right: 26px;
+}
+
+.crisp-pulse-view button.pulse-btn-secondary.crisp-pulse-search-btn {
+  width: 36px;
+  padding: 0;
+}
+
+.crisp-pulse-view button.pulse-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0 !important;
+  border-radius: 6px !important;
+  background-color: var(--text-normal) !important;
+  color: var(--background-primary) !important;
+  box-shadow: var(--pulse-shadow-primary) !important;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background-color var(--pulse-dur-hover) var(--pulse-ease-out), transform var(--pulse-dur-hover) var(--pulse-ease-out), opacity var(--pulse-dur-hover) var(--pulse-ease-out);
+}
+
+.crisp-pulse-view button.pulse-btn-primary:disabled,
+.crisp-pulse-view button.pulse-btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Tactile utility pill (sprint trigger, review inline pills). */
+.crisp-pulse-view .pulse-goal .pulse-goal-sprint {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--pulse-control-bg);
+  color: var(--text-normal);
+  box-shadow: var(--pulse-shadow-button);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  transition: background-color var(--pulse-dur-hover) var(--pulse-ease-out), color var(--pulse-dur-hover) var(--pulse-ease-out), transform var(--pulse-dur-hover) var(--pulse-ease-out);
+}
+
+.crisp-pulse-view .pulse-goal .pulse-goal-sprint.is-running {
+  color: var(--pulse-ui-accent, var(--interactive-accent));
+  box-shadow: 0 1px 2px 0 color-mix(in srgb, var(--pulse-ui-accent, var(--interactive-accent)) 16%, transparent), 0 0 0 1px color-mix(in srgb, var(--pulse-ui-accent, var(--interactive-accent)) 28%, transparent);
+}
+
+/* Inline copy button check feedback. */
+.crisp-pulse-view .pulse-copy-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crisp-pulse-view .pulse-copy-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.crisp-pulse-view button.pulse-copy-btn.is-copied .pulse-copy-icon {
+  color: var(--color-green, var(--text-success));
+}
+
+/* Evidence modal footer: Cancel left, actions right. */
+.crisp-pulse-evidence-actions {
+  justify-content: space-between;
+  align-items: center !important;
+  width: 100%;
+  margin: 4px 0 0 !important;
+}
+
+.crisp-pulse-evidence-actions-right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Hover only on fine pointers so touch taps never stick. */
+@media (hover: hover) and (pointer: fine) {
+  .crisp-pulse-view .crisp-pulse-title-group > .crisp-pulse-actions button.crisp-pulse-tab-btn:not(.is-active):hover {
+    color: var(--text-normal) !important;
+  }
+  .crisp-pulse-view button.pulse-btn-secondary:not(:disabled):hover,
+  .crisp-pulse-view .pulse-goal .pulse-goal-sprint:not(:disabled):hover {
+    background-color: var(--pulse-control-hover) !important;
+  }
+  .crisp-pulse-view button.pulse-btn-primary:not(:disabled):hover {
+    background-color: color-mix(in srgb, var(--text-normal) 88%, var(--background-primary)) !important;
+  }
+}
+
+/* Physical squeeze on press. */
+.crisp-pulse-view :is(button.crisp-pulse-tab-btn, .pulse-v2-seg button, button.pulse-btn-secondary, button.pulse-btn-primary, button.pulse-pomo-btn, button.crisp-pulse-review-cite, button.crisp-pulse-review-outcome-pick, button.crisp-pulse-review-add, button.pulse-goal-sprint, .crisp-pulse-fingerprint-actions button):not(:disabled):active,
+.crisp-pulse-memo-view button.crisp-pulse-memo-tab:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+.crisp-pulse-view :is(button.pulse-btn-secondary.crisp-pulse-search-btn, button.pulse-today-open, button.crisp-pulse-review-icon-btn):not(:disabled):active,
+.crisp-pulse-memo-view :is(button.crisp-pulse-memo-tool, button.crisp-pulse-memo-send):not(:disabled):active {
+  transform: scale(0.92);
+}
+
+/* Tap highlight & touch ergonomics. */
+.crisp-pulse-view :is(button, select, summary, .crisp-pulse-cell),
+.crisp-pulse-memo-view :is(button, select) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (pointer: coarse) {
+  .crisp-pulse-view :is(input, textarea, select),
+  .crisp-pulse-memo-view :is(input, textarea, select),
+  .crisp-pulse-evidence-modal :is(input, textarea, select),
+  textarea.crisp-pulse-memo-modal-input {
+    font-size: 16px !important;
+  }
+  .crisp-pulse-view :is(button.pulse-btn-secondary, button.pulse-btn-primary, select.crisp-pulse-scope-select) {
+    min-height: 44px;
+    height: auto;
+  }
+  .crisp-pulse-view :is(button.pulse-btn-secondary, button.crisp-pulse-tab-btn, .pulse-v2-seg button):not(:disabled):active {
+    background-color: var(--pulse-control-hover) !important;
+  }
+}
+
+.is-phone .crisp-pulse-view .pulse-v2-tray-sub,
+.is-phone .crisp-pulse-view .crisp-pulse-review-note,
+.is-phone .crisp-pulse-view .pulse-today-facts,
+.is-phone .crisp-pulse-view .pulse-hero-label,
+.is-phone .crisp-pulse-view .pulse-hero-meta,
+.is-phone .crisp-pulse-view .pulse-day-label,
+.is-phone .crisp-pulse-view .crisp-pulse-review-clue-detail {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.is-phone .crisp-pulse-view :is(.crisp-pulse-file-item, .crisp-pulse-review-file-open, .crisp-pulse-review-memo-text, .crisp-pulse-review-change-name, .crisp-pulse-review-folder, .crisp-pulse-review-mix-item) {
+  font-size: 15px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crisp-pulse-view :is(button, select, .pulse-hero-bubble, .crisp-pulse-cell, .pulse-v2-seg button),
+  .crisp-pulse-memo-view :is(button, .crisp-pulse-memo-composer) {
+    transition: none !important;
+  }
 }

@@ -9722,7 +9722,7 @@ class CrispPulseView extends ItemView {
 
     // Refresh Button
     const refreshBtn = actions.createEl("button", {
-      cls: "crisp-pulse-tab-btn",
+      cls: "pulse-btn-secondary",
       text: tr("刷新", "Refresh")
     });
     refreshBtn.addEventListener("click", () => {
@@ -9739,7 +9739,7 @@ class CrispPulseView extends ItemView {
     try { enabled = !!this.app.plugins?.enabledPlugins?.has?.("crisp-search"); } catch (_) { enabled = false; }
     if (!enabled) return;
     const button = parent.createEl("button", {
-      cls: "crisp-pulse-tab-btn crisp-pulse-search-btn",
+      cls: "pulse-btn-secondary crisp-pulse-search-btn",
       attr: { "aria-label": tr("搜索（Crisp Search）", "Search (Crisp Search)"), "data-tooltip-position": "bottom" }
     });
     setIcon(button, "search");
@@ -10965,7 +10965,7 @@ class CrispPulseView extends ItemView {
       input.dataset.reviewField = `period-${field}`;
       input.addEventListener('input', () => { this.reviewRangeInputs = { ...(this.reviewRangeInputs || { start, end }), [field]: input.value }; });
     }
-    const apply = controls.createEl('button', { cls: 'crisp-pulse-tab-btn', text: tr('应用日期', 'Apply dates') });
+    const apply = controls.createEl('button', { cls: 'pulse-btn-secondary', text: tr('应用日期', 'Apply dates') });
     apply.addEventListener('click', () => { const range = this.reviewRangeInputs || { start, end }; this.applyReviewPeriod(range.start, range.end); });
   }
 
@@ -11266,7 +11266,7 @@ class CrispPulseView extends ItemView {
       if (clickable) item.addEventListener('click', () => { this.reviewMaterialMode = 'capture'; this.reviewFolder = ''; this.reviewShowAllFiles = false; this.render(); this.scrollReviewTo('.crisp-pulse-review-materials'); });
     }
     const row = section.createDiv({ cls: 'crisp-pulse-review-controls crisp-pulse-review-system' });
-    const toggle = row.createEl('button', { cls: 'crisp-pulse-tab-btn', text: this.plugin.settings.excludeSystemArtifacts ? tr('系统产物已排除', 'System output excluded') : tr('排除后续系统产物', 'Exclude future system output') });
+    const toggle = row.createEl('button', { cls: 'pulse-btn-secondary', text: this.plugin.settings.excludeSystemArtifacts ? tr('系统产物已排除', 'System output excluded') : tr('排除后续系统产物', 'Exclude future system output') });
     toggle.setAttr('aria-pressed', String(!!this.plugin.settings.excludeSystemArtifacts));
     toggle.addEventListener('click', async () => {
       toggle.disabled = true;
@@ -11390,7 +11390,7 @@ class CrispPulseView extends ItemView {
     title.maxLength = 500;title.setAttr('aria-label', tr('新行动', 'New action'));title.dataset.reviewField = 'new-action';const newActionKey = getReviewDraftKey(...args);this.reviewNewActions ||= {};title.value = this.reviewNewActions[newActionKey] || '';
     this.trackReviewComposition(title);
     title.addEventListener('input', () => { this.reviewNewActions[newActionKey] = title.value; });
-    const addButton = add.createEl('button', { cls: 'crisp-pulse-tab-btn', text: tr('添加', 'Add') });
+    const addButton = add.createEl('button', { cls: 'pulse-btn-secondary', text: tr('添加', 'Add') });
     const submit = () => {
       try { this.plugin.addReviewAction(...args, title.value);delete this.reviewNewActions[newActionKey];this.render(); }
       catch (error) { new Notice(error.message); }
@@ -11403,7 +11403,7 @@ class CrispPulseView extends ItemView {
     const status = footer.createDiv({ cls: 'crisp-pulse-review-note' });
     status.setAttr('role', 'status');
     const fresh = () => this.plugin.buildReviewReportModel(start, end, model.scope);
-    const archive = buttons.createEl('button', { cls: 'crisp-pulse-tab-btn is-active', text: tr('归档至知识库', 'Archive to vault') });
+    const archive = buttons.createEl('button', { cls: 'pulse-btn-primary', text: tr('归档至知识库', 'Archive to vault') });
     archive.addEventListener('click', async () => {
       archive.disabled = true;
       try {
@@ -11412,19 +11412,31 @@ class CrispPulseView extends ItemView {
       } catch (error) { status.setText(tr(`归档失败：${error.message}`, `Archiving failed: ${error.message}`)); }
       finally { archive.disabled = false; }
     });
-    const copy = buttons.createEl('button', { cls: 'crisp-pulse-tab-btn', text: tr('复制 Markdown', 'Copy Markdown') });
+    const copy = buttons.createEl('button', { cls: 'pulse-btn-secondary pulse-copy-btn' });
+    const copyIcon = copy.createSpan({ cls: 'pulse-copy-icon', attr: { 'aria-hidden': 'true' } });
+    setIcon(copyIcon, 'copy');
+    copy.createSpan({ text: tr('复制 Markdown', 'Copy Markdown') });
+    let copyTimer = null;
     copy.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(generateReviewReport(await fresh())); status.setText(tr('报告已复制。', 'Report copied.')); }
-      catch (error) { status.setText(tr('复制失败，请检查剪贴板权限后重试。', 'Copy failed. Check clipboard permissions and try again.')); }
+      if (copyTimer) { window.clearTimeout(copyTimer); copyTimer = null; }
+      copyIcon.empty?.(); setIcon(copyIcon, 'check'); copy.addClass('is-copied');
+      try {
+        await navigator.clipboard.writeText(generateReviewReport(await fresh()));
+        status.setText(tr('报告已复制。', 'Report copied.'));
+        copyTimer = window.setTimeout(() => { copyIcon.empty?.(); setIcon(copyIcon, 'copy'); copy.removeClass('is-copied'); copyTimer = null; }, 1600);
+      } catch (error) {
+        copyIcon.empty?.(); setIcon(copyIcon, 'copy'); copy.removeClass('is-copied');
+        status.setText(tr('复制失败，请检查剪贴板权限后重试。', 'Copy failed. Check clipboard permissions and try again.'));
+      }
     });
-    const save = buttons.createEl('button', { cls: 'crisp-pulse-tab-btn', text: tr('保存草稿', 'Save draft') });
+    const save = buttons.createEl('button', { cls: 'pulse-btn-secondary', text: tr('保存草稿', 'Save draft') });
     save.addEventListener('click', async () => {
       save.disabled = true;
       const result = await this.plugin.savePluginData();
       save.disabled = false; status.setText(result.success ? tr('草稿已保存到本地。', 'Draft saved locally.') : tr('保存失败，草稿仍在内存中，请重试。', 'Save failed; the draft is still in memory. Please try again.'));
     });
     if (this.plugin.focusAdapter?.isAvailable()) {
-      const focus = buttons.createEl('button', { cls: 'crisp-pulse-tab-btn', text: tr('专注 25 分钟', 'Focus 25 min') });
+      const focus = buttons.createEl('button', { cls: 'pulse-btn-secondary', text: tr('专注 25 分钟', 'Focus 25 min') });
       focus.addEventListener('click', () => this.plugin.focusAdapter.startFocusSession(25));
     }
   }
@@ -11580,15 +11592,18 @@ class CrispPulseEvidenceModal extends Modal {
     const preview = root.createEl('textarea');preview.readOnly = true;preview.rows = 7;preview.setAttr('aria-label', tr('证据原文预览', 'Evidence preview'));
     const quote = root.createEl('textarea');quote.rows = 3;quote.maxLength = 2000;quote.placeholder = tr('原文摘录（可留空，最多 2000 字）', 'Quote (optional, up to 2000 characters)');quote.setAttr('aria-label', tr('保留的原文摘录', 'Saved quote'));
     const status = root.createDiv({ cls: 'crisp-pulse-review-note' });status.setAttr('role', 'status');
-    const actions = root.createDiv({ cls: 'crisp-pulse-review-controls' });
-    const use = actions.createEl('button', { text: tr('使用选中文本', 'Use selected text') });
+    const actions = root.createDiv({ cls: 'crisp-pulse-review-controls crisp-pulse-evidence-actions' });
+    const cancel = actions.createEl('button', { text: tr('取消', 'Cancel'), attr: { type: 'button' } });
+    cancel.addEventListener('click', () => this.close());
+    const right = actions.createDiv({ cls: 'crisp-pulse-evidence-actions-right' });
+    const use = right.createEl('button', { text: tr('使用选中文本', 'Use selected text'), attr: { type: 'button' } });
     use.addEventListener('click', () => {
       const selected = preview.value.slice(preview.selectionStart, preview.selectionEnd);
       if (!selected) { status.setText(tr('请先在原文预览中选择文字。', 'Select some text in the preview first.'));return; }
       if (selected.length > 2000) { status.setText(tr('选中文字超过 2000 字，请缩小范围。', 'The selection is over 2000 characters; select less.'));return; }
       quote.value = selected;status.setText(tr('已填入选中的原文。', 'Selected text filled in.'));
     });
-    const save = actions.createEl('button', { text: tr('保存证据', 'Save evidence') });save.disabled = true;
+    const save = right.createEl('button', { text: tr('保存证据', 'Save evidence'), cls: 'mod-cta', attr: { type: 'button' } });save.disabled = true;
     const select = async path => {
       const token = ++this.readVersion;this.selectedPath = null;save.disabled = true;preview.value = '';quote.value = '';chosen.setText(tr(`读取：${path}`, `Loading: ${path}`));
       try {
