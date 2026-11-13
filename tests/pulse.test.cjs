@@ -71,7 +71,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8').replace(PUBLIC_PEM_RE, '`' + LOCAL_PUBLIC_PEM + '`') +
-    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined,splitActiveInterval:typeof splitActiveInterval === "function" ? splitActiveInterval : undefined,buildHourlyProfile:typeof buildHourlyProfile === "function" ? buildHourlyProfile : undefined,getReviewClues,reviewWeekRange,buildOverviewModel:typeof buildOverviewModel === "function" ? buildOverviewModel : undefined,dayComposition:typeof dayComposition === "function" ? dayComposition : undefined,dayRhythm:typeof dayRhythm === "function" ? dayRhythm : undefined,entitle:(plugin,on)=>PULSE_LICENSE_STATE.set(pulseLicenseManagerFor(plugin),!!on),smoothLinePath:typeof smoothLinePath === "function" ? smoothLinePath : undefined};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined,splitActiveInterval:typeof splitActiveInterval === "function" ? splitActiveInterval : undefined,buildHourlyProfile:typeof buildHourlyProfile === "function" ? buildHourlyProfile : undefined,getReviewClues,reviewWeekRange,buildOverviewModel:typeof buildOverviewModel === "function" ? buildOverviewModel : undefined,dayComposition:typeof dayComposition === "function" ? dayComposition : undefined,dayRhythm:typeof dayRhythm === "function" ? dayRhythm : undefined,entitle:(plugin,on)=>PULSE_LICENSE_STATE.set(pulseLicenseManagerFor(plugin),!!on),smoothLinePath:typeof smoothLinePath === "function" ? smoothLinePath : undefined,buildMonthPosterModel:typeof buildMonthPosterModel === "function" ? buildMonthPosterModel : undefined,shiftMonthKey:typeof shiftMonthKey === "function" ? shiftMonthKey : undefined};',
     context
   );
   const Pulse = context.module.exports;
@@ -3528,4 +3528,37 @@ test('trackActivity long after any user action, or with bad input, is ignored an
   for (const bad of [undefined, null, {}, { type: 'mindmap' }, { type: 'mindmap', file: 42 }, { type: '', file: 'a.md' }, { type: 'mindmap', file: '' }]) {
     assert.equal(p.trackActivity(bad), false, JSON.stringify(bad));
   }
+});
+
+test('month poster: partial month compares with the same days of last month, future days and streak are counted correctly',()=>{
+ const { helpers } = setup();
+ const day=(score)=>({quality:'recorded',contribution:{score,wordsAdded:score*10,notesCreated:1,tasksCompleted:0,meaningfulEdits:1},activity:{activeMinutes:30,focusMinutes:25}});
+ const daily={};
+ for(let d=1;d<=31;d++) daily[`2026-10-${String(d).padStart(2,'0')}`]=day(10); // 上个月每天 10 分，整月 310
+ daily['2026-11-01']=day(20);daily['2026-11-02']=day(20);daily['2026-11-04']=day(40);daily['2026-11-05']=day(20);daily['2026-11-06']=day(20);
+ const include=()=>true;
+ const m=helpers.buildMonthPosterModel(daily,'2026-11',include,'2026-11-06',{weekStartsOn:'monday'});
+ assert.equal(m.daysInMonth,30);
+ assert.equal(m.elapsed,6);
+ assert.equal(m.partial,true);
+ assert.equal(m.totals.score,120);
+ // 和 10 月前 6 天（60 分）比，不是整月 310 分
+ assert.equal(m.previousTotal,60);
+ assert.equal(m.delta,100);
+ assert.deepEqual([m.streak.length,m.streak.start,m.streak.end],[3,3,5]);
+ assert.equal(m.activeDays,5);
+ assert.equal(m.best.day,4);
+ assert.equal(m.days[10].status,'future');
+ assert.equal(m.days[10].level,0);
+ assert.ok(m.days.filter(d=>d.level>0).every(d=>d.level>=1&&d.level<=5));
+ // 整月：和上个月整月比；上个月没有记录不比
+ const full=helpers.buildMonthPosterModel(daily,'2026-10',include,'2026-11-06');
+ assert.equal(full.partial,false);
+ assert.equal(full.delta,null);
+ assert.equal(full.streak.length,31);
+ assert.equal(helpers.shiftMonthKey('2026-01',-1),'2025-12');
+ assert.equal(helpers.shiftMonthKey('2026-12',1),'2027-01');
+ const empty=helpers.buildMonthPosterModel({},'2026-11',include,'2026-11-06');
+ assert.equal(empty.empty,true);
+ assert.equal(empty.best,null);
 });

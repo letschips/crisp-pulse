@@ -188,7 +188,7 @@ function makeView(entitled, extra = {}) {
 
 test("门控表覆盖进阶功能，采集、备份、导出不在其中", () => {
   const keys = Object.keys(lib.PULSE_GATED_FEATURES || {}).sort();
-  assert.deepEqual(keys, ["analytics", "dayDetail", "heatmapMetrics", "memoConvert", "memoFilter", "memoReview", "memoTags", "memoWalk", "review", "weeklyReport", "yearly"]);
+  assert.deepEqual(keys, ["analytics", "dayDetail", "heatmapMetrics", "memoConvert", "memoFilter", "memoReview", "memoTags", "memoWalk", "monthlyPoster", "review", "weeklyReport", "yearly"]);
   for (const free of ["export", "backup", "csv", "json", "capture", "dashboard"]) assert.ok(!keys.some((k) => k.toLowerCase().includes(free)), free);
 });
 
@@ -274,4 +274,11 @@ test("带到期时间的授权到点立即失效，Obsidian 一直开着也一�
   assert.equal(manager.isEntitled(), false);
   await new Promise((r) => setTimeout(r, 0));
   assert.deepEqual(changes, [true, false]);
+});
+
+test("月报海报未激活时不打开", () => {
+  const asked = [];
+  const fake = { requireEntitlement: (key) => { asked.push(key); return false; }, app: null };
+  assert.doesNotThrow(() => lib.PluginClass.prototype.openMonthlyPoster.call(fake));
+  assert.deepEqual(asked, ["monthlyPoster"]);
 });

@@ -2123,6 +2123,16 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
   .crisp-pulse-memo-item { transition: none; }
 }
 
+/* 月报海报 */
+.crisp-pulse-poster-modal { width: min(560px, 92vw); }
+.crisp-pulse-poster-modal .modal-content { display: flex; flex-direction: column; gap: 14px; }
+.crisp-pulse-poster-bar { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.crisp-pulse-poster-title { min-width: 9em; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+.crisp-pulse-poster-bar button[disabled] { opacity: 0.3; pointer-events: none; }
+.crisp-pulse-poster-frame { border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 1px var(--background-modifier-border); line-height: 0; }
+.crisp-pulse-poster-frame img { display: block; width: 100%; height: auto; max-height: 68vh; object-fit: contain; }
+.crisp-pulse-poster-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
 /* Mobile (iPhone / iPad) Responsive Adaptations */
 .crisp-pulse-heatmap-scroll {
   -webkit-overflow-scrolling: touch;
