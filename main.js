@@ -8226,6 +8226,8 @@ class CrispPulseView extends ItemView {
   analyticsSvg(parent, width, height, label) {
     const doc = parent.ownerDocument;
     const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    // Also inherited by labelled SVG targets; keep accessibility and chart readouts, skip HTML tooltips.
+    svg.style.setProperty('--no-tooltip', 'true');
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     svg.setAttribute('class', 'crisp-pulse-analytics-chart');
     if (label) { svg.setAttribute('role', 'group'); svg.setAttribute('aria-label', label); } else svg.setAttribute('aria-hidden', 'true');
@@ -8876,6 +8878,7 @@ class CrispPulseView extends ItemView {
     const scroll = card.createDiv({ cls: 'crisp-pulse-analytics-chart-scroll' });
     const doc = card.ownerDocument;
     const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.style.setProperty('--no-tooltip', 'true');
     const chartWidth = Math.max(280, Math.min(960, card.clientWidth - 48));
     svg.setAttribute('viewBox', `0 0 ${chartWidth} 270`);
     svg.setAttribute('class', 'crisp-pulse-analytics-chart');

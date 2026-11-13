@@ -1,5 +1,11 @@
 # Changelog - Crisp Pulse
 
+## [1.50.1] - 2026-11-13
+
+### Fixed
+- 悬停概览、分析及年度图表的 SVG 和日期目标时，不再触发 Obsidian 1.15.1 的 `isShown is not a function` 错误。保留无障碍名称、键盘导航和图表自定义提示。
+- 增加 SVG Tooltip 回归测试，覆盖根节点、子节点、提示读数与键盘操作。
+
 ## [1.50.0] - 2026-11-13
 
 ### Added
