@@ -129,7 +129,7 @@
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  transition: background-color 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1)), border-color 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1)), color 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1)), transform 150ms var(--pulse-ease-out, cubic-bezier(.23, 1, .32, 1));
+  transition: all 0.15s ease;
 }
 
 /* 未激活时进阶标签页保持可点，点进去是锁定说明；用较淡的文字提示它们需要激活。 */
@@ -2398,6 +2398,14 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 :is(.crisp-pulse-heatmap-card,.crisp-pulse-analytics-card) {
   background: color-mix(in srgb, var(--background-primary) 28%, transparent);
 }
+body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view
+:is(button.crisp-pulse-tab-btn:not(.is-active):not(:disabled),select.crisp-pulse-scope-select) {
+  background-color: var(--pulse-ui-soft) !important;
+  box-shadow: inset 0 1px 0 var(--pulse-glass-rim) !important;
+}
+body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view button.crisp-pulse-tab-btn:not(.is-active):not(:disabled):hover {
+  background: color-mix(in srgb, var(--text-normal) 10%, transparent) !important;
+}
 
 /* Hide the page scrollbar while preserving wheel, touch and keyboard scrolling. */
 .crisp-pulse-view {
@@ -2408,13 +2416,13 @@ body.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-vi
 }
 
 /* Surface and text tokens per theme; translucent windows get glass variants. */
-.crisp-pulse-view { --pulse-ui-surface: var(--background-primary); --pulse-ui-soft: var(--background-secondary); --pulse-ui-border: var(--background-modifier-border); --pulse-ui-accent: var(--interactive-accent, #6b84bf); --text-muted: color-mix(in srgb, var(--text-normal) 78%, transparent); --text-faint: color-mix(in srgb, var(--text-normal) 55%, transparent); color: var(--text-normal); font-family: var(--font-interface); font-weight: 400; scrollbar-width: none; background: var(--pulse-ui-soft) !important; padding: 20px 28px 56px !important; }
+.crisp-pulse-view { --pulse-ui-surface: var(--background-primary); --pulse-ui-soft: var(--background-secondary); --pulse-ui-border: var(--background-modifier-border); --pulse-ui-accent: var(--interactive-accent, #6b84bf); --pulse-glass-rim: rgba(255, 255, 255, 0.55); --text-muted: color-mix(in srgb, var(--text-normal) 78%, transparent); --text-faint: color-mix(in srgb, var(--text-normal) 55%, transparent); color: var(--text-normal); font-family: var(--font-interface); font-weight: 400; scrollbar-width: none; background: var(--pulse-ui-soft) !important; padding: 20px 28px 56px !important; }
 .crisp-pulse-view::-webkit-scrollbar { display: none; }
-body.theme-dark.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 36%, transparent); --pulse-ui-soft: color-mix(in srgb, var(--background-primary) 22%, transparent); --pulse-ui-border: color-mix(in srgb, var(--text-normal) 14%, transparent); --text-normal: #f1f2f6; --text-muted: rgba(235, 240, 250, 0.80); --text-faint: rgba(220, 225, 235, 0.54); background: transparent !important; }
-body.theme-light.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 82%, transparent); --pulse-ui-soft: color-mix(in srgb, var(--background-secondary) 72%, transparent); --pulse-ui-border: rgba(0, 0, 0, 0.08); background: transparent !important; }
-body.theme-dark .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 92%, #ffffff); --pulse-ui-soft: var(--background-primary); --pulse-ui-border: color-mix(in srgb, var(--text-normal) 16%, transparent); --text-normal: #ecedf1; --text-muted: rgba(236, 237, 241, 0.78); --text-faint: rgba(236, 237, 241, 0.52); }
+body.theme-dark.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 36%, transparent); --pulse-ui-soft: color-mix(in srgb, var(--background-primary) 22%, transparent); --pulse-ui-border: color-mix(in srgb, var(--text-normal) 14%, transparent); --pulse-glass-rim: rgba(255, 255, 255, 0.18); --text-normal: #f1f2f6; --text-muted: rgba(235, 240, 250, 0.80); --text-faint: rgba(220, 225, 235, 0.54); background: transparent !important; }
+body.theme-light.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 82%, transparent); --pulse-ui-soft: color-mix(in srgb, var(--background-secondary) 72%, transparent); --pulse-ui-border: rgba(0, 0, 0, 0.08); --pulse-glass-rim: rgba(255, 255, 255, 0.95); background: transparent !important; }
+body.theme-dark .crisp-pulse-view { --pulse-ui-surface: color-mix(in srgb, var(--background-primary) 92%, #ffffff); --pulse-ui-soft: var(--background-primary); --pulse-ui-border: color-mix(in srgb, var(--text-normal) 16%, transparent); --pulse-glass-rim: rgba(255, 255, 255, 0.10); --text-normal: #ecedf1; --text-muted: rgba(236, 237, 241, 0.78); --text-faint: rgba(236, 237, 241, 0.52); }
 /* Light themes follow the host theme's colours (warm themes such as Still stay warm). */
-body.theme-light .crisp-pulse-view { --pulse-ui-surface: var(--background-primary); --pulse-ui-soft: var(--background-secondary, #f8f9fa); --pulse-ui-border: rgba(0, 0, 0, 0.08); background: var(--background-secondary, #f8f9fa) !important; }
+body.theme-light .crisp-pulse-view { --pulse-ui-surface: var(--background-primary); --pulse-ui-soft: var(--background-secondary, #f8f9fa); --pulse-ui-border: rgba(0, 0, 0, 0.08); --pulse-glass-rim: rgba(255, 255, 255, 0.9); background: var(--background-secondary, #f8f9fa) !important; }
 
 /* ==========================================================================
    Dashboard tray layout (pulse-v2): tray header on a soft surface, content on an
@@ -3386,46 +3394,6 @@ input.is-invalid[aria-invalid="true"] { border-color: var(--text-error); box-sha
   border-width: var(--pulse-hairline);
 }
 
-/* Header view switcher: segmented well + raised tactile active pill (no loud accent block). */
-.crisp-pulse-view .crisp-pulse-title-group > .crisp-pulse-actions {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  padding: 3px;
-  border-radius: 10px;
-  background: var(--pulse-track-bg);
-  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--text-normal) 8%, transparent);
-}
-
-.crisp-pulse-view .crisp-pulse-title-group > .crisp-pulse-actions button.crisp-pulse-tab-btn {
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
-  border-radius: 7px !important;
-  min-height: 30px;
-  height: 30px;
-  padding: 0 12px;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: var(--text-muted) !important;
-  transition: background-color var(--pulse-dur-hover) var(--pulse-ease-out), color var(--pulse-dur-hover) var(--pulse-ease-out), transform var(--pulse-dur-hover) var(--pulse-ease-out), box-shadow var(--pulse-dur-hover) var(--pulse-ease-out);
-}
-
-/* Phone: keep the 44px touch target the earlier mobile rule gave these tabs. */
-.is-mobile .crisp-pulse-view .crisp-pulse-title-group > .crisp-pulse-actions button.crisp-pulse-tab-btn {
-  min-height: 44px;
-  height: auto;
-  padding: 0 4px;
-}
-
-.crisp-pulse-view .crisp-pulse-title-group > .crisp-pulse-actions button.crisp-pulse-tab-btn.is-active {
-  background: var(--pulse-control-bg) !important;
-  color: var(--text-normal) !important;
-  box-shadow: var(--pulse-shadow-button) !important;
-  font-weight: 500;
-}
-
 /* All other segmented tracks adopt the same crisp raised active pill without border shift. */
 .crisp-pulse-view.pulse-v2 .pulse-v2-seg {
   background: var(--pulse-track-bg);
@@ -3446,8 +3414,7 @@ input.is-invalid[aria-invalid="true"] { border-color: var(--text-error); box-sha
 }
 
 /* Tactile Secondary & Primary action button roles. */
-.crisp-pulse-view button.pulse-btn-secondary,
-.crisp-pulse-view select.crisp-pulse-scope-select {
+.crisp-pulse-view button.pulse-btn-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3465,15 +3432,6 @@ input.is-invalid[aria-invalid="true"] { border-color: var(--text-error); box-sha
   letter-spacing: -0.01em;
   cursor: pointer;
   transition: background-color var(--pulse-dur-hover) var(--pulse-ease-out), color var(--pulse-dur-hover) var(--pulse-ease-out), transform var(--pulse-dur-hover) var(--pulse-ease-out), box-shadow var(--pulse-dur-hover) var(--pulse-ease-out);
-}
-
-.crisp-pulse-view select.crisp-pulse-scope-select {
-  padding-right: 26px;
-}
-
-.crisp-pulse-view button.pulse-btn-secondary.crisp-pulse-search-btn {
-  width: 36px;
-  padding: 0;
 }
 
 .crisp-pulse-view button.pulse-btn-primary {
@@ -3553,17 +3511,8 @@ input.is-invalid[aria-invalid="true"] { border-color: var(--text-error); box-sha
   margin-left: auto;
 }
 
-/* Light glass: header controls on the scenery keep the pre-1.51 soft glass fill (and hover), with the tactile edge. */
-body.theme-light.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view .crisp-pulse-header > .crisp-pulse-actions {
-  --pulse-control-bg: var(--pulse-ui-soft);
-  --pulse-control-hover: color-mix(in srgb, var(--text-normal) 10%, transparent);
-}
-
 /* Hover only on fine pointers so touch taps never stick. */
 @media (hover: hover) and (pointer: fine) {
-  .crisp-pulse-view .crisp-pulse-title-group > .crisp-pulse-actions button.crisp-pulse-tab-btn:not(.is-active):hover {
-    color: var(--text-normal) !important;
-  }
   .crisp-pulse-view button.pulse-btn-secondary:not(:disabled):hover,
   .crisp-pulse-view .pulse-goal .pulse-goal-sprint:not(:disabled):hover {
     background-color: var(--pulse-control-hover) !important;
@@ -3574,12 +3523,12 @@ body.theme-light.is-translucent:not(.is-popout-window):not(.is-popout-modal) .cr
 }
 
 /* Physical squeeze on press. */
-.crisp-pulse-view :is(button.crisp-pulse-tab-btn, .pulse-v2-seg button, button.pulse-btn-secondary, button.pulse-btn-primary, button.pulse-pomo-btn, button.crisp-pulse-review-cite, button.crisp-pulse-review-outcome-pick, button.crisp-pulse-review-add, button.pulse-goal-sprint, .crisp-pulse-fingerprint-actions button):not(:disabled):active,
+.crisp-pulse-view :is(.pulse-v2-seg button, button.pulse-btn-secondary, button.pulse-btn-primary, button.pulse-pomo-btn, button.crisp-pulse-review-cite, button.crisp-pulse-review-outcome-pick, button.crisp-pulse-review-add, button.pulse-goal-sprint, .crisp-pulse-fingerprint-actions button):not(:disabled):active,
 .crisp-pulse-memo-view button.crisp-pulse-memo-tab:not(:disabled):active {
   transform: scale(0.97);
 }
 
-.crisp-pulse-view :is(button.pulse-btn-secondary.crisp-pulse-search-btn, button.pulse-today-open, button.crisp-pulse-review-icon-btn):not(:disabled):active,
+.crisp-pulse-view :is(button.pulse-today-open, button.crisp-pulse-review-icon-btn):not(:disabled):active,
 .crisp-pulse-memo-view :is(button.crisp-pulse-memo-tool, button.crisp-pulse-memo-send):not(:disabled):active {
   transform: scale(0.92);
 }
@@ -3597,11 +3546,11 @@ body.theme-light.is-translucent:not(.is-popout-window):not(.is-popout-modal) .cr
   textarea.crisp-pulse-memo-modal-input {
     font-size: 16px !important;
   }
-  .crisp-pulse-view :is(button.pulse-btn-secondary, button.pulse-btn-primary, select.crisp-pulse-scope-select) {
+  .crisp-pulse-view :is(button.pulse-btn-secondary, button.pulse-btn-primary) {
     min-height: 44px;
     height: auto;
   }
-  .crisp-pulse-view :is(button.pulse-btn-secondary, button.crisp-pulse-tab-btn, .pulse-v2-seg button):not(:disabled):active {
+  .crisp-pulse-view :is(button.pulse-btn-secondary, .pulse-v2-seg button):not(:disabled):active {
     background-color: var(--pulse-control-hover) !important;
   }
 }

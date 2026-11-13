@@ -9722,7 +9722,7 @@ class CrispPulseView extends ItemView {
 
     // Refresh Button
     const refreshBtn = actions.createEl("button", {
-      cls: "pulse-btn-secondary",
+      cls: "crisp-pulse-tab-btn",
       text: tr("刷新", "Refresh")
     });
     refreshBtn.addEventListener("click", () => {
@@ -9739,7 +9739,7 @@ class CrispPulseView extends ItemView {
     try { enabled = !!this.app.plugins?.enabledPlugins?.has?.("crisp-search"); } catch (_) { enabled = false; }
     if (!enabled) return;
     const button = parent.createEl("button", {
-      cls: "pulse-btn-secondary crisp-pulse-search-btn",
+      cls: "crisp-pulse-tab-btn crisp-pulse-search-btn",
       attr: { "aria-label": tr("搜索（Crisp Search）", "Search (Crisp Search)"), "data-tooltip-position": "bottom" }
     });
     setIcon(button, "search");
