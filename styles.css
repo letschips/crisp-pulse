@@ -3553,6 +3553,12 @@ input.is-invalid[aria-invalid="true"] { border-color: var(--text-error); box-sha
   margin-left: auto;
 }
 
+/* Light glass: header controls on the scenery keep the pre-1.51 soft glass fill (and hover), with the tactile edge. */
+body.theme-light.is-translucent:not(.is-popout-window):not(.is-popout-modal) .crisp-pulse-view .crisp-pulse-header > .crisp-pulse-actions {
+  --pulse-control-bg: var(--pulse-ui-soft);
+  --pulse-control-hover: color-mix(in srgb, var(--text-normal) 10%, transparent);
+}
+
 /* Hover only on fine pointers so touch taps never stick. */
 @media (hover: hover) and (pointer: fine) {
   .crisp-pulse-view .crisp-pulse-title-group > .crisp-pulse-actions button.crisp-pulse-tab-btn:not(.is-active):hover {
