@@ -2133,6 +2133,24 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
 .crisp-pulse-poster-frame img { display: block; width: 100%; height: auto; max-height: 68vh; object-fit: contain; }
 .crisp-pulse-poster-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+/* 写作目标与冲刺（1.51.0） */
+.crisp-pulse-view .pulse-today .pulse-goal { flex-basis: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); }
+.crisp-pulse-view .pulse-goal-head { display: flex; align-items: baseline; gap: 10px; }
+.crisp-pulse-view .pulse-goal-label { font-size: 13px; font-weight: 600; color: var(--text-normal); }
+.crisp-pulse-view .pulse-goal-num { font-variant-numeric: tabular-nums; }
+.crisp-pulse-view .pulse-goal-value { font-family: var(--font-monospace); font-size: 17px; font-weight: 500; color: var(--text-normal); }
+.crisp-pulse-view .pulse-goal-total { font-size: 13px; color: var(--text-muted); }
+.crisp-pulse-view .pulse-goal .pulse-goal-sprint { margin-left: auto; height: 26px; padding: 0 12px; font-size: 12px; border-radius: 13px; background: none; border: 1px solid var(--pulse-ui-border, var(--background-modifier-border)); box-shadow: none; color: var(--text-muted); cursor: pointer; font-variant-numeric: tabular-nums; }
+.crisp-pulse-view .pulse-goal .pulse-goal-sprint:hover { color: var(--text-normal); }
+.crisp-pulse-view .pulse-goal .pulse-goal-sprint.is-running { color: var(--pulse-ui-accent, var(--interactive-accent)); border-color: color-mix(in srgb, var(--pulse-ui-accent, var(--interactive-accent)) 45%, transparent); }
+.crisp-pulse-view .pulse-goal-track { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--text-normal) 8%, transparent); overflow: hidden; }
+.crisp-pulse-view .pulse-goal-fill { height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--pulse-ui-accent, var(--interactive-accent)) 70%, transparent); transition: width .4s ease; }
+.crisp-pulse-view .pulse-goal.is-done .pulse-goal-fill { background: var(--pulse-ui-accent, var(--interactive-accent)); }
+.crisp-pulse-status .crisp-pulse-status-sprint { margin-left: 8px; font-variant-numeric: tabular-nums; color: var(--text-accent); }
+.crisp-pulse-sprint-modal .crisp-pulse-sprint-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
+.crisp-pulse-sprint-modal .crisp-pulse-sprint-options button.is-selected { background: var(--interactive-accent); color: var(--text-on-accent); }
+@media (prefers-reduced-motion: reduce) { .crisp-pulse-view .pulse-goal-fill { transition: none; } }
+
 /* Mobile (iPhone / iPad) Responsive Adaptations */
 .crisp-pulse-heatmap-scroll {
   -webkit-overflow-scrolling: touch;

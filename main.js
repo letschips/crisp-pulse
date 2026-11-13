@@ -36,7 +36,7 @@ const PULSE_ZH = /^zh\b/i.test(PULSE_LANGUAGE);
 const PULSE_HANT = PULSE_ZH && /^zh[-_](tw|hk|mo|hant)\b/i.test(PULSE_LANGUAGE);
 /* 繁体文案由简体文案转出来（OpenCC s2twp：台湾正体 + 台湾用语），表由 scripts/gen-hant.cjs 生成，只收源码里用到的字词。
    分两段按最长匹配替换：s 简→繁，t 台湾用语。插值进来的内容（文件名、标签）也会被转，只影响显示。 */
-const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"4ca7f2a180a24907","s":"一只 一隻|一周 一週|一致 一致|万 萬|万字 萬字|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下个月 下個月|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|册 冊|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|制图 製圖|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|头 頭|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|断了 斷了|方向 方向|无 無|日历 日曆|日子里 日子裏|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栋 棟|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|楼 樓|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|江面 江面|沉淀 沉澱|没 沒|注册 註冊|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|游 遊|游船 遊船|湖面 湖面|满 滿|灯 燈|点 點|烟 煙|烟花 煙花|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记了 記了|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|超出 超出|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这个月 這個月|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風|黄 黃","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
+const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"007bf2fceae0cc35","s":"一只 一隻|一周 一週|一致 一致|万 萬|万字 萬字|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下个月 下個月|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|册 冊|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲刺 衝刺|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|制图 製圖|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|头 頭|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|断了 斷了|方向 方向|无 無|日历 日曆|日子里 日子裏|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栋 棟|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|楼 樓|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|江面 江面|沉淀 沉澱|没 沒|注册 註冊|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|游 遊|游船 遊船|湖面 湖面|满 滿|满了 滿了|灯 燈|点 點|烟 煙|烟花 煙花|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记了 記了|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|超出 超出|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这个月 這個月|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風|黄 黃","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導入 匯入|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
 let pulseHantStages = null;
 function pulseHant(text) {
   if (typeof text !== "string" || !/\p{Script=Han}/u.test(text)) return text;
@@ -327,6 +327,7 @@ const PULSE_GATED_FEATURES = Object.freeze({
   analytics: tr("数据分析", "Analytics"),
   yearly: tr("年度画像", "Year Portrait"),
   weeklyReport: tr("周报复制与归档", "Weekly report copy & archive"),
+  writingSprint: tr("写作冲刺", "Writing sprints"),
   monthlyPoster: tr("月报海报", "Monthly poster"),
   dayDetail: tr("每日明细", "Day details"),
   heatmapMetrics: tr("热力图切换指标", "Heatmap metrics"),
@@ -747,6 +748,7 @@ const DEFAULT_SETTINGS = {
   headerBannerImage: "", // vault path of a custom banner image; empty uses the generated sky
   sceneStyle: "pixel", // 顶部天空和底部地平线的画风："pixel" 像素湖面 | "ink" 水墨山水 | "city" 像素城市
   celebratedOn: "", // "YYYY-MM-DD"：这一天达标的流星/彩虹已经在页脚放过，不再重复
+  dailyWordGoal: 1000, // 每天写多少字（只算自己打的字，不算粘贴、导入、系统写入）；0 关闭
 
   // --- 1.1 Credible Analytics Settings ---
   trackingStartDate: null, // "YYYY-MM-DD" or null
@@ -1367,6 +1369,23 @@ function migrateFocusPaths(daily, log, migratePath) {
   }
   return changed;
 }
+/** 当天自己打的字：只算没被归为粘贴导入（capture）和系统写入（system）的新增。写作目标和冲刺都用它。 */
+function typedWordsOf(record) {
+  let n = 0;
+  for (const f of Object.values(record?.files || {})) {
+    const v = f?.sourceWords?.unattributed;
+    if (Number.isFinite(v) && v > 0) n += v;
+  }
+  return Math.round(n);
+}
+
+/** 冲刺写了多少：开始时记下当天已打的字，之后的差；跨过零点就把前一天剩下的加上。 */
+function sprintWords(daily, sprint, todayKey) {
+  const now = typedWordsOf(daily?.[todayKey]);
+  if (todayKey === sprint.baseDate) return Math.max(0, now - sprint.base);
+  return Math.max(0, typedWordsOf(daily?.[sprint.baseDate]) - sprint.base) + now;
+}
+
 function recordSourceWords(fileRecord, path, words, capture) {
   if (!(words > 0)) return;
   if (!fileRecord.sourceWords || typeof fileRecord.sourceWords !== 'object' || Array.isArray(fileRecord.sourceWords)) fileRecord.sourceWords = {};
@@ -1775,6 +1794,15 @@ function validateAndRepairStore(store, defaultSettings = DEFAULT_SETTINGS) {
           repairedCount++;
         }
       }
+      // 写作冲刺（1.51.0 起）：形状不对的条目丢掉
+      if (rec.writing !== undefined) {
+        if (!rec.writing || typeof rec.writing !== "object" || Array.isArray(rec.writing) || !Array.isArray(rec.writing.sprints)) { delete rec.writing; repairedCount++; }
+        else {
+          const ok = rec.writing.sprints.filter((x) => x && typeof x === "object" && /^\d{2}:\d{2}$/.test(x.at) && Number.isInteger(x.minutes) && x.minutes >= 1 && x.minutes <= 240
+            && Number.isInteger(x.words) && x.words >= 0 && (x.target === undefined || (Number.isInteger(x.target) && x.target > 0))).slice(-50);
+          if (ok.length !== rec.writing.sprints.length) { rec.writing.sprints = ok; repairedCount++; }
+        }
+      }
       // 每一段专注（来自 Crisp Focus 事件）：形状不对的条目丢掉，不影响其他统计
       if (rec.activity.focusSessions !== undefined) {
         if (!Array.isArray(rec.activity.focusSessions)) {
@@ -2075,6 +2103,17 @@ class CrispPulsePlugin extends Plugin {
           new Notice(tr("复制失败，请检查剪贴板权限后重试。", "Copy failed. Check clipboard permissions and try again."));
         }
       }
+    });
+
+    this.addCommand({
+      id: "start-writing-sprint",
+      name: tr("开始写作冲刺", "Start a writing sprint"),
+      callback: () => { if (this.requireEntitlement("writingSprint")) new CrispPulseSprintModal(this.app, this).open(); }
+    });
+    this.addCommand({
+      id: "finish-writing-sprint",
+      name: tr("结束写作冲刺", "Finish the writing sprint"),
+      checkCallback: (checking) => { if (!this.sprint) return false; if (!checking) void this.finishSprint(); return true; }
     });
 
     this.addCommand({
@@ -2648,6 +2687,13 @@ class CrispPulsePlugin extends Plugin {
     this.statusBarEl.appendChild(iconSpan);
     this.statusBarEl.appendChild(textSpan);
 
+    if (this.sprint) {
+      this.sprintEl = document.createElement("span");
+      this.sprintEl.className = "crisp-pulse-status-sprint";
+      this.statusBarEl.appendChild(this.sprintEl);
+      this.tickSprint();
+    }
+
     if (isFocusing) {
       const focusSpan = document.createElement("span");
       focusSpan.className = "crisp-pulse-status-focus-dot";
@@ -2665,6 +2711,9 @@ class CrispPulsePlugin extends Plugin {
     const scopeName = REVIEW_SCOPE_LABELS[this.settings.dataQualityScope] || this.settings.dataQualityScope;
     let tooltip = tr(`Crisp Pulse 今日知识脉冲\n今日贡献: ${score.toFixed(1)} 分\n连续活跃: ${streak} 天 (范围: ${scopeName})\n新建笔记: ${todayRecord.contribution.notesCreated} 篇\n新增字数: ${todayRecord.contribution.wordsAdded} 词`,
       `Crisp Pulse · Today\nContribution: ${score.toFixed(1)} pts\nStreak: ${plural(streak, "day")} (scope: ${scopeName})\nNotes created: ${todayRecord.contribution.notesCreated}\nWords added: ${todayRecord.contribution.wordsAdded}`);
+    // 开了字数目标：提示里加一行今天自己打了多少字
+    const wordGoal = this.wordGoal();
+    if (wordGoal) tooltip += tr(`\n写作目标: ${typedWordsOf(todayRecord)} / ${wordGoal} 字`, `\nWord goal: ${typedWordsOf(todayRecord)} / ${wordGoal}`);
     if (isFocusing) {
       const remainingMs = this.focusAdapter.getFocusRemainingMs();
       const mins = Math.ceil(remainingMs / 60000);
@@ -2882,7 +2931,7 @@ class CrispPulsePlugin extends Plugin {
     }, 0);
   }
 
-  /** 今天达标了吗：番茄数到了 Crisp Focus 的每日目标，或者贡献分进了最近 30 天（有分的日子，至少 7 天）的前四分之一。
+  /** 今天达标了吗：番茄数到了 Crisp Focus 的每日目标、写满了每日字数目标，或者贡献分进了最近 30 天（有分的日子，至少 7 天）的前四分之一。
       返回原因，没达标返回 null。 */
   todayMilestone() {
     const date = getTodayKey();
@@ -2895,6 +2944,9 @@ class CrispPulsePlugin extends Plugin {
       if (focus && Number(focus.focusApiVersion) >= 1 && typeof focus.getPomodoroSnapshot === "function") goal = Number(focus.getPomodoroSnapshot()?.goal) || 0;
     } catch (_) { /* Focus 重载中：只看贡献分 */ }
     if (goal > 0 && done >= goal) return { date, reason: "pomodoro", done, goal };
+    const wordGoal = this.wordGoal();
+    const typed = typedWordsOf(record);
+    if (wordGoal > 0 && typed >= wordGoal) return { date, reason: "words", words: typed, goal: wordGoal };
     const score = Number(record.contribution?.score) || 0;
     if (score <= 0) return null;
     const day = reviewDayNumber(date);
@@ -2906,6 +2958,66 @@ class CrispPulsePlugin extends Plugin {
     if (past.length < 7) return null;
     past.sort((a, b) => a - b);
     return score >= past[Math.floor(0.75 * (past.length - 1))] ? { date, reason: "score", score } : null;
+  }
+
+  wordGoal() {
+    const n = Math.round(Number(this.settings.dailyWordGoal) || 0);
+    return n > 0 ? Math.min(100000, n) : 0;
+  }
+
+  /* ---------- 写作冲刺：限时写一段，Pulse 只数字数；装了 Crisp Focus 就同时开一段同样长的专注 ---------- */
+  async startSprint(minutes, target = 0) {
+    if (!this.requireEntitlement("writingSprint")) return false;
+    if (this.sprint) { new Notice(tr("已经在冲刺了", "A sprint is already running")); return false; }
+    const mins = Math.max(1, Math.min(240, Math.round(Number(minutes) || 25)));
+    const date = getTodayKey();
+    this.sprint = { start: Date.now(), minutes: mins, target: Math.max(0, Math.round(Number(target) || 0)), baseDate: date, base: typedWordsOf(this.store.daily[date]) };
+    if (this.settings.enableCrispFocusSync && this.focusAdapter?.isAvailable?.() && !this.focusAdapter.isFocusRunning()) {
+      try { await this.focusAdapter.startFocusSession(mins); } catch (_) { /* Focus 开不了也照样冲刺 */ }
+    }
+    this.sprintTimer = window.setInterval(() => this.tickSprint(), 1000);
+    this.registerInterval(this.sprintTimer);
+    this.tickSprint();
+    this.refreshViews();
+    return true;
+  }
+
+  sprintStatus() {
+    const s = this.sprint;
+    if (!s) return null;
+    const left = Math.max(0, s.start + s.minutes * 60000 - Date.now());
+    return { left, words: sprintWords(this.store.daily, s, getTodayKey()), target: s.target, minutes: s.minutes };
+  }
+
+  tickSprint() {
+    const status = this.sprintStatus();
+    if (!status) return;
+    if (status.left <= 0) { void this.finishSprint(); return; }
+    const mm = String(Math.floor(status.left / 60000)).padStart(2, "0"), ss = String(Math.floor(status.left / 1000) % 60).padStart(2, "0");
+    const text = tr(`冲刺 ${mm}:${ss} · +${status.words} 字`, `Sprint ${mm}:${ss} · +${status.words} words`);
+    if (this.sprintEl?.isConnected) this.sprintEl.setText(text);
+    for (const leaf of this.app.workspace?.getLeavesOfType?.(VIEW_TYPE_PULSE) || []) leaf.view?.updateSprintUi?.(status, text);
+  }
+
+  /** 到点或提前结束：记进当天，提示写了多少。不到 1 分钟的不记。 */
+  async finishSprint() {
+    const s = this.sprint;
+    if (!s) return;
+    const words = sprintWords(this.store.daily, s, getTodayKey());
+    const minutes = Math.min(s.minutes, Math.round((Date.now() - s.start) / 60000));
+    this.sprint = null;
+    if (this.sprintTimer) { window.clearInterval(this.sprintTimer); this.sprintTimer = null; }
+    if (minutes >= 1) {
+      const today = this.getOrCreateTodayRecord();
+      if (!today.writing || !Array.isArray(today.writing.sprints)) today.writing = { sprints: [] };
+      const at = new Date(s.start);
+      today.writing.sprints.push({ at: `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`, minutes, words, ...(s.target ? { target: s.target } : {}) });
+      this.dirty = true;
+      await this.savePluginData();
+      new Notice(tr(`写作冲刺结束：${minutes} 分钟写了 ${words} 字${s.target ? (words >= s.target ? "，目标达成" : `，目标 ${s.target}`) : ""}`, `Sprint done: ${words} words in ${minutes} min${s.target ? (words >= s.target ? ", goal reached" : `, goal ${s.target}`) : ""}`));
+    }
+    this.updateStatusBar();
+    this.refreshViews();
   }
 
   /** 今天达标了、但页脚还没放过流星/彩虹。 */
@@ -9422,7 +9534,9 @@ class CrispPulseView extends ItemView {
     const what = scene.words.celebration(night ? "night" : "day");
     this.celebrationNote = milestone.reason === "pomodoro"
       ? tr(` · ${what}：今天的 ${milestone.goal} 个番茄目标达成了`, ` · ${what}: today’s goal of ${milestone.goal} pomodoros is done`)
-      : tr(` · ${what}：今天的贡献分进了最近 30 天的前四分之一`, ` · ${what}: today’s score is in the top quarter of the last 30 days`);
+      : milestone.reason === "words"
+        ? tr(` · ${what}：今天写满了 ${milestone.goal} 字`, ` · ${what}: today’s ${milestone.goal}-word goal is done`)
+        : tr(` · ${what}：今天的贡献分进了最近 30 天的前四分之一`, ` · ${what}: today’s score is in the top quarter of the last 30 days`);
     this.setFooterCaption();
     this.celebrating = true;
     const pieces = [];
@@ -9719,9 +9833,11 @@ class CrispPulseView extends ItemView {
     } else value.createSpan({ cls: 'pulse-today-empty', text: tr('还没开始', 'Not started') });
     const facts = strip.createDiv({ cls: 'pulse-today-facts' });
     const fact = text => facts.createSpan({ cls: 'pulse-today-fact', text });
+    const wordGoal = this.plugin.wordGoal();
     if (entitled && rec) {
       const words = rec.contribution?.wordsAdded || 0, focusMinutes = rec.activity?.focusMinutes || 0;
-      if (words > 0) fact(tr(`新增 ${Number(words).toLocaleString(PULSE_NUMBER_LOCALE)} 词`, `${Number(words).toLocaleString(PULSE_NUMBER_LOCALE)} words`));
+      // 开了字数目标就看下面那条进度，不再重复列新增词数（两个口径不同，放一起容易看混）
+      if (words > 0 && !wordGoal) fact(tr(`新增 ${Number(words).toLocaleString(PULSE_NUMBER_LOCALE)} 词`, `${Number(words).toLocaleString(PULSE_NUMBER_LOCALE)} words`));
       if (focusMinutes > 0) fact(tr(`专注 ${formatPulseMinutes(focusMinutes)} 分钟`, `${formatPulseMinutes(focusMinutes)} min focus`));
     }
     const focus = entitled && this.plugin.settings.enableCrispFocusSync ? this.pomodoroFocus() : null;
@@ -9731,6 +9847,42 @@ class CrispPulseView extends ItemView {
     const open = strip.createEl('button', { cls: 'pulse-today-open', attr: { type: 'button', 'aria-label': tr('看明细', 'Details'), 'data-tooltip-position': 'top' } });
     open.innerHTML = ICON_MAP_ARROW_RIGHT_SVG;
     open.addEventListener('click', () => this.openAnalyticsDay(todayKey));
+    if (wordGoal) this.renderWordGoal(strip, rec, wordGoal);
+  }
+
+  /** 今天条下面的写作行：今天写了多少 / 目标，一条进度；右边是冲刺按钮，冲刺中显示倒计时和这次写了多少。 */
+  renderWordGoal(strip, rec, goal) {
+    const typed = typedWordsOf(rec);
+    const row = strip.createDiv({ cls: 'pulse-goal' });
+    row.toggleClass('is-done', typed >= goal);
+    const head = row.createDiv({ cls: 'pulse-goal-head' });
+    head.createSpan({ cls: 'pulse-goal-label', text: tr('写作', 'Writing') });
+    const num = head.createSpan({ cls: 'pulse-goal-num' });
+    num.createSpan({ cls: 'pulse-goal-value', text: Number(typed).toLocaleString(PULSE_NUMBER_LOCALE) });
+    num.createSpan({ cls: 'pulse-goal-total', text: tr(` / ${Number(goal).toLocaleString(PULSE_NUMBER_LOCALE)} 字`, ` / ${Number(goal).toLocaleString(PULSE_NUMBER_LOCALE)} words`) });
+    const sprint = head.createEl('button', { cls: 'pulse-goal-sprint', attr: { type: 'button' } });
+    this.sprintButton = sprint;
+    const status = this.plugin.sprintStatus();
+    const paint = (st, text) => {
+      sprint.toggleClass('is-running', !!st);
+      sprint.setText(st ? text : tr('冲刺', 'Sprint'));
+      sprint.setAttr('aria-label', st ? tr('提前结束这次冲刺', 'Finish this sprint now') : tr('开始限时写作冲刺', 'Start a timed writing sprint'));
+    };
+    this.paintSprintButton = paint;
+    paint(status, status ? tr(`${Math.ceil(status.left / 60000)} 分钟 · +${status.words}`, `${Math.ceil(status.left / 60000)} min · +${status.words}`) : '');
+    sprint.addEventListener('click', () => {
+      if (this.plugin.sprint) return void this.plugin.finishSprint();
+      if (this.plugin.requireEntitlement('writingSprint')) new CrispPulseSprintModal(this.app, this.plugin).open();
+    });
+    const track = row.createDiv({ cls: 'pulse-goal-track' });
+    track.createDiv({ cls: 'pulse-goal-fill' }).style.width = `${Math.min(100, typed / goal * 100).toFixed(1)}%`;
+  }
+
+  /** 冲刺每秒刷新：只改按钮文字，不重画看板。 */
+  updateSprintUi(status) {
+    if (!this.sprintButton?.isConnected || !this.paintSprintButton) return;
+    const mm = String(Math.floor(status.left / 60000)).padStart(2, '0'), ss = String(Math.floor(status.left / 1000) % 60).padStart(2, '0');
+    this.paintSprintButton(status, tr(`${mm}:${ss} · +${status.words} 字`, `${mm}:${ss} · +${status.words}`));
   }
 
   /** 卡片内的小锁：一句说明和「前往激活」。 */
@@ -10421,6 +10573,20 @@ class CrispPulseView extends ItemView {
     }
 
     this.renderFocusTrace(card, rec);
+
+    // 当天的写作冲刺
+    const sprints = Array.isArray(rec.writing?.sprints) ? rec.writing.sprints : [];
+    if (sprints.length) {
+      const wrap = card.createDiv({ cls: "crisp-pulse-file-list-wrap pulse-day-sprints" });
+      wrap.createDiv({ cls: "crisp-pulse-file-list-title", text: tr(`写作冲刺 · ${sprints.length}`, `Writing sprints · ${sprints.length}`) });
+      const list = wrap.createDiv({ cls: "crisp-pulse-file-list pulse-day-focus-list" });
+      for (const x of sprints) {
+        const row = list.createDiv({ cls: "pulse-day-focus-item" });
+        row.createSpan({ cls: "pulse-day-focus-time", text: x.at });
+        row.createSpan({ cls: "pulse-day-focus-main", text: tr(`${x.minutes} 分钟写了 ${x.words} 字`, `${x.words} words in ${x.minutes} min`) });
+        if (x.target) row.createSpan({ cls: "pulse-day-focus-kind", text: x.words >= x.target ? tr("达成", "Reached") : tr(`目标 ${x.target}`, `Goal ${x.target}`) });
+      }
+    }
 
     // 当天在 Crisp Tempo 里完成的任务：Tempo 异步给数据，先占位，有任务才显示；只展示、不计分
     if (this.plugin.tempoLinked()) {
@@ -11380,6 +11546,26 @@ class CrispPulsePosterModal extends Modal {
     }
   }
   onClose() { this.contentEl.empty(); this.canvas = null; }
+}
+
+class CrispPulseSprintModal extends Modal {
+  constructor(app, plugin) { super(app); this.plugin = plugin; this.minutes = 25; this.target = ""; }
+  onOpen() {
+    this.modalEl.addClass("crisp-pulse-sprint-modal");
+    this.setTitle?.(tr("写作冲刺", "Writing sprint"));
+    const root = this.contentEl;
+    const options = root.createDiv({ cls: "crisp-pulse-sprint-options" });
+    for (const m of [10, 15, 25, 45]) {
+      const b = options.createEl("button", { text: tr(`${m} 分钟`, `${m} min`), attr: { type: "button" } });
+      b.toggleClass("is-selected", m === this.minutes);
+      b.addEventListener("click", () => { this.minutes = m; options.querySelectorAll("button").forEach((x) => x.toggleClass("is-selected", x === b)); });
+    }
+    new Setting(root).setName(tr("这次写多少字", "Words for this sprint")).addText((t) => { t.inputEl.type = "number"; t.inputEl.min = "0"; t.setPlaceholder(tr("可不填", "Optional")).onChange((v) => (this.target = v)); });
+    new Setting(root).addButton((b) => b.setButtonText(tr("开始", "Start")).setCta().onClick(async () => {
+      if (await this.plugin.startSprint(this.minutes, Number(this.target) || 0)) this.close();
+    }));
+  }
+  onClose() { this.contentEl.empty(); }
 }
 
 class CrispPulseEvidenceModal extends Modal {
@@ -15228,6 +15414,22 @@ class CrispPulseSettingTab extends PluginSettingTab {
       }));
 
     containerEl.createEl("h3", { text: tr("常规偏好", "General") });
+
+    new Setting(containerEl)
+      .setName(tr("每天写多少字", "Daily word goal"))
+      .setDesc(tr("只算自己打的字，不算粘贴和导入。写满算今天达标。填 0 关闭。", "Counts only what you type, not pastes or imports. Reaching it counts as today’s milestone. 0 turns it off."))
+      .addText((t) => {
+        t.inputEl.type = "number";
+        t.inputEl.min = "0";
+        t.setValue(String(this.plugin.settings.dailyWordGoal ?? 1000)).onChange(async (v) => {
+          const n = Math.round(Number(v));
+          if (!Number.isFinite(n) || n < 0) return;
+          this.plugin.settings.dailyWordGoal = Math.min(100000, n);
+          await this.plugin.saveSettings();
+          this.plugin.updateStatusBar();
+          this.plugin.refreshViews();
+        });
+      });
 
     new Setting(containerEl)
       .setName(tr("显示底部状态栏指示器", "Show status bar indicator"))

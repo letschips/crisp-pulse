@@ -188,7 +188,7 @@ function makeView(entitled, extra = {}) {
 
 test("门控表覆盖进阶功能，采集、备份、导出不在其中", () => {
   const keys = Object.keys(lib.PULSE_GATED_FEATURES || {}).sort();
-  assert.deepEqual(keys, ["analytics", "dayDetail", "heatmapMetrics", "memoConvert", "memoFilter", "memoReview", "memoTags", "memoWalk", "monthlyPoster", "review", "weeklyReport", "yearly"]);
+  assert.deepEqual(keys, ["analytics", "dayDetail", "heatmapMetrics", "memoConvert", "memoFilter", "memoReview", "memoTags", "memoWalk", "monthlyPoster", "review", "weeklyReport", "writingSprint", "yearly"]);
   for (const free of ["export", "backup", "csv", "json", "capture", "dashboard"]) assert.ok(!keys.some((k) => k.toLowerCase().includes(free)), free);
 });
 

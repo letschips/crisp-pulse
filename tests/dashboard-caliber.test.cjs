@@ -6,8 +6,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 function element(tag = 'div', options = {}) {
-  const el = { tag, options, children: [], text: options.text || '', attrs: { ...(options.attr || {}) }, handlers: {}, style: {}, classList: { add() {}, remove() {} },
-    setAttr(k, v) { this.attrs[k] = v; }, addEventListener(k, v) { this.handlers[k] = v; }, setText(v) { this.text = v; }, empty() { this.children = []; } };
+  const el = { tag, options, children: [], text: options.text || '', attrs: { ...(options.attr || {}) }, handlers: {}, style: {}, classes: new Set(), classList: { add() {}, remove() {} },
+    toggleClass(c, on) { on ? this.classes.add(c) : this.classes.delete(c); }, setAttr(k, v) { this.attrs[k] = v; }, addEventListener(k, v) { this.handlers[k] = v; }, setText(v) { this.text = v; }, empty() { this.children = []; } };
   el.createEl = (t, o = {}) => { const child = element(t, o); el.children.push(child); return child; };
   el.createDiv = (o) => el.createEl('div', o);
   el.createSpan = (o) => el.createEl('span', o);
@@ -45,10 +45,10 @@ test('月初第 7 天之前不判断落后，也不推算月底', () => {
   assert.equal(paceReading({ ...base, today: 10, deltaPct: null }).behind, false);
 });
 
-function strip({ record, entitled = true, streak = 3 }) {
+function strip({ record, entitled = true, streak = 3, goal = 0, sprint = null }) {
   const opened = [];
   const view = Object.create(Pulse.CrispPulseView.prototype);
-  view.plugin = { store: { daily: record ? { [Pulse.dashboardHelpers.todayKey()]: record } : {} }, settings: {} };
+  view.plugin = { store: { daily: record ? { [Pulse.dashboardHelpers.todayKey()]: record } : {} }, settings: {}, wordGoal: () => goal, sprintStatus: () => sprint, sprint };
   view.pomodoroFocus = () => null;
   view.openAnalyticsDay = (date) => opened.push(date);
   const parent = element();
@@ -63,6 +63,22 @@ test('今天条显示今天的分数和数据，点开跳到今天明细', () =>
   for (const part of ['今天', '4.4', '88', '25', '连续 3 天']) assert.ok(text.includes(part), `${part} in ${text}`);
   all(parent).find((n) => n.tag === 'button').handlers.click();
   assert.deepEqual(opened, [Pulse.dashboardHelpers.todayKey()]);
+});
+
+test('开了字数目标：今天条下面多一行「写作 已打 / 目标 字」和冲刺按钮，只算自己打的字，不再列新增词数', () => {
+  const rec = { contribution: { score: 4.4, wordsAdded: 900 }, activity: {}, files: { 'a.md': { sourceWords: { unattributed: 640, capture: 260 } }, 'b.md': { sourceWords: { system: 50 } } } };
+  const { parent } = strip({ record: rec, goal: 1000 });
+  const text = textOf(parent);
+  assert.ok(text.includes('写作') && text.includes('640') && text.includes('/ 1,000 字'), text);
+  assert.ok(!text.includes('新增 900 词'), '开了目标不再重复列新增词数');
+  assert.ok(text.includes('冲刺'));
+  const fill = all(parent).find((n) => n.options?.cls === 'pulse-goal-fill');
+  assert.equal(fill.style.width, '64.0%');
+});
+
+test('冲刺中按钮显示剩余时间和这次写了多少', () => {
+  const { parent } = strip({ record: { contribution: { score: 1 }, activity: {}, files: {} }, goal: 500, sprint: { left: 5 * 60000, words: 120, target: 0, minutes: 25 } });
+  assert.ok(textOf(parent).includes('5 分钟 · +120'), textOf(parent));
 });
 
 test('今天没有数据时说还没开始，不显示 0 分', () => {
