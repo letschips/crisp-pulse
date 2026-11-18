@@ -1,5 +1,10 @@
 # Changelog - Crisp Pulse
 
+## [1.51.3] - 2026-11-17
+
+### Changed
+- 优化使用体验，修复 bug
+
 ## [1.51.2] - 2026-11-13
 
 ### Changed

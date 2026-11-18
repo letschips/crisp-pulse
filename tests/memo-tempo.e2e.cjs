@@ -15,7 +15,7 @@ function load(){
  const obs={Plugin,TFile,ItemView:class{},PluginSettingTab:class{},Setting:class{},Modal:class{},Notice:class{},Platform:{isMobile:false,isDesktop:true},normalizePath:p=>p,addIcon(){},setIcon(){},requestUrl:()=>Promise.reject(new Error('offline in test'))};
  const base={require:n=>n==='obsidian'?obs:require(n),console,Date,Blob,setTimeout,clearTimeout,setInterval,clearInterval,window:{setTimeout,clearTimeout,setInterval,clearInterval},document:{hidden:false},crypto:globalThis.crypto,TextEncoder,TextDecoder,Buffer,atob,btoa,AbortController,URL,structuredClone};
  const pulseCtx={...base,module:{exports:{}}};vm.runInNewContext(fs.readFileSync(process.env.PULSE_RUNTIME||path.join(__dirname,'../main.js'),'utf8'),pulseCtx);
- const build=esbuild.buildSync({stdin:{contents:'export { default as Tempo } from "./src/main"; export { TempoStore } from "./src/core/store";',resolveDir:tempoRoot,loader:'ts'},bundle:true,write:false,platform:'node',format:'cjs',external:['obsidian'],alias:{'tempo-apple-helper':path.join(__dirname,'fixtures/tempo-apple-helper.stub.js')},jsx:'automatic',jsxImportSource:'preact',logLevel:'silent'});
+ const build=esbuild.buildSync({stdin:{contents:'export { default as Tempo } from "./src/main"; export { TempoStore } from "./src/core/store"; export { applyEntitlement } from "./src/services/entitlement";',resolveDir:tempoRoot,loader:'ts'},bundle:true,write:false,platform:'node',format:'cjs',external:['obsidian'],alias:{'tempo-apple-helper':path.join(__dirname,'fixtures/tempo-apple-helper.stub.js')},jsx:'automatic',jsxImportSource:'preact',logLevel:'silent'});
  const tempoCtx={...base,module:{exports:{}}};vm.runInNewContext('(function(){'+build.outputFiles[0].text+'})()',{...tempoCtx,exports:tempoCtx.module.exports,module:tempoCtx.module});
  return {Pulse:pulseCtx.module.exports,...tempoCtx.module.exports};
 }
@@ -28,13 +28,15 @@ function fixture(t,{licensed=true,dest='inbox',daily='> [!memo] 09:00\n> 买一�
  const app={plugins:{plugins:{}},workspace:{trigger:name=>triggered.push(name),getLeavesOfType:()=>[],on:()=>({}),onLayoutReady:fn=>fn()},metadataCache:{getFileCache:()=>null,getFirstLinkpathDest:()=>null},vault:{adapter,configDir:'.obsidian',getAbstractFileByPath:p=>files.get(p),getMarkdownFiles:()=>[...files.values()].filter(f=>f.extension==='md'),read:async f=>read(f.path),cachedRead:async f=>read(f.path),process:async(f,fn)=>{const next=fn(read(f.path));if(failMemoWrite&&next.includes('crisp-pulse-tempo:'))throw new Error('note locked');fs.writeFileSync(abs(f.path),next);return next;}},internalPlugins:{getPluginById:()=>({enabled:true,instance:{options:{folder:'Daily',format:'YYYY-MM-DD'}}})}};
  put('Daily/2026-10-09.md','# 日记\n\n## 速记\n\n'+daily);
  put('plugin/tempo/data.json',JSON.stringify({schemaVersion:1,locale:'zh',defaultDest:dest,database:{schemaVersion:1,tasks:{},projects:{},areas:{},cycles:{},labels:{}}}));
- const loaded=load();const {Pulse,Tempo,TempoStore}=loaded;
+ const loaded=load();const {Pulse,Tempo,TempoStore,applyEntitlement}=loaded;
+ // Tempo 0.19.2+ gates on a module-private map; licenseStatus is only a display cache.
+ const grantTempo=store=>{store.data.licenseStatus='valid';applyEntitlement(store,{valid:true});};
  const pulse=new Pulse(app,{id:'crisp-pulse'});pulse.settings={memoMode:'general',memoHeading:'## 速记'};pulse.memoStore=new Pulse.memoHelpers.MemoStore(app,()=>pulse.settings);pulse.refreshMemoViews=()=>{};app.plugins.plugins['crisp-pulse']=pulse;
  let tempo;
- const makeTempo=async()=>{tempo=new Tempo(app,{id:'crisp-tempo',dir:'plugin/tempo',version:'0.2.0'});tempo.activateView=async()=>null;await tempo.onload();const store=TempoStore.get(tempo);await store.load(true);if(licensed)store.data.licenseStatus='valid';app.plugins.plugins['crisp-tempo']=tempo;return tempo;};
+ const makeTempo=async()=>{tempo=new Tempo(app,{id:'crisp-tempo',dir:'plugin/tempo',version:'0.2.0'});tempo.activateView=async()=>null;await tempo.onload();const store=TempoStore.get(tempo);await store.load(true);if(licensed)grantTempo(store);app.plugins.plugins['crisp-tempo']=tempo;return tempo;};
  const memos=()=>Pulse.memoHelpers.parseMemoBlocks(read('Daily/2026-10-09.md')).map(m=>({...m,path:'Daily/2026-10-09.md',date:'2026-10-09'}));
  const tasks=()=>Object.values(JSON.parse(read('plugin/tempo/data.json')).database.tasks);
- return {Pulse,TempoStore,app,pulse,read,put,memos,tasks,triggered,makeTempo,get tempo(){return tempo;},setMemoWriteFailure:b=>{failMemoWrite=b;},setTempoWriteFailure:b=>{failTempoWrite=b;}};
+ return {Pulse,TempoStore,grantTempo,app,pulse,read,put,memos,tasks,triggered,makeTempo,get tempo(){return tempo;},setMemoWriteFailure:b=>{failMemoWrite=b;},setTempoWriteFailure:b=>{failTempoWrite=b;}};
 }
 
 test('a memo becomes one Tempo task in the default destination, with its text and a link back to the note',async t=>{
@@ -193,7 +195,7 @@ test('when Tempo refuses, the memo is still saved and can be converted later fro
  const f=fixture(t,{licensed:false});await f.makeTempo();
  await assert.rejects(()=>f.pulse.captureMemoAsTask('给房东打电话',new Date(2026,9,9,12,0)),/已记下/);
  const m=f.memos().find(x=>x.text==='给房东打电话');assert.ok(m,'速记没丢');assert.ok(m.id);assert.equal(f.tasks().length,0);assert.doesNotMatch(f.read('Daily/2026-10-09.md'),/crisp-pulse-tempo:/);
- f.TempoStore.get(f.tempo).data.licenseStatus='valid';await f.pulse.convertMemoToTempo(m);assert.equal(f.tasks().length,1,'之后从卡片菜单转只建一条');
+ f.grantTempo(f.TempoStore.get(f.tempo));await f.pulse.convertMemoToTempo(m);assert.equal(f.tasks().length,1,'之后从卡片菜单转只建一条');
 });
 
 test('without Tempo, capturing as a task writes nothing and says why',async t=>{

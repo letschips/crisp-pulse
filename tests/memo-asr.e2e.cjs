@@ -11,6 +11,11 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const asrRoot=process.env.CRISP_ASR_REPO||path.resolve(__dirname,'../../crisp-asr');
 if(!fs.existsSync(path.join(asrRoot,'node_modules/esbuild'))){test('Pulse/ASR cross-plugin workflow',{skip:'Set CRISP_ASR_REPO to a source checkout with dependencies'},()=>{});return;}
 const esbuild=require(path.join(asrRoot,'node_modules/esbuild'));
+// Built once before the cases: esbuild plugins need the async API.
+let asrBundle='';
+test.before(async()=>{asrBundle=(await esbuild.build({stdin:{contents:'export { default as ASR } from "./src/main"; export {TranscriptionQueue} from "./src/transcription-queue"; export {normalizeSettings} from "./src/settings";',resolveDir:asrRoot},bundle:true,write:false,platform:'node',format:'cjs',external:['obsidian'],loader:{'.png':'dataurl'},
+  // ASR 0.9.11 gates on a module function; the test build swaps it for a stub that a case can switch off.
+  plugins:[{name:'asr-license-stub',setup(b){b.onResolve({filter:/^\.\/license-gate$/},()=>({path:'license-gate',namespace:'asr-license-stub'}));b.onLoad({filter:/.*/,namespace:'asr-license-stub'},()=>({contents:'export async function requireAsrLicense(plugin){ return plugin.testLicensed !== false; }',loader:'js'}));}}]})).outputFiles[0].text;});
 const observations=[];
 class Plugin{constructor(app,manifest){this.app=app;this.manifest=manifest;}}
 class TFile{constructor(p){this.path=p;this.name=path.basename(p);this.basename=this.name.replace(/\.[^.]+$/,'');this.extension=p.split('.').pop();}}
@@ -18,7 +23,7 @@ function load(requestUrl){
  const obs={Plugin,TFile,ItemView:class{},PluginSettingTab:class{},Modal:class{},AbstractInputSuggest:class{},Notice:class{},Platform:{isMobile:false},normalizePath:p=>path.posix.normalize(p),addIcon(){},requestUrl};
  const context={module:{exports:{}},require:n=>n==='obsidian'?obs:require(n),console,Date,Blob,window:{setTimeout,clearTimeout,setInterval,clearInterval},setTimeout,clearTimeout,document:{hidden:false},crypto:globalThis.crypto,TextEncoder,TextDecoder,Buffer,atob,AbortController,URL};
  vm.runInNewContext(fs.readFileSync(process.env.PULSE_RUNTIME||path.join(__dirname,'../main.js'),'utf8'),context);const Pulse=context.module.exports;
- const build=esbuild.buildSync({stdin:{contents:'export { default as ASR } from "./src/main"; export {TranscriptionQueue} from "./src/transcription-queue"; export {normalizeSettings} from "./src/settings";',resolveDir:asrRoot},bundle:true,write:false,platform:'node',format:'cjs',external:['obsidian'],loader:{'.png':'dataurl'}});
+ const build={outputFiles:[{text:asrBundle}]};
  context.module={exports:{}};vm.runInNewContext("(function(){"+build.outputFiles[0].text+"})()",context);return {Pulse,...context.module.exports};
 }
 function fixture(t){
@@ -38,7 +43,7 @@ function fixture(t){
  put('Other.md','# 保持不变\n');put('Daily/2026-10-09.md','# 日记\n\n> [!memo] 09:00\n> 我的原文\n> ![[Attachments/test.wav]]\n\n> [!memo] 10:00\n> 另一条\n');
  const pulse=new Pulse(app,{id:'crisp-pulse'});pulse.settings={memoMode:'general'};pulse.memoStore=new Pulse.memoHelpers.MemoStore(app,()=>pulse.settings);pulse.refreshMemoViews=()=>{};app.plugins.plugins['crisp-pulse']=pulse;
  function makeAsr(settings){
-  const asr=new ASR(app,{id:'crisp-asr',dir:'plugin/asr'});asr.settings=normalizeSettings(settings||{sttEngine:'gemini',outputMode:'current-note'});asr.ensureLicenseActivated=async()=>true;asr.getApiKey=()=> 'test-only-key';asr.emit=()=>{};
+  const asr=new ASR(app,{id:'crisp-asr',dir:'plugin/asr'});asr.settings=normalizeSettings(settings||{sttEngine:'gemini',outputMode:'current-note'});asr.getApiKey=()=> 'test-only-key';asr.emit=()=>{};
   asr.fileQueue=new TranscriptionQueue(asr.settings.fileJobs,{run:j=>asr.runFileJob(j),persist:async jobs=>{asr.settings.fileJobs=jobs;put('plugin/asr/data.json',JSON.stringify(asr.settings));},delay:async()=>{},onChange:jobs=>{asr.uiState.jobs=jobs;}});app.plugins.plugins['crisp-asr']=asr;return asr;
  }
  let asr=makeAsr();
@@ -66,7 +71,7 @@ test('encoded relative Markdown audio resolves and transcribes into the card',as
  const f=fixture(t);f.files.delete(f.audio.path);f.audio.path='Attachments/test audio.wav';f.put(f.audio.path,Buffer.from('audio'));f.put('Daily/2026-10-09.md','> [!memo] 09:00\n> ![](../Attachments/test%20audio.wav)\n');await f.pulse.transcribeMemoAudio(f.memo(),f.audio.path);await f.asr.fileQueue.whenIdle();assert.equal(f.asr.settings.fileJobs[0].status,'completed');assert(f.read('Daily/2026-10-09.md').includes('这是识别出的文字'));observations.push('Markdown audio resolves');
 });
 test('missing ASR and credentials never enqueue or report successful transcription',async t=>{
- const f=fixture(t);delete f.app.plugins.plugins['crisp-asr'];await assert.rejects(f.pulse.transcribeMemoAudio(f.memo(),f.audio.path),/Crisp ASR/);f.app.plugins.plugins['crisp-asr']=f.asr;f.asr.getApiKey=()=>null;await assert.rejects(f.pulse.transcribeMemoAudio(f.memo(),f.audio.path),/Key|密钥|设置/);assert.equal(f.asr.settings.fileJobs.length,0);f.asr.getApiKey=()=> 'test-only-key';f.asr.ensureLicenseActivated=async()=>false;await assert.rejects(f.pulse.transcribeMemoAudio(f.memo(),f.audio.path),/激活/);assert.equal(f.asr.settings.fileJobs.length,0);observations.push('missing dependency/key/license fails visibly');
+ const f=fixture(t);delete f.app.plugins.plugins['crisp-asr'];await assert.rejects(f.pulse.transcribeMemoAudio(f.memo(),f.audio.path),/Crisp ASR/);f.app.plugins.plugins['crisp-asr']=f.asr;f.asr.getApiKey=()=>null;await assert.rejects(f.pulse.transcribeMemoAudio(f.memo(),f.audio.path),/Key|密钥|设置/);assert.equal(f.asr.settings.fileJobs.length,0);f.asr.getApiKey=()=> 'test-only-key';f.asr.testLicensed=false;await assert.rejects(f.pulse.transcribeMemoAudio(f.memo(),f.audio.path),/激活/);assert.equal(f.asr.settings.fileJobs.length,0);observations.push('missing dependency/key/license fails visibly');
 });
 test('durable card receipt prevents re-upload after ASR history is pruned',async t=>{const f=fixture(t);await f.pulse.transcribeMemoAudio(f.memo(),f.audio.path);await f.asr.fileQueue.whenIdle();await f.asr.fileQueue.remove(f.asr.settings.fileJobs[0].id);await f.pulse.transcribeMemoAudio(f.memo(),f.audio.path);await f.asr.fileQueue.whenIdle();assert.equal(f.requests(),1);observations.push('card receipt survives queue pruning');});
 test('multiple audio clips are transcribed independently into one memo',async t=>{const f=fixture(t);const second=f.put('Attachments/second.wav',Buffer.from('audio'));f.put('Daily/2026-10-09.md','> [!memo] 09:00\n> ![[Attachments/test.wav]]\n> ![[Attachments/second.wav]]\n');await f.pulse.transcribeMemoAudio(f.memo(),f.audio.path);await f.pulse.transcribeMemoAudio(f.memo(),second.path);await f.asr.fileQueue.whenIdle();assert.equal(f.requests(),2);assert.equal(f.Pulse.memoHelpers.parseMemoBlocks(f.read('Daily/2026-10-09.md')).length,1);assert.equal((f.read('Daily/2026-10-09.md').match(/crisp-pulse-asr:/g)||[]).length,2);observations.push('multiple audio clips stay in one memo');});

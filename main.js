@@ -343,12 +343,17 @@ const PULSE_LICENSE_STATE = new WeakMap();
 const PULSE_LICENSE_VERIFIER = new WeakMap();
 const PULSE_LICENSE_OWNER = new WeakMap();
 const PULSE_LICENSE_EXPIRY = new WeakMap();
+// 到期判断用的时钟只在创建管理器时登记一次；改实例上的属性拖不住到期。
+const PULSE_LICENSE_CLOCK = new WeakMap();
+function pulseLicenseNow(manager) {
+  return (PULSE_LICENSE_CLOCK.get(manager) || Date.now)();
+}
 
 /** 管理器当前是否放行。带到期时间的授权到点立即失效：Obsidian 一直开着也不会继续放行，并通知界面一次。 */
 function pulseLicenseActive(manager) {
   if (!manager || PULSE_LICENSE_STATE.get(manager) !== true) return false;
   const expiry = PULSE_LICENSE_EXPIRY.get(manager);
-  if (expiry === undefined || manager.now() < expiry) return true;
+  if (expiry === undefined || pulseLicenseNow(manager) < expiry) return true;
   PULSE_LICENSE_STATE.set(manager, false);
   manager.status = { valid: false, reason: tr("授权已到期", "License expired") };
   // 判断常发生在渲染途中；通知会重绘界面，放到下一轮，不在渲染里再渲染
@@ -359,6 +364,13 @@ function pulseLicenseActive(manager) {
 /** 插件内部所有门控都走这里：只认插件自己创建并登记的管理器、且真正验签通过。 */
 function pulseEntitled(plugin) {
   return pulseLicenseActive(plugin ? PULSE_LICENSE_OWNER.get(plugin) : null);
+}
+
+/** 功能入口的门控：未激活时提示并返回 false。是模块函数而不是插件方法，控制台替换方法拦不住它。 */
+function pulseRequire(plugin, featureKey) {
+  if (pulseEntitled(plugin)) return true;
+  new Notice(tr(`Crisp Pulse：${PULSE_GATED_FEATURES[featureKey] || "该功能"}需要激活。请在 设置 → Crisp Pulse 输入 Crisp 授权码；数据仍在照常记录。`, `Crisp Pulse: ${PULSE_GATED_FEATURES[featureKey] || "This feature"} requires activation. Enter your Crisp license code in Settings → Crisp Pulse; data is still being recorded as usual.`));
+  return false;
 }
 
 function pulseLicenseManagerFor(plugin, options = {}) {
@@ -379,7 +391,7 @@ function applyLicenseResult(manager, result, code) {
   if (Number.isFinite(expiry)) PULSE_LICENSE_EXPIRY.set(manager, expiry); else PULSE_LICENSE_EXPIRY.delete(manager);
   if (result?.valid && manager.settings) {
     manager.settings.licenseCode = code;
-    if (result.source === "online") manager.settings.licenseLastOnlineAt = manager.now();
+    if (result.source === "online") manager.settings.licenseLastOnlineAt = pulseLicenseNow(manager);
   }
   const entitled = PULSE_LICENSE_STATE.get(manager) === true;
   if (wasEntitled !== entitled) manager.onEntitlementChange(entitled);
@@ -391,7 +403,7 @@ class CrispPulseLicenseManager {
     this.settings = settings;
     PULSE_LICENSE_VERIFIER.set(this, options.verifier || verifyLicenseCode);
     PULSE_LICENSE_STATE.set(this, false);
-    this.now = options.now || (() => Date.now());
+    PULSE_LICENSE_CLOCK.set(this, typeof options.now === "function" ? options.now : () => Date.now());
     this.onEntitlementChange = options.onEntitlementChange || (() => {});
     // 一律从「未验证」起步：只有本地验签通过才放行，不凭库内某个文件的 product 字段先授予权限。
     this.status = { valid: false, reason: tr("尚未验证", "Not verified yet") };
@@ -2092,7 +2104,7 @@ class CrispPulsePlugin extends Plugin {
       id: "copy-pulse-weekly-markdown",
       name: tr("复制本周（自然周）工作复盘 Markdown", "Copy this week’s review (calendar week) as Markdown"),
       callback: async () => {
-        if (!this.requireEntitlement("weeklyReport")) return;
+        if (!pulseRequire(this, "weeklyReport")) return;
         // 本周 = 自然周（按「每周起始日」）到今天，和复盘页「本周」同一份草稿
         const week = reviewWeekRange(getTodayKey(), this.settings.weekStartsOn, 0);
         const md = generateReviewReport(await this.buildReviewReportModel(week.start, week.end, this.settings.dataQualityScope));
@@ -2108,7 +2120,7 @@ class CrispPulsePlugin extends Plugin {
     this.addCommand({
       id: "start-writing-sprint",
       name: tr("开始写作冲刺", "Start a writing sprint"),
-      callback: () => { if (this.requireEntitlement("writingSprint")) new CrispPulseSprintModal(this.app, this).open(); }
+      callback: () => { if (pulseRequire(this, "writingSprint")) new CrispPulseSprintModal(this.app, this).open(); }
     });
     this.addCommand({
       id: "finish-writing-sprint",
@@ -2176,7 +2188,7 @@ class CrispPulsePlugin extends Plugin {
       id: "archive-weekly-review",
       name: tr("归档本周（自然周）工作复盘至知识库 (ANKS Review)", "Archive this week’s review (calendar week) to the vault (ANKS Review)"),
       callback: async () => {
-        if (!this.requireEntitlement("weeklyReport")) return;
+        if (!pulseRequire(this, "weeklyReport")) return;
         const week = reviewWeekRange(getTodayKey(), this.settings.weekStartsOn, 0);
         // archiveReviewReport already reports success, existing files and failures.
         await this.archiveReviewReport(await this.buildReviewReportModel(week.start, week.end, this.settings.dataQualityScope));
@@ -2372,11 +2384,9 @@ class CrispPulsePlugin extends Plugin {
     return pulseEntitled(this);
   }
 
-  // 命令层门控：未激活时提示并返回 false，调用方直接 return。
+  // 供外部和测试查询；插件内部的门控一律直接调 pulseRequire，替换这个方法不影响它们。
   requireEntitlement(featureKey) {
-    if (pulseEntitled(this)) return true;
-    new Notice(tr(`Crisp Pulse：${PULSE_GATED_FEATURES[featureKey] || "该功能"}需要激活。请在 设置 → Crisp Pulse 输入 Crisp 授权码；数据仍在照常记录。`, `Crisp Pulse: ${PULSE_GATED_FEATURES[featureKey] || "This feature"} requires activation. Enter your Crisp license code in Settings → Crisp Pulse; data is still being recorded as usual.`));
-    return false;
+    return pulseRequire(this, featureKey);
   }
 
   openLicenseSettings() {
@@ -2967,7 +2977,7 @@ class CrispPulsePlugin extends Plugin {
 
   /* ---------- 写作冲刺：限时写一段，Pulse 只数字数；装了 Crisp Focus 就同时开一段同样长的专注 ---------- */
   async startSprint(minutes, target = 0) {
-    if (!this.requireEntitlement("writingSprint")) return false;
+    if (!pulseRequire(this, "writingSprint")) return false;
     if (this.sprint) { new Notice(tr("已经在冲刺了", "A sprint is already running")); return false; }
     const mins = Math.max(1, Math.min(240, Math.round(Number(minutes) || 25)));
     const date = getTodayKey();
@@ -3911,7 +3921,7 @@ class CrispPulsePlugin extends Plugin {
   }
 
   openMonthlyPoster() {
-    if (!this.requireEntitlement("monthlyPoster")) return;
+    if (!pulseRequire(this, "monthlyPoster")) return;
     new CrispPulsePosterModal(this.app, this, getTodayKey().slice(0, 7)).open();
   }
 
@@ -4679,7 +4689,7 @@ class CrispPulsePlugin extends Plugin {
     if (text) {
       try {
         // task=1：装了 Tempo 且已激活才转任务；否则照常记成速记，并说明为什么没转
-        if (task && this.memoTempo() && this.requireEntitlement("memoConvert")) {
+        if (task && this.memoTempo() && pulseRequire(this, "memoConvert")) {
           await this.captureMemoAsTask(text, new Date());
           new Notice(tr("Crisp Pulse：已记录速记并转为 Tempo 任务", "Crisp Pulse: memo saved and converted to a Tempo task"));
         } else {
@@ -9804,7 +9814,7 @@ class CrispPulseView extends ItemView {
       b.setAttr('aria-selected', String(this.selectedMetric === m[0]));
       const open = m[0] === 'contribution' || entitled;
       if (!open) { b.addClass('is-locked'); b.setAttr('title', tr('需要激活', 'Requires activation')); }
-      b.addEventListener('click', () => { if (!open && !this.plugin.requireEntitlement('heatmapMetrics')) return; this.selectedMetric = m[0]; this.heatLevelFilter = null; this.rememberChoice('defaultMetric', m[0]); this.render(); });
+      b.addEventListener('click', () => { if (!open && !pulseRequire(this.plugin, 'heatmapMetrics')) return; this.selectedMetric = m[0]; this.heatLevelFilter = null; this.rememberChoice('defaultMetric', m[0]); this.render(); });
     }
     this.renderHeatmapCard(heat);
     // 热力图是看板的主角放在上面；番茄是今天的行动入口，紧跟其后
@@ -9872,7 +9882,7 @@ class CrispPulseView extends ItemView {
     paint(status, status ? tr(`${Math.ceil(status.left / 60000)} 分钟 · +${status.words}`, `${Math.ceil(status.left / 60000)} min · +${status.words}`) : '');
     sprint.addEventListener('click', () => {
       if (this.plugin.sprint) return void this.plugin.finishSprint();
-      if (this.plugin.requireEntitlement('writingSprint')) new CrispPulseSprintModal(this.app, this.plugin).open();
+      if (pulseRequire(this.plugin, 'writingSprint')) new CrispPulseSprintModal(this.app, this.plugin).open();
     });
     const track = row.createDiv({ cls: 'pulse-goal-track' });
     track.createDiv({ cls: 'pulse-goal-fill' }).style.width = `${Math.min(100, typed / goal * 100).toFixed(1)}%`;
@@ -13711,8 +13721,8 @@ class CrispPulseMemoView extends ItemView {
       return b;
     };
     navButton("refresh-cw", tr("刷新速记", "Refresh memos"), () => this.reload());
-    navButton("filter", MEMO_FILTER_LABEL, () => { if (!this.plugin.requireEntitlement("memoFilter")) return; this.showAdvanced = !this.showAdvanced; this.tab = "all"; this.render(); }, this.showAdvanced || this.isFiltered());
-    navButton("shuffle", tr("随机漫步", "Random walk"), () => { if (!this.plugin.requireEntitlement("memoWalk")) return; this.startWalk(); this.tab = "walk"; this.render(); }, this.tab === "walk");
+    navButton("filter", MEMO_FILTER_LABEL, () => { if (!pulseRequire(this.plugin, "memoFilter")) return; this.showAdvanced = !this.showAdvanced; this.tab = "all"; this.render(); }, this.showAdvanced || this.isFiltered());
+    navButton("shuffle", tr("随机漫步", "Random walk"), () => { if (!pulseRequire(this.plugin, "memoWalk")) return; this.startWalk(); this.tab = "walk"; this.render(); }, this.tab === "walk");
     navButton("trash-2", tr("速记回收站", "Memo trash"), () => { this.tab = this.tab === "trash" ? "all" : "trash"; this.render(); }, this.tab === "trash");
     navButton("settings", tr("速记设置", "Memo settings"), () => {
       const setting = this.app.setting;
@@ -14352,7 +14362,7 @@ class CrispPulseMemoView extends ItemView {
       if (this.dictation) { new Notice(tr("Crisp Pulse 速记：实时听写还没结束，等文字定稿后再记录", "Crisp Pulse memos: live dictation is still running; save once the text is final")); return; }
       if (this.recording || this.recordingStarting) { new Notice(tr("Crisp Pulse 速记：正在录音，结束录音后再记录", "Crisp Pulse memos: recording in progress; stop recording before saving")); return; }
       if (this.attachmentSaving()) { new Notice(tr("Crisp Pulse 速记：附件还在保存，存好后再记录", "Crisp Pulse memos: attachments are still saving; save once they are done")); return; }
-      if (asTask && !this.plugin.requireEntitlement("memoConvert")) return;
+      if (asTask && !pulseRequire(this.plugin, "memoConvert")) return;
       const submitted = input.value;
       const revision = this.draftRevision;
       this.memoSubmitting = true;
@@ -14444,7 +14454,7 @@ class CrispPulseMemoView extends ItemView {
       const tab = tabs.createEl("button", { cls: `crisp-pulse-memo-tab${this.tab === id ? " is-active" : ""}${locked ? " is-locked" : ""}`, text: label, attr: { role: "tab", "aria-selected": String(this.tab === id) } });
       if (locked) tab.setAttr("title", tr("需要激活", "Requires activation"));
       tab.addEventListener("click", () => {
-        if (locked && !this.plugin.requireEntitlement(gates[id])) return;
+        if (locked && !pulseRequire(this.plugin, gates[id])) return;
         if (id === "walk" && !this.walk.trail.length) this.startWalk();
         this.tab = id;
         this.render();
@@ -14883,7 +14893,7 @@ class CrispPulseMemoView extends ItemView {
     };
     const key = this.memoKey(m);
     // 相关笔记、漫步和各种转化需要激活；未激活时菜单项仍在，点了提示去激活
-    const gated = (featureKey, fn) => () => { if (this.plugin.requireEntitlement(featureKey)) fn(); };
+    const gated = (featureKey, fn) => () => { if (pulseRequire(this.plugin, featureKey)) fn(); };
     menu.addItem((i) => i.setTitle(this.expanded === key ? tr("收起相关笔记", "Hide related memos") : tr("相关笔记", "Related memos")).setIcon("sparkles").onClick(gated("memoConvert", () => { this.expanded = this.expanded === key ? null : key; this.render(); })));
     menu.addItem((i) => i.setTitle(tr("从这里漫步", "Walk from here")).setIcon("shuffle").onClick(gated("memoWalk", () => { this.startWalk(m); this.tab = "walk"; this.render(); })));
     menu.addSeparator();
@@ -14894,7 +14904,7 @@ class CrispPulseMemoView extends ItemView {
       const live = m.id ? this.tempoSnapshots?.[`crisp-pulse:${m.id}`] : null;
       const taskId = live?.id;
       menu.addItem((i) => i.setTitle(taskId ? tr("在 Tempo 中打开任务", "Open task in Tempo") : m.tempoTasks?.length ? tr("重新转为 Tempo 任务", "Convert to a Tempo task again") : tr("转为 Tempo 任务", "Convert to a Tempo task")).setIcon("list-checks").onClick(async () => {
-        if (!taskId && !this.plugin.requireEntitlement("memoConvert")) return;
+        if (!taskId && !pulseRequire(this.plugin, "memoConvert")) return;
         try {
           if (taskId) await tempo.revealTask(taskId);
           else { await this.plugin.convertMemoToTempo(m); new Notice(tr("已转为 Tempo 任务", "Converted to a Tempo task")); done(); }

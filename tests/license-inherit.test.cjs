@@ -277,8 +277,8 @@ test("带到期时间的授权到点立即失效，Obsidian 一直开着也一�
 });
 
 test("月报海报未激活时不打开", () => {
-  const asked = [];
-  const fake = { requireEntitlement: (key) => { asked.push(key); return false; }, app: null };
+  // An unregistered plugin is never entitled, and a replaced requireEntitlement method does not
+  // reach the gate: the poster is refused before a modal is built (app is null, so building would throw).
+  const fake = { requireEntitlement: () => true, app: null };
   assert.doesNotThrow(() => lib.PluginClass.prototype.openMonthlyPoster.call(fake));
-  assert.deepEqual(asked, ["monthlyPoster"]);
 });

@@ -1435,6 +1435,28 @@ test('unactivated: reminders and advanced memo features stay locked, exports sta
  for(const key of ['dayDetail','memoReview','memoConvert'])assert.equal(p.requireEntitlement(key),true,key);
 });
 
+// Hardening: the gate is a module function and the expiry clock is fixed at creation, so the
+// one-line console unlocks (replacing a method or the clock on the instance) do nothing.
+test('replacing requireEntitlement on the plugin does not unlock a gated action', async()=>{
+ const {p,helpers}=setup();await p.loadPluginData();
+ helpers.entitle(p,false);
+ p.requireEntitlement=()=>true;
+ assert.equal(await p.startSprint(25),false);
+ assert.equal(p.sprint,undefined);
+});
+
+test('replacing the license manager clock does not keep an expired license open', async()=>{
+ const {helpers}=setup();
+ let clock=Date.now();
+ const settings={licenseCode:localLicenseCode({expiresAt:new Date(clock+60000).toISOString()}),licenseLastOnlineAt:0};
+ const lm=new helpers.CrispPulseLicenseManager(null,settings,{now:()=>clock});
+ await lm.initialize();
+ assert.equal(lm.isEntitled(),true);
+ lm.now=()=>0;
+ clock+=120000;
+ assert.equal(lm.isEntitled(),false);
+});
+
 test('every local SVG draw helper accepts a parent, so gradients get their stops', ()=>{
  const source=fs.readFileSync(path.join(__dirname,'../main.js'),'utf8');
  const defs=[...source.matchAll(/const draw = \(([^)]*)\) =>/g)].map(m=>m[1]);
