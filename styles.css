@@ -46,6 +46,19 @@
   font-family: var(--font-interface);
 }
 
+/* When the header banner is active on desktop, float the view header over its
+   top edge so the sky meets the tab bar directly without a 45 px blank strip,
+   regardless of theme or recipe. Skip mobile and stacked tab spines. */
+body:not(.is-mobile) .workspace-tabs:not(.mod-stacked) .workspace-leaf-content[data-type="crisp-pulse-view"]:has(> .view-content.has-banner) > .view-header {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 3;
+  --file-header-background: transparent;
+  --file-header-background-focused: transparent;
+  background: transparent;
+  border-bottom-color: transparent;
+}
+
 .crisp-pulse-wrapper {
   max-width: 1040px;
   margin: 0 auto;
