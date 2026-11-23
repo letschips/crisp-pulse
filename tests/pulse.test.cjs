@@ -71,7 +71,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8').replace(PUBLIC_PEM_RE, '`' + LOCAL_PUBLIC_PEM + '`') +
-    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined,splitActiveInterval:typeof splitActiveInterval === "function" ? splitActiveInterval : undefined,buildHourlyProfile:typeof buildHourlyProfile === "function" ? buildHourlyProfile : undefined,getReviewClues,reviewWeekRange,buildOverviewModel:typeof buildOverviewModel === "function" ? buildOverviewModel : undefined,dayComposition:typeof dayComposition === "function" ? dayComposition : undefined,dayRhythm:typeof dayRhythm === "function" ? dayRhythm : undefined,entitle:(plugin,on)=>PULSE_LICENSE_STATE.set(pulseLicenseManagerFor(plugin),!!on),smoothLinePath:typeof smoothLinePath === "function" ? smoothLinePath : undefined,buildMonthPosterModel:typeof buildMonthPosterModel === "function" ? buildMonthPosterModel : undefined,typedWordsOf:typeof typedWordsOf === "function" ? typedWordsOf : undefined,sprintWords:typeof sprintWords === "function" ? sprintWords : undefined,shiftMonthKey:typeof shiftMonthKey === "function" ? shiftMonthKey : undefined};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined,splitActiveInterval:typeof splitActiveInterval === "function" ? splitActiveInterval : undefined,buildHourlyProfile:typeof buildHourlyProfile === "function" ? buildHourlyProfile : undefined,getReviewClues,reviewWeekRange,buildOverviewModel:typeof buildOverviewModel === "function" ? buildOverviewModel : undefined,dayComposition:typeof dayComposition === "function" ? dayComposition : undefined,dayRhythm:typeof dayRhythm === "function" ? dayRhythm : undefined,entitle:(plugin,on)=>PULSE_LICENSE_STATE.set(pulseLicenseManagerFor(plugin),!!on),smoothLinePath:typeof smoothLinePath === "function" ? smoothLinePath : undefined,buildMonthPosterModel:typeof buildMonthPosterModel === "function" ? buildMonthPosterModel : undefined,typedWordsOf:typeof typedWordsOf === "function" ? typedWordsOf : undefined,sprintWords:typeof sprintWords === "function" ? sprintWords : undefined,shiftMonthKey:typeof shiftMonthKey === "function" ? shiftMonthKey : undefined,PulseSnapshotCache:typeof PulseSnapshotCache === "function" ? PulseSnapshotCache : undefined};',
     context
   );
   const Pulse = context.module.exports;
@@ -1912,7 +1912,8 @@ test('malformed array containers cannot silently discard collected data on save 
   }
 });
 
-const baseline = content => ({ words: content.split(/\s+/).filter(Boolean).length, tasks: 0, links: 0, lineSet: new Set(content.split('\n').map(l => l.trim()).filter(Boolean)), completedTaskSet: new Set(), lastTime: 0 });
+const baselineLines = content => setup().helpers.getLineSet(content);
+const baseline = content => ({ words: content.split(/\s+/).filter(Boolean).length, tasks: 0, links: 0, lineSet: baselineLines(content), completedTaskSet: new Set(), lastTime: 0 });
 
 test('re-including an excluded folder does not back-count edits made while excluded', async () => {
   const { p } = setup();await p.loadPluginData();
@@ -3605,4 +3606,83 @@ test('写作目标：只算自己打的字；冲刺跨零点也算对；写满�
   const store = { settings: {}, daily: { '2026-09-08': { date: '2026-09-08', quality: 'recorded', contribution: {}, activity: {}, files: {}, writing: { sprints: [{ at: '09:30', minutes: 25, words: 812, target: 800 }, { at: 'x', minutes: 25, words: 1 }, { at: '10:00', minutes: 0, words: 5 }, { at: '11:00', minutes: 10, words: -3 }] } } } };
   helpers.validateAndRepairStore(store);
   assert.deepEqual(JSON.parse(JSON.stringify(store.daily['2026-09-08'].writing.sprints)), [{ at: '09:30', minutes: 25, words: 812, target: 800 }]);
+});
+
+
+// 1.52.0 启动基线缓存：行集合只存哈希；按 mtime+size 命中的笔记启动时不再读盘
+function memoryBackend(stamp) {
+  const backend = { stamp, files: new Map(), writes: 0,
+    async read() { return { stamp: backend.stamp, entries: [...backend.files.values()].map(e => structuredClone(e)) }; },
+    async reset(next) { backend.files.clear(); backend.stamp = next; },
+    async write(puts, dels) { backend.writes++; for (const e of puts) backend.files.set(e.path, structuredClone(e)); for (const k of dels) backend.files.delete(k); } };
+  return backend;
+}
+
+test('line sets keep only hashes, and rewrite detection still sees changed lines', async () => {
+  const { p, helpers } = setup();await p.loadPluginData();
+  const set = helpers.getLineSet('alpha\n  alpha  \n\nbeta');
+  assert.equal(set.size, 2);
+  for (const key of set) assert.equal(typeof key, 'number');
+  assert.notDeepEqual([...helpers.getLineSet('alpha')], [...helpers.getLineSet('beta')]);
+  const file = { path: 'draft.md', extension: 'md', content: 'one line here\ntwo line here\nthree line here\nfour' };
+  await p.initializeSnapshots([file]);
+  file.content = 'uno line here\ndos line here\ntres line here\nfour';await p.handleFileModification(file);
+  assert.ok(p.getOrCreateTodayRecord().contribution.rewrittenWords > 0);
+});
+
+test('startup baseline reuses cached snapshots whose mtime and size still match, and re-reads the rest', async () => {
+  const { p, helpers } = setup();await p.loadPluginData();
+  const backend = memoryBackend('1:1.7.0');
+  const cache = new helpers.PulseSnapshotCache(backend, '1:1.7.0');
+  const same = { path: 'same.md', extension: 'md', content: 'one two', stat: { mtime: 10, size: 7 } };
+  const changed = { path: 'changed.md', extension: 'md', content: 'a b c d', stat: { mtime: 20, size: 7 } };
+  backend.files.set('same.md', { path: 'same.md', mtime: 10, size: 7, words: 2, tasks: 0, links: 0, lines: [...helpers.getLineSet('one two')], done: [], lastTime: 10 });
+  backend.files.set('changed.md', { path: 'changed.md', mtime: 19, size: 3, words: 2, tasks: 0, links: 0, lines: [], done: [], lastTime: 19 });
+  backend.files.set('gone.md', { path: 'gone.md', mtime: 1, size: 1, words: 1, tasks: 0, links: 0, lines: [], done: [], lastTime: 1 });
+  const reads = [];const read = p.app.vault.read;p.app.vault.read = async f => { reads.push(f.path); return read(f); };
+  p.app.vault.getMarkdownFiles = () => [same, changed];
+  p.createSnapshotCache = () => cache;
+  await p.loadStartupSnapshots();
+  assert.deepEqual(reads, ['changed.md']);
+  assert.equal(p.fileSnapshots.get('same.md').words, 2);
+  assert.equal(p.fileSnapshots.get('changed.md').words, 4);
+  await p.flushSnapshotCache();
+  assert.deepEqual([...backend.files.keys()].sort(), ['changed.md', 'same.md']);
+  assert.deepEqual({ mtime: backend.files.get('changed.md').mtime, words: backend.files.get('changed.md').words }, { mtime: 20, words: 4 });
+  // 命中缓存的基线照常算增量
+  same.content = 'one two three four';same.stat = { mtime: 30, size: 18 };await p.handleFileModification(same);
+  assert.equal(p.getOrCreateTodayRecord().contribution.wordsAdded, 2);
+  await p.flushSnapshotCache();
+  assert.deepEqual({ mtime: backend.files.get('same.md').mtime, words: backend.files.get('same.md').words }, { mtime: 30, words: 4 });
+  const writes = backend.writes;await p.flushSnapshotCache();
+  assert.equal(backend.writes, writes, 'nothing changed, nothing written');
+});
+
+test('snapshot cache follows deletes, renames and tracking rules, and a new version starts over', async () => {
+  const { p, helpers, handlers } = setup();await p.loadPluginData();p.registerVaultEvents();
+  const backend = memoryBackend('1:1.6.0');
+  backend.files.set('old.md', { path: 'old.md', mtime: 1, size: 3, words: 1, tasks: 0, links: 0, lines: [], done: [], lastTime: 1 });
+  const cache = new helpers.PulseSnapshotCache(backend, '1:1.7.0');
+  const a = { path: 'a.md', extension: 'md', content: 'aa', stat: { mtime: 1, size: 2 } };
+  const b = { path: 'Drafts/b.md', extension: 'md', content: 'bb', stat: { mtime: 1, size: 2 } };
+  p.app.vault.getMarkdownFiles = () => [a, b];
+  p.createSnapshotCache = () => cache;
+  await p.loadStartupSnapshots();await p.flushSnapshotCache();
+  assert.equal(backend.stamp, '1:1.7.0');
+  assert.deepEqual([...backend.files.keys()].sort(), ['Drafts/b.md', 'a.md']);
+  p.app.vault.getMarkdownFiles = () => [b];await handlers.delete(a);await p.flushSnapshotCache();
+  assert.deepEqual([...backend.files.keys()], ['Drafts/b.md']);
+  p.settings.excludedFolders = ['Drafts'];await p.syncSnapshotsToTrackingRules();await p.flushSnapshotCache();
+  assert.deepEqual([...backend.files.keys()], []);
+});
+
+test('a snapshot records the stat seen before reading, so a write racing the read is re-read next start', async () => {
+  const { p, helpers } = setup();await p.loadPluginData();
+  const backend = memoryBackend('1:1.7.0');
+  const file = { path: 'race.md', extension: 'md', content: 'one', stat: { mtime: 1, size: 3 } };
+  p.app.vault.read = async f => { const c = f.content; f.content = 'one two'; f.stat = { mtime: 2, size: 7 }; return c; };
+  p.app.vault.getMarkdownFiles = () => [file];
+  p.createSnapshotCache = () => new helpers.PulseSnapshotCache(backend, '1:1.7.0');
+  await p.loadStartupSnapshots();await p.flushSnapshotCache();
+  assert.equal(backend.files.get('race.md').mtime, 1);
 });

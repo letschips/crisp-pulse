@@ -880,10 +880,149 @@ function mergeCreatedBase(a, b) {
 }
 
 // 1.2 Line Hashes for Rewriting / Polish Detection
+// 1.52.0：行集合只存每行的 53 位哈希（cyrb53），只用来比哪些行变了，不必常驻整份行文本
+function lineKey(line) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+}
+
 function getLineSet(str) {
-  if (!str) return new Set();
-  const lines = str.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-  return new Set(lines);
+  const set = new Set();
+  if (!str) return set;
+  for (const raw of str.split("\n")) {
+    const line = raw.trim();
+    if (line) set.add(lineKey(line));
+  }
+  return set;
+}
+
+function snapshotStat(file) {
+  const stat = file?.stat;
+  return stat && Number.isFinite(stat.mtime) && Number.isFinite(stat.size) ? { mtime: stat.mtime, size: stat.size } : null;
+}
+
+/* 1.52.0 启动基线缓存：每台设备各存一份在 IndexedDB（不随库同步）。条目记下读盘前看到的 mtime+size，
+   启动时两者都对得上才复用，否则照旧读盘；插件升版即整份作废，计数口径变了也不会沿用旧数。 */
+class PulseSnapshotCache {
+  constructor(backend, stamp) {
+    this.backend = backend;
+    this.stamp = stamp;
+    this.keys = new Set();
+    this.flushing = null;
+  }
+
+  async load() {
+    const entries = new Map();
+    try {
+      const { stamp, entries: list } = await this.backend.read();
+      if (stamp !== this.stamp) {
+        await this.backend.reset(this.stamp);
+        return entries;
+      }
+      for (const entry of list || []) {
+        if (!entry || typeof entry.path !== "string") continue;
+        entries.set(entry.path, entry);
+        this.keys.add(entry.path);
+      }
+    } catch (err) {
+      console.warn("[Crisp Pulse] Snapshot cache unavailable, reading notes instead:", err);
+    }
+    return entries;
+  }
+
+  async flush(snapshots) {
+    if (this.flushing) return this.flushing;
+    const puts = [];
+    const dels = [];
+    for (const [path, snap] of snapshots) {
+      if (!snap?.stat) { if (this.keys.has(path)) dels.push(path); continue; }
+      if (snap.cacheDirty || !this.keys.has(path)) puts.push([path, snap]);
+    }
+    for (const key of this.keys) if (!snapshots.has(key)) dels.push(key);
+    if (!puts.length && !dels.length) return;
+    for (const [, snap] of puts) snap.cacheDirty = false;
+    const entries = puts.map(([path, snap]) => ({
+      path, mtime: snap.stat.mtime, size: snap.stat.size,
+      words: snap.words, tasks: snap.tasks, links: snap.links,
+      lines: [...(snap.lineSet || [])], done: [...(snap.completedTaskSet || [])], lastTime: snap.lastTime
+    }));
+    this.flushing = (async () => {
+      try {
+        await this.backend.write(entries, dels);
+        for (const entry of entries) this.keys.add(entry.path);
+        for (const key of dels) this.keys.delete(key);
+      } catch (err) {
+        for (const [, snap] of puts) snap.cacheDirty = true;
+        console.warn("[Crisp Pulse] Snapshot cache write failed:", err);
+      } finally {
+        this.flushing = null;
+      }
+    })();
+    return this.flushing;
+  }
+
+  close() { try { this.backend.close?.(); } catch (_) {} }
+}
+
+function idbRequest(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function idbDone(tx) {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error("aborted"));
+  });
+}
+
+function idbSnapshotBackend(name) {
+  let opening = null;
+  const open = () => opening ||= new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta");
+      if (!db.objectStoreNames.contains("files")) db.createObjectStore("files", { keyPath: "path" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error("blocked"));
+  });
+  return {
+    async read() {
+      const db = await open();
+      const tx = db.transaction(["meta", "files"], "readonly");
+      const [stamp, entries] = await Promise.all([idbRequest(tx.objectStore("meta").get("stamp")), idbRequest(tx.objectStore("files").getAll())]);
+      return { stamp, entries };
+    },
+    async reset(stamp) {
+      const db = await open();
+      const tx = db.transaction(["meta", "files"], "readwrite");
+      tx.objectStore("files").clear();
+      tx.objectStore("meta").put(stamp, "stamp");
+      await idbDone(tx);
+    },
+    async write(puts, dels) {
+      const db = await open();
+      const tx = db.transaction("files", "readwrite");
+      const store = tx.objectStore("files");
+      for (const entry of puts) store.put(entry);
+      for (const key of dels) store.delete(key);
+      await idbDone(tx);
+    },
+    close() { opening?.then(db => db.close(), () => {}); }
+  };
 }
 
 // 1.2 Task Fingerprints for Lifecycle Tracking
@@ -2222,7 +2361,7 @@ class CrispPulsePlugin extends Plugin {
       this.registerEvent(this.app.workspace.on("crisp-search:ready", () => this.connectSearch()));
       this.connectSearch();
       this.focusAdapter.attach();
-      await this.initializeSnapshots();
+      await this.loadStartupSnapshots();
       if (this.stopped) return;
       // Pulse 停用、重载期间结束的专注只在 Crisp Focus 的会话日志里
       this.catchUpFocusSessionsIfChanged();
@@ -2249,6 +2388,8 @@ class CrispPulsePlugin extends Plugin {
     if (this.snapshotSyncTimer) clearTimeout(this.snapshotSyncTimer);
     this.focusAdapter?.detach();
     this.flushAllSessions();
+    const cache = this.snapshotCache;
+    if (cache) cache.flush(this.fileSnapshots).finally(() => cache.close());
     // 卸载快照已排进共用写入队列；此后旧实例迟到的保存不再落盘，免得盖掉新实例的设置和统计
     this.storeRetired = true;
     this.memoDrafts?.retire();
@@ -2912,6 +3053,7 @@ class CrispPulsePlugin extends Plugin {
   /** 每 30 秒：结算闲置的编辑会话；过了零点时没有输入、没有待保存数据也要换到新的一天（状态栏、看板、crisp-pulse:state）。 */
   maintenanceTick() {
     void this.checkIdleSessions();
+    void this.flushSnapshotCache();
     this.catchUpFocusSessionsIfChanged();
     const day = getTodayKey();
     if (this.maintenanceDay && day !== this.maintenanceDay) this.refreshViews();
@@ -3160,13 +3302,23 @@ class CrispPulsePlugin extends Plugin {
     }
   }
 
-  async initializeSnapshots(files = this.app.vault.getMarkdownFiles()) {
+  async initializeSnapshots(files = this.app.vault.getMarkdownFiles(), cached = null) {
     const concurrency = 16;
     let index = 0;
     const worker = async () => {
       while (index < files.length && !this.stopped) {
         const file = files[index++];
         if (!this.shouldTrackPath(file.path)) {
+          continue;
+        }
+        const stat = snapshotStat(file);
+        const hit = stat && cached?.get(file.path);
+        if (hit && hit.mtime === stat.mtime && hit.size === stat.size) {
+          this.fileSnapshots.set(file.path, {
+            words: hit.words, tasks: hit.tasks, links: hit.links,
+            lineSet: new Set(hit.lines), completedTaskSet: new Set(hit.done),
+            lastTime: hit.lastTime || stat.mtime, stat
+          });
           continue;
         }
         try {
@@ -3178,7 +3330,8 @@ class CrispPulsePlugin extends Plugin {
             links: countLinks(content),
             lineSet: getLineSet(writingText(content)),
             completedTaskSet: getCompletedTaskSet(content),
-            lastTime: file.stat?.mtime || Date.now()
+            lastTime: file.stat?.mtime || Date.now(),
+            stat, cacheDirty: true
           });
         } catch (e) {
           console.error("[Crisp Pulse] Baseline read failed for:", file.path, e);
@@ -3186,6 +3339,27 @@ class CrispPulsePlugin extends Plugin {
       }
     };
     await Promise.all(Array.from({ length: Math.min(concurrency, files.length || 1) }, worker));
+  }
+
+  createSnapshotCache() {
+    try {
+      if (typeof indexedDB === "undefined" || !indexedDB) return null;
+      const id = this.app?.appId || this.app?.vault?.getName?.() || "default";
+      return new PulseSnapshotCache(idbSnapshotBackend(`crisp-pulse-snapshots:${id}`), `1:${this.manifest?.version || ""}`);
+    } catch (_) { return null; }
+  }
+
+  /** 启动基线：先取本机缓存，mtime+size 没变的笔记不再读盘。 */
+  async loadStartupSnapshots() {
+    this.snapshotCache = this.createSnapshotCache();
+    const cached = this.snapshotCache ? await this.snapshotCache.load() : null;
+    if (this.stopped) return;
+    await this.initializeSnapshots(this.app.vault.getMarkdownFiles(), cached);
+    if (!this.stopped) void this.flushSnapshotCache();
+  }
+
+  flushSnapshotCache() {
+    return this.snapshotCache?.flush(this.fileSnapshots) || Promise.resolve();
   }
 
   // --- Tracking & Session Engine ---
@@ -3495,6 +3669,7 @@ class CrispPulsePlugin extends Plugin {
     return this.queueFileOperation(file, async () => {
       if (this.fileSnapshots.has(file.path)) return;
         try {
+          const stat = snapshotStat(file);
           const content = await this.readTrackedFile(file);
           if (content === null) return;
           const words = countWords(writingText(content));
@@ -3508,7 +3683,8 @@ class CrispPulsePlugin extends Plugin {
             links: countLinks(content),
             lineSet: getLineSet(writingText(content)),
             completedTaskSet: getCompletedTaskSet(content),
-            lastTime: Date.now()
+            lastTime: Date.now(),
+            stat, cacheDirty: true
           });
           if (external) {
             this.recordExternalWords(words - before);
@@ -3604,6 +3780,7 @@ class CrispPulsePlugin extends Plugin {
   async processFileModification(file, at = Date.now()) {
     if (this.stopped || !this.shouldTrackPath(file.path)) return;
     try {
+      const stat = snapshotStat(file);
       const content = await this.readTrackedFile(file);
       if (content === null) return;
       const newWords = countWords(writingText(content));
@@ -3621,7 +3798,8 @@ class CrispPulsePlugin extends Plugin {
           links: newLinks,
           lineSet: newLineSet,
           completedTaskSet: newCompletedTasks,
-          lastTime: now
+          lastTime: now,
+          stat, cacheDirty: true
         };
         this.fileSnapshots.set(file.path, snapshot);
         return;
@@ -3670,6 +3848,8 @@ class CrispPulsePlugin extends Plugin {
       snapshot.lineSet = newLineSet;
       snapshot.completedTaskSet = newCompletedTasks;
       snapshot.lastTime = now;
+      snapshot.stat = stat;
+      snapshot.cacheDirty = true;
 
       if (wordsDelta === 0 && realTasksAdded === 0 && realTasksRemoved === 0 && linksDelta === 0 && !isMeaningfulRewrite) {
         return;
