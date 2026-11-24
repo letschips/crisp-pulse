@@ -14682,17 +14682,18 @@ class CrispPulseMemoView extends ItemView {
         const level = memoHeatLevel(cell.count, max);
         const el = grid.createDiv({ cls: `crisp-pulse-memo-heat-cell level-${level}${cell.future ? " is-future" : ""}${cell.date === todayKey ? " is-today" : ""}${this.filterDate === cell.date ? " is-selected" : ""}` });
         el.setAttribute("title", tr(`${cell.date} · ${cell.count} 条`, `${cell.date} · ${plural(cell.count, "memo")}`));
-        if (!cell.future) el.addEventListener("click", () => { this.filterDate = this.filterDate === cell.date ? null : cell.date; this.tab = "all"; this.render(); });
+        if (!cell.future) el.addEventListener("click", () => this.selectMemoDate(cell.date));
       }
     }
     const metrics = card.createDiv({ cls: "crisp-pulse-memo-metrics" });
     const recent = memoRecentCount(this.memos, todayKey, 10);
     metrics.createSpan({ text: tr(`近 10 周 ${recent} 条`, `${recent} in 10 weeks`) });
-    metrics.createSpan({ text: tr(`连续 ${stats.streak} 天`, `${stats.streak}-day streak`) });
+    if (stats.streak) metrics.createSpan({ text: tr(`连续 ${stats.streak} 天`, `${stats.streak}-day streak`) });
     const monthButton = metrics.createEl("button", { cls: "crisp-pulse-memo-month-metric", text: tr(`本月 ${stats.month} 条`, `${stats.month} this month`), attr: { type: "button" } });
     monthButton.addEventListener("click", () => {
       const date = memoKeyToDay(todayKey);
       this.filterDate = null;
+      this.calendarMonth = todayKey.slice(0, 7);
       this.filters.from = `${todayKey.slice(0, 7)}-01`;
       this.filters.to = dateKey(new Date(date.getFullYear(), date.getMonth() + 1, 0));
       this.tab = "all";
