@@ -12137,13 +12137,6 @@ function memoAdjacentDates(memos, selected) {
   return { previous: dates.filter((d) => d < selected).at(-1) || null, next: dates.find((d) => d > selected) || null };
 }
 
-function memoRecentCount(memos, today, weeks) {
-  const first = memoKeyToDay(today);
-  first.setDate(first.getDate() - weeks * 7 + 1);
-  const start = dateKey(first);
-  return memos.filter((m) => m.date >= start && m.date <= today).length;
-}
-
 function formatMemoDate(date, format, momentFn) {
   if (momentFn) return momentFn(date).format(format);
   const tokens = { YYYY: String(date.getFullYear()), YY: String(date.getFullYear()).slice(-2), MM: memoPad(date.getMonth() + 1), M: String(date.getMonth() + 1), DD: memoPad(date.getDate()), D: String(date.getDate()) };
@@ -14686,8 +14679,7 @@ class CrispPulseMemoView extends ItemView {
       }
     }
     const metrics = card.createDiv({ cls: "crisp-pulse-memo-metrics" });
-    const recent = memoRecentCount(this.memos, todayKey, 10);
-    metrics.createSpan({ text: tr(`近 10 周 ${recent} 条`, `${recent} in 10 weeks`) });
+    metrics.createSpan({ text: tr(`近 ${weeks} 周 ${stats.recent} 条`, `${stats.recent} in ${weeks} weeks`) });
     if (stats.streak) metrics.createSpan({ text: tr(`连续 ${stats.streak} 天`, `${stats.streak}-day streak`) });
     const monthButton = metrics.createEl("button", { cls: "crisp-pulse-memo-month-metric", text: tr(`本月 ${stats.month} 条`, `${stats.month} this month`), attr: { type: "button" } });
     monthButton.addEventListener("click", () => {
