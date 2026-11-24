@@ -1153,11 +1153,131 @@ button.pulse-day-focus-task.is-link:focus-visible { outline: 2px solid var(--tex
   font-size: var(--font-ui-small);
 }
 
-.crisp-pulse-memo-body {
+.crisp-pulse-memo-view.is-memo-adaptive {
+  container: pulse-memo / inline-size;
+}
+
+.crisp-pulse-memo-body,
+.crisp-pulse-memo-entry,
+.crisp-pulse-memo-feed {
   display: flex;
   flex-direction: column;
   gap: var(--memo-gap);
+  min-width: 0;
+}
+
+.crisp-pulse-memo-body {
   padding: 4px 12px 24px;
+}
+
+@container pulse-memo (min-width: 600px) {
+  .crisp-pulse-memo-view.is-memo-adaptive > .crisp-pulse-memo-body {
+    display: grid;
+    grid-template-columns: clamp(240px, 38%, 340px) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "stats entry" "stats feed";
+    align-items: start;
+    column-gap: 24px;
+  }
+
+  .crisp-pulse-memo-entry { grid-area: entry; }
+  .crisp-pulse-memo-stats { grid-area: stats; }
+  .crisp-pulse-memo-feed { grid-area: feed; }
+}
+
+.crisp-pulse-memo-calendar-wide,
+.crisp-pulse-memo-metrics {
+  display: none;
+}
+
+.crisp-pulse-memo-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 2px;
+}
+
+.crisp-pulse-memo-calendar-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.crisp-pulse-memo-calendar-head strong {
+  flex: 1;
+  font-size: var(--font-ui-small);
+}
+
+.crisp-pulse-memo-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+  text-align: center;
+}
+
+.crisp-pulse-memo-calendar-weekday {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  padding: 3px 0;
+}
+
+.crisp-pulse-memo-view button.crisp-pulse-memo-calendar-day {
+  position: relative;
+  min-width: 0;
+  height: 34px;
+  padding: 0 0 3px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+}
+
+.crisp-pulse-memo-view button.crisp-pulse-memo-calendar-day:hover { background: var(--memo-fill); }
+.crisp-pulse-memo-view button.crisp-pulse-memo-calendar-day.is-outside { color: var(--text-faint); }
+.crisp-pulse-memo-view button.crisp-pulse-memo-calendar-day.is-today { outline: 1px solid var(--text-muted); outline-offset: -2px; }
+.crisp-pulse-memo-view button.crisp-pulse-memo-calendar-day.is-selected { background: var(--memo-accent-soft); color: var(--memo-accent); font-weight: 600; }
+.crisp-pulse-memo-calendar-day.has-memos::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  left: calc(50% - 2px);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--memo-accent);
+}
+
+.crisp-pulse-memo-search-toggle { margin-inline-start: 0; }
+.crisp-pulse-memo-calendar-toggle { margin-inline-start: auto; flex: none; }
+.crisp-pulse-memo-calendar-toggle.is-active { color: var(--memo-accent); }
+
+@container pulse-memo (min-width: 600px) {
+  .crisp-pulse-memo-calendar-wide { display: block; }
+  .crisp-pulse-memo-summary-streak { display: none; }
+  .crisp-pulse-memo-calendar-toggle,
+  .crisp-pulse-memo-calendar-narrow { display: none; }
+  .crisp-pulse-memo-search-toggle { margin-inline-start: auto; }
+  .crisp-pulse-memo-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    order: 1;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+  }
+  .crisp-pulse-memo-view button.crisp-pulse-memo-month-metric {
+    height: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    color: var(--text-muted);
+    font-size: inherit;
+  }
+  .crisp-pulse-memo-view button.crisp-pulse-memo-month-metric:hover { color: var(--memo-accent); }
 }
 
 .crisp-pulse-memo-nav .nav-action-button.is-active {

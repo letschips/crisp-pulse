@@ -36,7 +36,7 @@ const PULSE_ZH = /^zh\b/i.test(PULSE_LANGUAGE);
 const PULSE_HANT = PULSE_ZH && /^zh[-_](tw|hk|mo|hant)\b/i.test(PULSE_LANGUAGE);
 /* 繁体文案由简体文案转出来（OpenCC s2twp：台湾正体 + 台湾用语），表由 scripts/gen-hant.cjs 生成，只收源码里用到的字词。
    分两段按最长匹配替换：s 简→繁，t 台湾用语。插值进来的内容（文件名、标签）也会被转，只影响显示。 */
-const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"007bf2fceae0cc35","s":"一只 一隻|一周 一週|一致 一致|万 萬|万字 萬字|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下个月 下個月|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|册 冊|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲刺 衝刺|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|制图 製圖|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|头 頭|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|断了 斷了|方向 方向|无 無|日历 日曆|日子里 日子裏|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栋 棟|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|楼 樓|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|江面 江面|沉淀 沉澱|没 沒|注册 註冊|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|游 遊|游船 遊船|湖面 湖面|满 滿|满了 滿了|灯 燈|点 點|烟 煙|烟花 煙花|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记了 記了|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|超出 超出|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这个月 這個月|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風|黄 黃","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導入 匯入|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
+const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"b69b561173534646","s":"一只 一隻|一周 一週|一致 一致|万 萬|万字 萬字|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下个月 下個月|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|册 冊|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲刺 衝刺|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|制图 製圖|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|头 頭|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|断了 斷了|方向 方向|无 無|日历 日曆|日子里 日子裏|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栋 棟|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|楼 樓|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|江面 江面|沉淀 沉澱|没 沒|注册 註冊|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|游 遊|游船 遊船|湖面 湖面|满 滿|满了 滿了|灯 燈|点 點|烟 煙|烟花 煙花|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记了 記了|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|超出 超出|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这个月 這個月|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風|黄 黃","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導入 匯入|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
 let pulseHantStages = null;
 function pulseHant(text) {
   if (typeof text !== "string" || !/\p{Script=Han}/u.test(text)) return text;
@@ -12131,6 +12131,30 @@ function memoStats(memos, todayKey, { weeks = 12, weekStartsOn = "sunday" } = {}
   return { cells, recent, streak, month, total: memos.length, byDate };
 }
 
+function memoCalendarDays(month, weekStartsOn = "sunday") {
+  const [year, number] = month.split("-").map(Number);
+  const first = new Date(year, number - 1, 1);
+  const last = new Date(year, number, 0);
+  const firstDow = weekStartsOn === "monday" ? 1 : 0;
+  const start = new Date(year, number - 1, 1 - (first.getDay() - firstDow + 7) % 7);
+  const end = new Date(year, number - 1, last.getDate() + (firstDow + 6 - last.getDay() + 7) % 7);
+  const days = [];
+  for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) days.push(dateKey(d));
+  return days;
+}
+
+function memoAdjacentDates(memos, selected) {
+  const dates = [...new Set(memos.map((m) => m.date))].sort();
+  return { previous: dates.filter((d) => d < selected).at(-1) || null, next: dates.find((d) => d > selected) || null };
+}
+
+function memoRecentCount(memos, today, weeks) {
+  const first = memoKeyToDay(today);
+  first.setDate(first.getDate() - weeks * 7 + 1);
+  const start = dateKey(first);
+  return memos.filter((m) => m.date >= start && m.date <= today).length;
+}
+
 function formatMemoDate(date, format, momentFn) {
   if (momentFn) return momentFn(date).format(format);
   const tokens = { YYYY: String(date.getFullYear()), YY: String(date.getFullYear()).slice(-2), MM: memoPad(date.getMonth() + 1), M: String(date.getMonth() + 1), DD: memoPad(date.getDate()), D: String(date.getDate()) };
@@ -13739,6 +13763,8 @@ class CrispPulseMemoView extends ItemView {
     this.tab = "all";
     this.showAdvanced = false;
     this.searchOpen = false;
+    this.calendarOpen = false;
+    this.calendarMonth = null;
     this.reviewBatch = 0;
     this.expanded = null;
     this.walk = { trail: [], step: null };
@@ -13777,6 +13803,17 @@ class CrispPulseMemoView extends ItemView {
     const win = this.containerEl.win || window;
     const place = () => this.placeDockSheet();
     for (const type of ["keyboardWillShow", "keyboardDidShow", "keyboardWillHide", "keyboardDidHide", "resize"]) this.registerDomEvent(win, type, place);
+    if (win.ResizeObserver) {
+      let width = 0;
+      const observer = new win.ResizeObserver(([entry]) => {
+        const nextWidth = entry.contentRect.width;
+        if (width === nextWidth) return;
+        width = nextWidth;
+        if (width && !this.dockedComposer) this.fitComposerInput();
+      });
+      observer.observe(this.containerEl.children[1]);
+      this.register(() => observer.disconnect());
+    }
     if (win.visualViewport) {
       win.visualViewport.addEventListener("resize", place);
       win.visualViewport.addEventListener("scroll", place);
@@ -13876,11 +13913,15 @@ class CrispPulseMemoView extends ItemView {
     const body = root.createDiv({ cls: "crisp-pulse-memo-body" });
     // 手机上输入栏停在底部，拇指够得着，滑动列表也不会消失；桌面端仍在顶部
     const docked = !!(Platform.isPhone || doc?.body?.classList?.contains("is-phone"));
-    if (!docked) this.renderComposer(body, refocusComposer);
-    if (this.error) body.createDiv({ cls: "crisp-pulse-memo-error", text: this.error });
+    root.toggleClass("is-memo-adaptive", !docked);
+    if (!docked || this.error) {
+      const entry = body.createDiv({ cls: "crisp-pulse-memo-entry" });
+      if (!docked) this.renderComposer(entry, refocusComposer);
+      if (this.error) entry.createDiv({ cls: "crisp-pulse-memo-error", text: this.error });
+    }
     this.renderStats(body, memoStats(this.memos, getTodayKey(), { weeks: 20, weekStartsOn: this.plugin.settings.weekStartsOn }));
     this.listEl = null;
-    this.renderTabs(body, searchFocus);
+    this.renderTabs(body.createDiv({ cls: "crisp-pulse-memo-feed" }), searchFocus);
     if (docked) {
       this.renderComposer(root, refocusComposer, { docked: true });
       // Obsidian 给侧栏视图最后一个 div 加了底部留白；交给这个占位块，不撑高输入栏
@@ -14589,15 +14630,58 @@ class CrispPulseMemoView extends ItemView {
     }, 0);
   }
 
+  selectMemoDate(date) {
+    this.filterDate = this.filterDate === date ? null : date;
+    this.calendarMonth = date.slice(0, 7);
+    this.tab = "all";
+    this.render();
+  }
+
+  renderCalendar(root) {
+    const today = getTodayKey();
+    const month = this.calendarMonth || this.filterDate?.slice(0, 7) || today.slice(0, 7);
+    const [year, number] = month.split("-").map(Number);
+    const section = root.createDiv({ cls: "crisp-pulse-memo-calendar" });
+    const header = section.createDiv({ cls: "crisp-pulse-memo-calendar-head" });
+    const title = header.createEl("strong", { text: new Intl.DateTimeFormat(PULSE_NUMBER_LOCALE, { year: "numeric", month: "long" }).format(new Date(year, number - 1, 1)) });
+    const move = (offset) => {
+      this.calendarMonth = dateKey(new Date(year, number - 1 + offset, 1)).slice(0, 7);
+      this.render();
+    };
+    for (const [icon, label, action] of [
+      ["chevron-left", tr("上个月", "Previous month"), () => move(-1)],
+      ["chevron-right", tr("下个月", "Next month"), () => move(1)],
+    ]) {
+      const button = header.createEl("button", { cls: "clickable-icon crisp-pulse-memo-calendar-nav", attr: { type: "button", "aria-label": label } });
+      setIcon(button, icon);
+      button.addEventListener("click", action);
+    }
+    title.setAttribute("aria-live", "polite");
+    const grid = section.createDiv({ cls: "crisp-pulse-memo-calendar-grid" });
+    const startsMonday = this.plugin.settings.weekStartsOn === "monday";
+    for (let i = 0; i < 7; i++) {
+      const weekday = new Date(2024, 0, 7 + (i + (startsMonday ? 1 : 0)) % 7);
+      grid.createSpan({ cls: "crisp-pulse-memo-calendar-weekday", text: new Intl.DateTimeFormat(PULSE_NUMBER_LOCALE, { weekday: "short" }).format(weekday) });
+    }
+    const counts = new Map();
+    for (const memo of this.memos) counts.set(memo.date, (counts.get(memo.date) || 0) + 1);
+    for (const date of memoCalendarDays(month, this.plugin.settings.weekStartsOn)) {
+      const count = counts.get(date) || 0;
+      const button = grid.createEl("button", { cls: `crisp-pulse-memo-calendar-day${date.slice(0, 7) !== month ? " is-outside" : ""}${date === today ? " is-today" : ""}${date === this.filterDate ? " is-selected" : ""}${count ? " has-memos" : ""}`, text: String(Number(date.slice(-2))), attr: { type: "button", "aria-label": tr(`${date}，${count} 条速记`, `${date}, ${plural(count, "memo")}`), "aria-pressed": String(date === this.filterDate) } });
+      button.addEventListener("click", () => this.selectMemoDate(date));
+    }
+  }
+
   renderStats(root, stats) {
     const card = root.createDiv({ cls: "crisp-pulse-memo-stats" });
+    const calendar = card.createDiv({ cls: "crisp-pulse-memo-calendar-wide" });
+    this.renderCalendar(calendar);
     // 一行概览：总数做主角，标签数和连续天数跟在后面，不再分三栏各配标签
     const tagCount = new Set(this.memos.flatMap((m) => m.tags)).size;
     const summary = card.createDiv({ cls: "crisp-pulse-memo-summary" });
     summary.createSpan({ cls: "crisp-pulse-memo-summary-value", text: stats.total.toLocaleString(PULSE_NUMBER_LOCALE) });
-    const parts = [tr("条", "memos"), tr(`${tagCount} 标签`, plural(tagCount, "tag"))];
-    if (stats.streak) parts.push(tr(`连续 ${stats.streak} 天`, `${stats.streak}-day streak`));
-    summary.createSpan({ cls: "crisp-pulse-memo-summary-meta", text: parts.join(" · ") });
+    const meta = summary.createSpan({ cls: "crisp-pulse-memo-summary-meta", text: [tr("条", "memos"), tr(`${tagCount} 标签`, plural(tagCount, "tag"))].join(" · ") });
+    if (stats.streak) meta.createSpan({ cls: "crisp-pulse-memo-summary-streak", text: ` · ${tr(`连续 ${stats.streak} 天`, `${stats.streak}-day streak`)}` });
     const weeks = stats.cells.length / 7;
     const todayKey = getTodayKey();
     card.style.setProperty("--memo-heat-weeks", String(weeks));
@@ -14612,6 +14696,19 @@ class CrispPulseMemoView extends ItemView {
         if (!cell.future) el.addEventListener("click", () => { this.filterDate = this.filterDate === cell.date ? null : cell.date; this.tab = "all"; this.render(); });
       }
     }
+    const metrics = card.createDiv({ cls: "crisp-pulse-memo-metrics" });
+    const recent = memoRecentCount(this.memos, todayKey, 10);
+    metrics.createSpan({ text: tr(`近 10 周 ${recent} 条`, `${recent} in 10 weeks`) });
+    metrics.createSpan({ text: tr(`连续 ${stats.streak} 天`, `${stats.streak}-day streak`) });
+    const monthButton = metrics.createEl("button", { cls: "crisp-pulse-memo-month-metric", text: tr(`本月 ${stats.month} 条`, `${stats.month} this month`), attr: { type: "button" } });
+    monthButton.addEventListener("click", () => {
+      const date = memoKeyToDay(todayKey);
+      this.filterDate = null;
+      this.filters.from = `${todayKey.slice(0, 7)}-01`;
+      this.filters.to = dateKey(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+      this.tab = "all";
+      this.render();
+    });
     const months = card.createDiv({ cls: "crisp-pulse-memo-heat-months", attr: { "aria-hidden": "true" } });
     let lastMonth = null;
     for (let col = 0; col < weeks; col++) {
@@ -14640,6 +14737,9 @@ class CrispPulseMemoView extends ItemView {
         this.render();
       });
     }
+    const calendarToggle = row.createEl("button", { cls: `clickable-icon crisp-pulse-memo-calendar-toggle${this.calendarOpen ? " is-active" : ""}`, attr: { type: "button", "aria-label": tr("速记日历", "Memo calendar"), "aria-expanded": String(this.calendarOpen) } });
+    setIcon(calendarToggle, "calendar-days");
+    calendarToggle.addEventListener("click", () => { this.calendarOpen = !this.calendarOpen; this.render(); });
     const searchShown = this.searchOpen || !!this.filters.query;
     const toggle = row.createDiv({ cls: `clickable-icon crisp-pulse-memo-search-toggle${searchShown ? " is-active" : ""}`, attr: { "aria-label": tr("搜索速记", "Search memos"), role: "button", tabindex: "0", "aria-expanded": String(searchShown) } });
     setIcon(toggle, "search");
@@ -14652,6 +14752,7 @@ class CrispPulseMemoView extends ItemView {
     };
     toggle.addEventListener("click", flip);
     toggle.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); } });
+    if (this.calendarOpen) this.renderCalendar(root.createDiv({ cls: "crisp-pulse-memo-calendar-narrow" }));
     if (searchShown) this.renderSearch(root, searchFocus);
     if (this.tab === "trash") return this.renderTrash(root);
     if (!pulseEntitled(this.plugin) && ["review", "walk", "tags"].includes(this.tab)) this.tab = "all";
@@ -14836,10 +14937,10 @@ class CrispPulseMemoView extends ItemView {
     return !!(this.filterMemoAt || this.filterMemoId || this.filterDate || this.filterTag || f.query.trim() || f.from || f.to || f.includeTags.length || f.excludeTags.length || f.untagged || f.converted !== null || f.hasLink || f.hasImage || f.hasAudio || f.onThisDay);
   }
 
-  visibleMemos() {
+  visibleMemos({ ignoreDate = false } = {}) {
     const f = this.filters;
     let list = filterMemos(this.memos, { ...f, includeTags: this.filterTag ? [...f.includeTags, this.filterTag] : f.includeTags });
-    if (this.filterDate) list = list.filter((m) => m.date === this.filterDate);
+    if (this.filterDate && !ignoreDate) list = list.filter((m) => m.date === this.filterDate);
     if (this.filterMemoId) list = list.filter((m) => m.id === this.filterMemoId);
     if (this.filterMemoAt) list = list.filter((m) => m.path === this.filterMemoAt.path && m.startLine === this.filterMemoAt.startLine);
     return list;
@@ -14854,7 +14955,16 @@ class CrispPulseMemoView extends ItemView {
       c.addEventListener("click", () => { clear(); this.render(); });
     };
     if (this.filterMemoId || this.filterMemoAt) chip(tr("这一条", "This memo"), () => { this.filterMemoId = null; this.filterMemoAt = null; });
-    if (this.filterDate) chip(this.filterDate, () => { this.filterDate = null; });
+    if (this.filterDate) {
+      const { previous, next } = memoAdjacentDates(this.visibleMemos({ ignoreDate: true }), this.filterDate);
+      for (const [target, label, icon] of [[previous, tr("上一有记录日", "Previous day with memos"), "chevron-left"], [next, tr("下一有记录日", "Next day with memos"), "chevron-right"]]) {
+        const button = chips.createEl("button", { cls: "clickable-icon crisp-pulse-memo-date-nav", attr: { type: "button", "aria-label": label } });
+        button.disabled = !target;
+        setIcon(button, icon);
+        button.addEventListener("click", () => { if (target) this.selectMemoDate(target); });
+      }
+      chip(this.filterDate, () => { this.filterDate = null; });
+    }
     if (this.filterTag) chip(`#${this.filterTag}`, () => { this.filterTag = null; });
     const f = this.filters;
     if (f.from) chip(tr(`从 ${f.from}`, `From ${f.from}`), () => { f.from = ""; });
