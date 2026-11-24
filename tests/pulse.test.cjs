@@ -1048,23 +1048,34 @@ test('Score breakdown title renders SVG computer icon rather than emoji', () => 
   assert.ok(helpers.ICON_COMPUTER_SVG.includes("crisp-pulse-breakdown-icon"));
 });
 
-test('Header title renders animated blocks-wave SVG rather than lightning emoji', () => {
+// 回归：无限循环的 SVG 动画让 Obsidian 空闲时每秒重排约 140 次（2026-11-24 实测，功能区图标隐藏时也在跑）。
+test('Pulse icons never run an endless animation', () => {
+  const { helpers } = setup();
+  for (const svg of [helpers.ICON_BLOCKS_WAVE_SVG, helpers.ICON_BLOCKS_WAVE_REGISTERED_SVG]) {
+    assert.ok(!/<animate/i.test(svg), 'no SMIL animation in icons');
+  }
+  const source = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+  assert.ok(!source.includes('repeatCount="indefinite"'), 'no endless SMIL animation in main.js');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+  assert.ok(/\.crisp-pulse-title-icon:hover \.crisp-pulse-title-icon-svg rect \{[^}]*animation: crisp-pulse-blocks-wave 1\.2s linear;/.test(css), 'title icon waves once on hover');
+});
+
+test('Header title renders the blocks-wave SVG rather than lightning emoji', () => {
   const { helpers } = setup();
   assert.ok(helpers.ICON_BLOCKS_WAVE_SVG);
   assert.ok(helpers.ICON_BLOCKS_WAVE_SVG.includes('viewBox="0 0 24 24"'));
   assert.ok(helpers.ICON_BLOCKS_WAVE_SVG.includes('crisp-pulse-title-icon-svg'));
-  assert.ok(helpers.ICON_BLOCKS_WAVE_SVG.includes('<animate'));
+  assert.equal((helpers.ICON_BLOCKS_WAVE_SVG.match(/<rect/g) || []).length, 9);
   assert.ok(helpers.ICON_BLOCKS_WAVE_SVG.includes('fill="currentColor"'));
   assert.ok(!helpers.ICON_BLOCKS_WAVE_SVG.includes('fill="#000000"'));
 });
 
-test('Animated blocks-wave icon is registered for tab header and ribbon without duplicate IDs', async () => {
+test('Blocks-wave icon is registered for tab header and ribbon without duplicate IDs', async () => {
   const { p, helpers, registeredIcons } = setup();
   await p.loadPluginData();
   assert.equal(helpers.CRISP_PULSE_ICON_ID, "crisp-pulse");
   assert.equal(registeredIcons.get(helpers.CRISP_PULSE_ICON_ID), helpers.ICON_BLOCKS_WAVE_REGISTERED_SVG);
-  assert.ok(helpers.ICON_BLOCKS_WAVE_REGISTERED_SVG.includes('<animate'));
-  assert.equal((helpers.ICON_BLOCKS_WAVE_REGISTERED_SVG.match(/<animate/g) || []).length, 36);
+  assert.equal((helpers.ICON_BLOCKS_WAVE_REGISTERED_SVG.match(/<rect/g) || []).length, 9);
   assert.ok(!helpers.ICON_BLOCKS_WAVE_REGISTERED_SVG.includes(' id="'));
   assert.ok(!helpers.ICON_BLOCKS_WAVE_REGISTERED_SVG.includes('begin="SVG'));
   assert.ok(!helpers.ICON_BLOCKS_WAVE_REGISTERED_SVG.includes('crisp-pulse-title-icon-svg'));

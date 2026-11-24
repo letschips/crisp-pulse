@@ -103,6 +103,26 @@ body:not(.is-mobile) .workspace-tabs:not(.mod-stacked) .workspace-leaf-content[d
   display: block;
 }
 
+/* 悬停标题图标时播一次波浪：方块沿对角线依次缩小再弹回。只播一次，空闲时不占渲染。 */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .crisp-pulse-title-icon:hover .crisp-pulse-title-icon-svg rect {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: crisp-pulse-blocks-wave 1.2s linear;
+  }
+
+  .crisp-pulse-title-icon:hover .crisp-pulse-title-icon-svg rect:nth-child(n+2) { animation-delay: 0.1s; }
+  .crisp-pulse-title-icon:hover .crisp-pulse-title-icon-svg rect:nth-child(n+4) { animation-delay: 0.2s; }
+  .crisp-pulse-title-icon:hover .crisp-pulse-title-icon-svg rect:nth-child(n+7) { animation-delay: 0.3s; }
+  .crisp-pulse-title-icon:hover .crisp-pulse-title-icon-svg rect:nth-child(9) { animation-delay: 0.4s; }
+}
+
+@keyframes crisp-pulse-blocks-wave {
+  0% { transform: scale(1); }
+  25% { transform: scale(0.18); }
+  50%, 100% { transform: scale(1); }
+}
+
 .crisp-pulse-actions {
   display: flex;
   align-items: center;

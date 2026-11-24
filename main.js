@@ -484,38 +484,27 @@ function renderAboutCard(container, pluginName, description) {
 const ICON_COMPUTER_SVG = `<svg viewBox="0 0 281.25 281.25" class="crisp-pulse-breakdown-icon" aria-hidden="true"><g transform="translate(6402.3564,-4296.9987)"><path d="m -6251.0783,4337.2868 a 4.6879687,4.6879687 0 0 0 -4.6875,4.6875 v 128.7945 a 4.6879687,4.6879687 0 0 0 0.9814,2.8674 l 19.4129,25.0965 a 4.6879687,4.6879687 0 0 0 7.4157,0 l 19.4147,-25.0965 a 4.6879687,4.6879687 0 0 0 0.9778,-2.8674 v -128.7945 a 4.6879687,4.6879687 0 0 0 -4.6875,-4.6875 z m 4.6875,9.375 h 29.4525 v 122.5067 l -14.7235,19.0338 -14.729,-19.0357 z m -109.3323,64.0191 a 4.6879687,4.6879687 0 0 0 -4.6875,4.6875 v 117.9053 a 4.6879687,4.6879687 0 0 0 4.6875,4.6875 h 187.9834 a 4.6879687,4.6879687 0 0 0 4.6875,-4.6875 v -117.9053 a 4.6879687,4.6879687 0 0 0 -4.6875,-4.6875 h -21.308 a 4.6875,4.6875 0 0 0 -4.6875,4.6875 4.6875,4.6875 0 0 0 4.6875,4.6875 h 16.6205 v 108.5303 h -178.6084 v -108.5303 h 74.3884 a 4.6875,4.6875 0 0 0 4.6875,-4.6875 4.6875,4.6875 0 0 0 -4.6875,-4.6875 z m 25.0964,78.1293 a 4.6875,4.6875 0 0 0 -4.6875,4.6875 4.6875,4.6875 0 0 0 4.6875,4.6875 h 50.6653 a 4.6875,4.6875 0 0 0 4.6875,-4.6875 4.6875,4.6875 0 0 0 -4.6875,-4.6875 z" fill="currentColor"/></g></svg>`;
 
 const BLOCKS_WAVE_CELLS = [
-  [1, 1, 0],
-  [8.33, 1, 0.1],
-  [1, 8.33, 0.1],
-  [15.66, 1, 0.2],
-  [8.33, 8.33, 0.2],
-  [1, 15.66, 0.2],
-  [15.66, 8.33, 0.3],
-  [8.33, 15.66, 0.3],
-  [15.66, 15.66, 0.4]
+  [1, 1],
+  [8.33, 1],
+  [1, 8.33],
+  [15.66, 1],
+  [8.33, 8.33],
+  [1, 15.66],
+  [15.66, 8.33],
+  [8.33, 15.66],
+  [15.66, 15.66]
 ];
 
-function buildBlocksWaveSvg(animated, className) {
-  const rects = BLOCKS_WAVE_CELLS.map(([x, y, delay]) => {
-    let animations = "";
-    if (animated) {
-      animations = ["x", "y", "width", "height"].map((attributeName) => {
-        let values = "7.33;1.33;7.33;7.33";
-        if (attributeName === "x") values = `${x};${x + 3};${x};${x}`;
-        if (attributeName === "y") values = `${y};${y + 3};${y};${y}`;
-        return `<animate attributeName="${attributeName}" begin="${delay}s" dur="1.2s" repeatCount="indefinite" keyTimes="0;0.25;0.5;1" values="${values}"/>`;
-      }).join("");
-    }
-    return `<rect width="7.33" height="7.33" x="${x}" y="${y}" fill="currentColor">${animations}</rect>`;
-  }).join("");
+// 图标保持静态：无限循环的 SVG 动画会让 Obsidian 空闲时也逐帧重排（功能区图标被隐藏时照样在跑）。
+// 面板标题的大图标只在悬停时用 CSS 播一次波浪（styles.css 的 crisp-pulse-blocks-wave）。
+function buildBlocksWaveSvg(className) {
+  const rects = BLOCKS_WAVE_CELLS.map(([x, y]) => `<rect width="7.33" height="7.33" x="${x}" y="${y}" fill="currentColor"></rect>`).join("");
   const classAttribute = className ? ` class="${className}"` : "";
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"${classAttribute} aria-hidden="true">${rects}</svg>`;
 }
 
-// SVG 自带的动画不受 CSS 的减弱动态效果控制，这里自己看系统设置
-const PULSE_REDUCED_MOTION = (() => { try { return !!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches; } catch (_) { return false; } })();
-const ICON_BLOCKS_WAVE_SVG = buildBlocksWaveSvg(!PULSE_REDUCED_MOTION, "crisp-pulse-title-icon-svg");
-const ICON_BLOCKS_WAVE_REGISTERED_SVG = buildBlocksWaveSvg(!PULSE_REDUCED_MOTION, "");
+const ICON_BLOCKS_WAVE_SVG = buildBlocksWaveSvg("crisp-pulse-title-icon-svg");
+const ICON_BLOCKS_WAVE_REGISTERED_SVG = buildBlocksWaveSvg("");
 
 const CRISP_PULSE_ICON_ID = "crisp-pulse";
 
