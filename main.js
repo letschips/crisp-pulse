@@ -163,6 +163,17 @@ async function importEd25519PublicKey(pem, windowObj = null) {
   );
 }
 
+/**
+ * Chat apps mangle long codes when they are copied: line breaks, spaces (incl. full-width/NBSP),
+ * zero-width characters, and surrounding text such as "卡密：…。". Returns the bare code.
+ */
+function normalizeLicenseCode(input) {
+  if (typeof input !== "string") return "";
+  const compact = input.replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, "");
+  const match = compact.match(/[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}/);
+  return match ? match[0] : compact;
+}
+
 // 库内其它 Crisp 插件保存的授权码，按「已加载插件 → 磁盘 data.json」顺序去重收集（不含 Pulse 自己）。
 function collectVaultCrispLicenseCandidates(app) {
   if (!app) return [];
@@ -170,7 +181,7 @@ function collectVaultCrispLicenseCandidates(app) {
   const candidates = [];
   const add = (code) => {
     if (typeof code !== "string") return;
-    const trimmed = code.trim();
+    const trimmed = normalizeLicenseCode(code);
     if (!trimmed.includes(".") || seen.has(trimmed)) return;
     seen.add(trimmed);
     candidates.push(trimmed);
@@ -214,7 +225,7 @@ async function discoverVaultCrispLicense(app) {
 }
 
 async function verifyLicenseCode(licenseCode, targetPluginId = "crisp-pulse", app = null, windowObj = null, options = {}) {
-  const trimmed = (licenseCode || "").trim();
+  const trimmed = normalizeLicenseCode(licenseCode);
   if (!trimmed) return { valid: false, reason: tr("授权码为空", "License code is empty") };
   const parts = trimmed.split(".");
   if (parts.length !== 2) return { valid: false, reason: tr("授权码格式无效", "Invalid license code format") };
@@ -430,7 +441,7 @@ class CrispPulseLicenseManager {
   // 启动时调用：只做不联网的本地验签（毫秒级），通过后在线设备校验转入后台。
   async initialize() {
     const id = ++this.verificationId;
-    let code = ((this.settings && this.settings.licenseCode) || "").trim();
+    let code = normalizeLicenseCode(this.settings && this.settings.licenseCode);
     if (!code) code = (await discoverVaultCrispLicense(this.app)) || "";
     const result = await this.runVerifier(code, { skipOnline: true });
     if (id !== this.verificationId) return result;
@@ -441,7 +452,7 @@ class CrispPulseLicenseManager {
 
   async verify(code = this.settings?.licenseCode) {
     const id = ++this.verificationId;
-    let targetCode = (code || "").trim();
+    let targetCode = normalizeLicenseCode(code);
     if (!targetCode) targetCode = (await discoverVaultCrispLicense(this.app)) || "";
     const result = await this.runVerifier(targetCode, {});
     // 更新的校验已经开始：本次结果不再落地，避免旧结果覆盖新状态。
