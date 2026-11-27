@@ -36,7 +36,7 @@ const PULSE_ZH = /^zh\b/i.test(PULSE_LANGUAGE);
 const PULSE_HANT = PULSE_ZH && /^zh[-_](tw|hk|mo|hant)\b/i.test(PULSE_LANGUAGE);
 /* 繁体文案由简体文案转出来（OpenCC s2twp：台湾正体 + 台湾用语），表由 scripts/gen-hant.cjs 生成，只收源码里用到的字词。
    分两段按最长匹配替换：s 简→繁，t 台湾用语。插值进来的内容（文件名、标签）也会被转，只影响显示。 */
-const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"b69b561173534646","s":"一只 一隻|一周 一週|一致 一致|万 萬|万字 萬字|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下个月 下個月|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|册 冊|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲刺 衝刺|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|制图 製圖|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|头 頭|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|断了 斷了|方向 方向|无 無|日历 日曆|日子里 日子裏|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栋 棟|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|楼 樓|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|江面 江面|沉淀 沉澱|没 沒|注册 註冊|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|游 遊|游船 遊船|湖面 湖面|满 滿|满了 滿了|灯 燈|点 點|烟 煙|烟花 煙花|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记了 記了|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|超出 超出|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这个月 這個月|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風|黄 黃","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導入 匯入|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
+const PULSE_HANT_TABLE = /* crisp-hant:begin */{"fp":"cf3e6c427365780e","s":"一只 一隻|一周 一週|一致 一致|万 萬|万字 萬字|上一个 上一個|上个月 上個月|上周 上週|上面 上面|下一个 下一個|下个月 下個月|下周 下週|下面 下面|不一致 不一致|不属于 不屬於|不等于 不等於|与 與|专 專|专注 專注|丢 丟|两 兩|个 個|个人 個人|个数 個數|个核 個核|为 爲|主控台 主控台|么 麼|义 義|之后 之後|书 書|了话 了話|于 於|于今 於今|于此 於此|云 雲|产 產|产出 產出|什么 什麼|仅 僅|仅供参考 僅供參考|从 從|代表 代表|价 價|价值 價值|优 優|会 會|会出 會出|会升 會升|会发 會發|体 體|余 餘|依据 依據|侧 側|修复 修復|修改 修改|做了 做了|储 儲|像素 像素|儿 兒|全面 全面|共同 共同|关 關|关于 關於|其余 其餘|内 內|册 冊|写 寫|写了 寫了|写回 寫回|冬天 冬天|冲 衝|冲刺 衝刺|冲突 衝突|决 決|况 況|准 準|准备 準備|准备好 準備好|减 減|几 幾|凭 憑|凭据 憑據|出上 出上|出到 出到|出发 出發|出处 出處|出现 出現|出的 出的|出错 出錯|击 擊|分布 分佈|分钟 分鐘|划 劃|列表 列表|则 則|创 創|删 刪|别 別|别到 別到|别的 別的|到了 到了|制台 制臺|制图 製圖|前后 前後|前面 前面|剩余 剩餘|办 辦|务 務|动 動|动了 動了|势 勢|区 區|升级 升級|升起 升起|协 協|协同 協同|单 單|占 佔|占比 佔比|历 歷|历史 歷史|历年 歷年|压 壓|去向 去向|参 參|参考 參考|发 發|发虚 發虛|变 變|变了 變了|叠 疊|只从 只從|只在 只在|只是 只是|只有 只有|只记 只記|台 臺|台后 臺後|台日 臺日|号 號|合约 合約|合计 合計|合适 合適|同一 同一|同一組 同一組|同一组 同一組|同区 同區|同名 同名|同日 同日|同期 同期|同步 同步|后 後|后台 後台|后周 後周|后点 後點|后续 後續|后读 後讀|后退 後退|后重 後重|听 聽|启 啓|周 週|周一 週一|周报 週報|周日 週日|周期 週期|响 響|哪个 哪個|哪里 哪裏|回了 回了|回定 回定|回收 回收|回收站 回收站|回看 回看|回转 迴轉|回顾 回顧|围 圍|图 圖|在下面 在下面|坏 壞|块 塊|基于 基於|声 聲|处 處|处理 處理|备 備|备注 備註|复 復|复上 覆上|复制 複製|复文 覆文|复用 複用|复盘 復盤|多云 多雲|够 夠|头 頭|夹 夾|妈 媽|存录 存錄|完成后 完成後|实 實|宽 寬|对 對|导 導|导出 導出|将 將|小范 小范|小范围 小範圍|少于 少於|层 層|属 屬|属于 屬於|峰 峯|已于 已於|带 帶|并 並|并在 並在|库 庫|应 應|开 開|开复 開復|异 異|弃 棄|张 張|强 強|归 歸|当 當|当前 當前|当周 當週|当天 當天|当日 當日|录 錄|录到 錄到|录的 錄的|录音 錄音|彩虹 彩虹|彻 徹|径 徑|後台 後台|後周 後周|必须 必須|态 態|怎么 怎麼|总 總|恢复 恢復|悬 懸|成了 成了|户 戶|才开 纔開|才能 才能|执 執|扫 掃|批准 批准|找回 找回|折叠 摺疊|折算 折算|护 護|报 報|报复 報復|择 擇|挑出 挑出|捕获 捕獲|损 損|换 換|换了 換了|据 據|据此 據此|控制 控制|控制台 主控台|搜索 搜索|摘录 摘錄|放回 放回|数 數|数据 數據|断 斷|断了 斷了|方向 方向|无 無|日历 日曆|日子里 日子裏|日志 日誌|旧 舊|早于 早於|时 時|时针 時針|时间范围 時間範圍|显 顯|晚于 晚於|暂 暫|曲线 曲線|未通过 未通過|本周 本週|机 機|权 權|权限 權限|条 條|来 來|松开 鬆開|构 構|标 標|标出 標出|标签 標籤|栋 棟|栏 欄|树 樹|核对 覈對|核心 核心|根目录 根目錄|档 檔|检 檢|楼 樓|模板 模板|横 橫|欢 歡|正确 正確|每分钟 每分鐘|每周 每週|气 氣|汇 匯|汇总 彙總|江面 江面|沉淀 沉澱|没 沒|注册 註冊|注记 註記|流向 流向|测 測|润 潤|淀 澱|渐 漸|游 遊|游船 遊船|湖面 湖面|满 滿|满了 滿了|灯 燈|点 點|烟 煙|烟花 煙花|热 熱|特别 特別|状 狀|献 獻|环 環|现 現|用于 用於|画 畫|番茄钟 番茄鐘|盏 盞|监 監|盖 蓋|盘 盤|目录 目錄|相同 相同|看板 看板|知道了 知道了|码 碼|确 確|确定 確定|确认 確認|离 離|秋天 秋天|积 積|稍后 稍後|突出 突出|竖 豎|笔 筆|符合 符合|第一个 第一個|等于 等於|等于零 等於零|筛 篩|签 籤|签名 簽名|算历 算曆|管理 管理|类 類|系列 系列|系数 係數|系统 系統|红 紅|约 約|级 級|纳 納|纸 紙|纹 紋|线 線|线上 線上|组 組|细 細|经 經|结 結|结合 結合|结合实际 結合實際|绘 繪|绘制 繪製|给 給|络 絡|绝 絕|统 統|统计数据 統計數據|继 繼|续 續|维 維|编 編|缩 縮|网 網|联 聯|脉 脈|脉冲 脈衝|脉冲数 脈衝數|脚 腳|节 節|范 範|范围 範圍|范围内 範圍內|获 獲|萤 螢|萤火虫 螢火蟲|虚 虛|虫 蟲|补 補|表格 表格|表示 表示|表示层 表示層|表示層 表示層|覆盖 覆蓋|见 見|规 規|视 視|览 覽|计 計|计划 計劃|计算 計算|认 認|议 議|记 記|记了 記了|记录 記錄|记录到 記錄到|设 設|证 證|证据 證據|识 識|识别 識別|词 詞|试 試|话 話|该 該|详 詳|语 語|语音识别 語音識別|误 誤|说 說|说了 說了|请 請|诺 諾|读 讀|调 調|贡 貢|败 敗|质 質|质量 品質|贴 貼|超出 超出|跃 躍|踪 蹤|转 轉|轮 輪|软 軟|载 載|较 較|辑 輯|输 輸|边 邊|达 達|过 過|运 運|返回 返回|还 還|这 這|这个 這個|这个月 這個月|这里 這裏|这里会 這裏會|进 進|进了 進了|连 連|适 適|选 選|递 遞|采 採|采集 採集|里 裏|里挑一 裏挑一|重复 重複|针 針|钟 鍾|链 鏈|链接 鏈接|错 錯|键 鍵|长 長|长出 長出|闭 閉|闭面 閉面|问 問|闲 閒|间 間|阅 閱|队 隊|阵 陣|际 際|限制 限制|随 隨|隐 隱|集合 集合|雾 霧|面会 面會|面板 面板|页 頁|顶 頂|项 項|顺 順|顺时针 順時針|须 須|顾 顧|预 預|频 頻|题 題|颜 顏|额 額|风 風|飞 飛|馈 饋|验 驗|验签 驗簽|验签通过 驗簽通過|高于 高於|鸟 鳥|鸭 鴨|鹤 鶴|麦 麥|麦克 麥克|麦克风 麥克風|黄 黃","t":"主控台 主控台|交互 互動|保存 儲存|信息 資訊|像素 像素|內存 記憶體|分辨率 解析度|刷新 重新整理|剪貼板 剪貼簿|創建 建立|加載 載入|品質 品質|啓 啟|在線 線上|字段 欄位|存儲 儲存|實例 例項|導入 匯入|導出 匯出|屏幕 螢幕|峯 峰|後台 後台|復盤 復盤|打開 開啟|接口 介面|插件 外掛|搜索 搜尋|支持 支援|數據 資料|文件 檔案|文件夾 資料夾|文本 文字|未通過 未通過|查看 檢視|權限 權限|添加 新增|演算法 演算法|激活 啟用|爲 為|狀態欄 狀態列|用戶 使用者|番茄鐘 番茄鐘|着 著|磁盤 磁碟|算法 演算法|粘貼 貼上|網絡 網路|纔 才|腳本 指令碼|菜單 選單|裏 裡|覈 核|視圖 檢視|設備 裝置|設置 設定|軟件 軟體|通過 透過|連接 連線|運行 執行|鏈接 連結|隊列 佇列|項目 專案|類型 型別|驗簽 驗簽|驗簽通過 驗簽通過|高級 高階|默認 預設|點擊 點選|鼠標 滑鼠"}/* crisp-hant:end */;
 let pulseHantStages = null;
 function pulseHant(text) {
   if (typeof text !== "string" || !/\p{Script=Han}/u.test(text)) return text;
@@ -7791,11 +7791,11 @@ function nextPulseScene(id) {
   return ids[(ids.indexOf(pulseScene(id).id) + 1) % ids.length];
 }
 
-/* ---------- 月报海报：一个月的贡献画成一张可分享的图 ----------
-   数据只从 daily 记录里算（和看板同一个数据范围口径）；画面沿用当前画风：顶部是天空，底部的山脊（或天际线）是这个月每天的贡献，
-   最高的一天立在山尖、最长的连续天数是岸边的石头、季节取这个月、天气取这个月的活跃比例。 */
-const PULSE_POSTER_WIDTH = 1080, PULSE_POSTER_HEIGHT = 1440, PULSE_POSTER_PIXEL = 4;
-const PULSE_POSTER_FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", "Microsoft YaHei", sans-serif';
+/* ---------- 月报小票：一个月的贡献印成一张统一的热敏小票 ----------
+   数据只从 daily 记录里算（和看板同一个数据范围口径）；无论看板用哪种画风，月报保持统一的热敏纸小票视觉：
+   锯齿撕边、顶部品牌章、月度贡献分、明细清单、单色热敏日历矩阵、合计、Code 128B 条码与收尾寄语。 */
+const PULSE_POSTER_WIDTH = 1080, PULSE_POSTER_HEIGHT = 1440;
+const PULSE_POSTER_FONT = '"SF Mono", "JetBrains Mono", "Menlo", "Cascadia Mono", "Consolas", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-monospace, monospace';
 
 /** "2026-11" 前后挪 delta 个月。 */
 function shiftMonthKey(key, delta) {
@@ -7872,20 +7872,79 @@ function posterDuration(minutes) {
 }
 
 const PULSE_POSTER_THEMES = {
-  day: { bg: "#f5f5f7", card: "#ffffff", text: "#1d1d1f", secondary: "#6e6e73", tertiary: "#a1a1a6", empty: "rgba(0,0,0,0.055)", future: "rgba(0,0,0,0.025)", shadow: "rgba(0,0,0,0.05)", onAccent: "#ffffff" },
-  night: { bg: "#0b0c10", card: "#16171c", text: "#f2f2f5", secondary: "#a0a0aa", tertiary: "#6b6b75", empty: "rgba(255,255,255,0.07)", future: "rgba(255,255,255,0.03)", shadow: "rgba(0,0,0,0)", onAccent: "#ffffff" },
+  day: {
+    backdropInner: "#ececf3",
+    backdropOuter: "#dcdee8",
+    shadowOuter: "rgba(22, 24, 42, 0.13)",
+    shadowInner: "rgba(22, 24, 42, 0.06)",
+    paperTop: "#fdfdfb",
+    paperFace: "#fcfcf9",
+    paperLower: "#f9f8f3",
+    paperBottom: "#f1f0ea",
+    paperRim: "rgba(28, 29, 36, 0.055)",
+    ink: "#1c1d24",
+    inkMid: "#5b5d68",
+    inkMuted: "#8e909c",
+    onInk: "#fcfcf9",
+    rule: "rgba(28, 29, 36, 0.19)",
+    cellEmpty: "rgba(28, 29, 36, 0.045)",
+    cellFuture: "rgba(28, 29, 36, 0.022)",
+    cellFutureStroke: "rgba(28, 29, 36, 0.09)",
+    cellFutureText: "rgba(28, 29, 36, 0.24)",
+  },
+  night: {
+    backdropInner: "#1d1e27",
+    backdropOuter: "#111218",
+    shadowOuter: "rgba(0, 0, 0, 0.56)",
+    shadowInner: "rgba(0, 0, 0, 0.34)",
+    paperTop: "#fcfcf9",
+    paperFace: "#fbfbf8",
+    paperLower: "#f7f6f1",
+    paperBottom: "#efeee8",
+    paperRim: "rgba(255, 255, 255, 0.22)",
+    ink: "#1c1d24",
+    inkMid: "#5b5d68",
+    inkMuted: "#8e909c",
+    onInk: "#fcfcf9",
+    rule: "rgba(28, 29, 36, 0.19)",
+    cellEmpty: "rgba(28, 29, 36, 0.045)",
+    cellFuture: "rgba(28, 29, 36, 0.022)",
+    cellFutureStroke: "rgba(28, 29, 36, 0.09)",
+    cellFutureText: "rgba(28, 29, 36, 0.24)",
+  },
 };
 
-/** 把 "#rrggbb" / "rgb(...)" 变成 [r, g, b]；认不出来用 Apple 蓝。 */
-function posterRgb(color, fallback = [0, 113, 227]) {
-  const s = String(color || "").trim();
-  let m = s.match(/^#([0-9a-f]{6})$/i);
-  if (m) return [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
-  m = s.match(/^#([0-9a-f]{3})$/i);
-  if (m) return [...m[1]].map((c) => parseInt(c + c, 16));
-  m = s.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i);
-  if (m) return [m[1], m[2], m[3]].map((v) => Math.round(Number(v)));
-  return fallback;
+/* Code 128B 条码码表（索引 0–106；0–105 每项 6 位总宽 11，106 为 7 位停止符总宽 13）。 */
+const PULSE_CODE128_PATTERNS = [
+  "212222", "222122", "222221", "121223", "121322", "131222", "122213", "122312", "132212", "221213",
+  "221312", "231212", "112232", "122132", "122231", "113222", "123122", "123221", "223211", "221132",
+  "221231", "213212", "223112", "312131", "311222", "321122", "321221", "312212", "322112", "322211",
+  "212123", "212321", "232121", "111323", "131123", "131321", "112313", "132113", "132311", "211313",
+  "231113", "231311", "112133", "112331", "132131", "113123", "113321", "133121", "313121", "211331",
+  "231131", "213113", "213311", "213131", "311123", "311321", "331121", "312113", "312311", "332111",
+  "314111", "221411", "431111", "111224", "111422", "121124", "121421", "141122", "141221", "112214",
+  "112412", "122114", "122411", "142112", "142211", "241211", "221114", "413111", "241112", "134111",
+  "111242", "121142", "121241", "114212", "124112", "124211", "411212", "421112", "421211", "212141",
+  "214121", "412121", "111143", "111341", "131141", "114113", "114311", "411113", "411311", "113141",
+  "114131", "311141", "411131", "211412", "211214", "211232", "2331112",
+];
+
+/** 把可打印 ASCII 编成 Code 128B 的条/空宽度数组（偶数为黑条、奇数为白空）。 */
+function encodeCode128B(text) {
+  const clean = String(text || "CRISP PULSE").replace(/[^\x20-\x7e]/g, " ");
+  const codes = [104];
+  let sum = 104;
+  for (let i = 0; i < clean.length; i++) {
+    const code = clean.charCodeAt(i) - 32;
+    codes.push(code);
+    sum += code * (i + 1);
+  }
+  codes.push(sum % 103, 106);
+  const widths = [];
+  for (const code of codes) {
+    for (const ch of PULSE_CODE128_PATTERNS[code]) widths.push(Number(ch));
+  }
+  return widths;
 }
 
 function posterRoundRect(ctx, x, y, w, h, r) {
@@ -7898,192 +7957,377 @@ function posterRoundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-/** 按顺序画几段不同颜色、字号的文字，返回结束的 x。parts: [{ text, color, size, weight }]。 */
-function posterRun(ctx, x, y, parts) {
-  for (const part of parts) {
-    ctx.font = `${part.weight || 500} ${part.size}px ${PULSE_POSTER_FONT}`;
-    ctx.fillStyle = part.color;
-    ctx.fillText(part.text, x, y);
-    x += ctx.measureText(part.text).width + (part.gap || 0);
+/** 构造上下锯齿撕边的小票纸轮廓路径。 */
+function receiptPaperPath(ctx, x, y, w, h, teeth = 40, toothH = 9.5) {
+  const tw = w / teeth;
+  ctx.beginPath();
+  ctx.moveTo(x, y + toothH);
+  for (let i = 0; i < teeth; i++) {
+    const sx = x + i * tw;
+    ctx.lineTo(sx + tw / 2, y);
+    ctx.lineTo(sx + tw, y + toothH);
   }
-  return x;
+  ctx.lineTo(x + w, y + h - toothH);
+  for (let i = teeth - 1; i >= 0; i--) {
+    const sx = x + i * tw;
+    ctx.lineTo(sx + tw / 2, y + h);
+    ctx.lineTo(sx, y + h - toothH);
+  }
+  ctx.closePath();
 }
 
-/** 画一张月报海报到 canvas（会改它的尺寸）。scale 是输出倍数，2 倍得到 2160×2880。 */
-function paintMonthPoster(canvas, model, { mode = "day", sceneId = "pixel", accent = "#0071e3", scale = 2 } = {}) {
-  const W = PULSE_POSTER_WIDTH, H = PULSE_POSTER_HEIGHT, P = PULSE_POSTER_PIXEL;
+/** 画一条热敏小票点状分隔线。 */
+function receiptDottedRule(ctx, x, y, w, color) {
+  ctx.fillStyle = color;
+  const step = 7;
+  for (let px = x + 1.5; px <= x + w - 1.5; px += step) {
+    ctx.beginPath();
+    ctx.arc(px, y, 1.15, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/** 左右对齐的一行小票条目。 */
+function receiptRow(ctx, leftX, rightX, y, leftText, rightText, {
+  size = 21, leftWeight = 500, rightWeight = 600,
+  leftColor = "#1c1d24", rightColor = "#1c1d24",
+  unitText = "", unitColor = "#5b5d68", unitSize = null,
+} = {}) {
+  ctx.textAlign = "left";
+  ctx.font = `${leftWeight} ${size}px ${PULSE_POSTER_FONT}`;
+  ctx.fillStyle = leftColor;
+  ctx.fillText(leftText, leftX, y);
+  let rx = rightX;
+  if (unitText) {
+    ctx.textAlign = "right";
+    ctx.font = `400 ${unitSize || Math.max(15, size - 3)}px ${PULSE_POSTER_FONT}`;
+    ctx.fillStyle = unitColor;
+    ctx.fillText(unitText, rx, y);
+    rx -= ctx.measureText(unitText).width + 6;
+  }
+  ctx.textAlign = "right";
+  ctx.font = `${rightWeight} ${size}px ${PULSE_POSTER_FONT}`;
+  ctx.fillStyle = rightColor;
+  ctx.fillText(rightText, rx, y);
+  ctx.textAlign = "left";
+}
+
+/** 画一张热敏小票风格的月报到 canvas（会改它的尺寸）。scale 是输出倍数，2 倍得到 2160×2880。 */
+function paintMonthPoster(canvas, model, { mode = "day", scale = 2 } = {}) {
+  const W = PULSE_POSTER_WIDTH, H = PULSE_POSTER_HEIGHT;
   const theme = PULSE_POSTER_THEMES[mode] || PULSE_POSTER_THEMES.day;
-  const scene = pulseScene(sceneId);
-  const doc = canvas.ownerDocument || document;
-  const [ar, ag, ab] = posterRgb(accent);
-  const accentAt = (a) => `rgba(${ar},${ag},${ab},${a})`;
   canvas.width = W * scale;
   canvas.height = H * scale;
   const ctx = canvas.getContext("2d");
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = theme.bg;
-  ctx.fillRect(0, 0, W, H);
-  const M = 64;
-  const blit = (src, x, y, w, h) => { ctx.imageSmoothingEnabled = !!scene.smooth; ctx.imageSmoothingQuality = "high"; ctx.drawImage(src, x, y, w, h); };
+  ctx.textAlign = "left";
 
-  // 天空：像素画风按 4 倍整数放大，按卡片尺寸现画；水墨固定尺寸，按 cover 裁切
-  const sky = { x: M, y: M, w: W - 2 * M, h: 340 };
+  // 1. 柔和影棚底面（浅色为浅灰蓝柔光台面，深色为哑光深灰台面）
+  const bg = ctx.createRadialGradient(W * 0.5, H * 0.34, 80, W * 0.5, H * 0.5, H * 0.78);
+  bg.addColorStop(0, theme.backdropInner);
+  bg.addColorStop(1, theme.backdropOuter);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // 2. 热敏纸本体（居中、上下锯齿撕边、双层物理投影与微纸纹）
+  const paperX = 149, paperY = 84, paperW = 782, paperH = 1272;
+  const teeth = 40, toothH = 9.5;
   ctx.save();
-  posterRoundRect(ctx, sky.x, sky.y, sky.w, sky.h, 32);
-  ctx.clip();
-  const skyCanvas = doc.createElement("canvas");
-  if (scene.smooth) {
-    scene.paintSky(skyCanvas, mode, model.weather, model.season);
-    const s = Math.max(sky.w / skyCanvas.width, sky.h / skyCanvas.height);
-    const cw = sky.w / s, ch = sky.h / s;
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(skyCanvas, (skyCanvas.width - cw) * 0.35, skyCanvas.height - ch, cw, ch, sky.x, sky.y, sky.w, sky.h);
-  } else {
-    skyCanvas.width = Math.round(sky.w / P);
-    skyCanvas.height = Math.round(sky.h / P);
-    scene.paintSky(skyCanvas, mode, model.weather, model.season);
-    blit(skyCanvas, sky.x, sky.y, sky.w, sky.h);
-  }
-  // 太阳 / 月亮挂在右上，天气差时暗一些
-  const orb = doc.createElement("canvas");
-  orb.width = orb.height = PULSE_CELESTIAL_SIZE;
-  scene.paintCelestial(orb, mode, lunarPhase(new Date(model.year, model.month - 1, 15)));
-  ctx.globalAlpha = PULSE_WEATHER[model.weather]?.light ?? 1;
-  const orbSize = PULSE_CELESTIAL_SIZE * P;
-  blit(orb, sky.x + sky.w * 0.8 - orbSize / 2, sky.y + sky.h * 0.26 - orbSize / 2, orbSize, orbSize);
-  ctx.globalAlpha = 1;
+  ctx.shadowColor = theme.shadowOuter;
+  ctx.shadowBlur = 54;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 24;
+  receiptPaperPath(ctx, paperX, paperY, paperW, paperH, teeth, toothH);
+  ctx.fillStyle = theme.paperFace;
+  ctx.fill();
   ctx.restore();
 
-  // 标题：年月 + 品牌
-  let y = sky.y + sky.h + 72;
-  const monthLabel = !PULSE_ZH
-    ? `${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][model.month - 1]} ${model.year}`
-    : `${model.year} 年 ${model.month} 月`;
-  const titleEnd = posterRun(ctx, M, y, [{ text: monthLabel, color: theme.text, size: 34, weight: 600 }]);
-  if (model.partial) posterRun(ctx, titleEnd + 14, y, [{ text: tr(`1–${model.elapsed} 日`, `1–${model.elapsed}`), color: theme.tertiary, size: 26, weight: 500 }]);
-  ctx.font = `600 18px ${PULSE_POSTER_FONT}`;
-  ctx.fillStyle = theme.tertiary;
-  if ("letterSpacing" in ctx) ctx.letterSpacing = "3px";
-  const brand = "CRISP PULSE";
-  ctx.fillText(brand, W - M - ctx.measureText(brand).width, y - 6);
-  if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
+  ctx.save();
+  ctx.shadowColor = theme.shadowInner;
+  ctx.shadowBlur = 16;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 6;
+  receiptPaperPath(ctx, paperX, paperY, paperW, paperH, teeth, toothH);
+  ctx.fillStyle = theme.paperFace;
+  ctx.fill();
+  ctx.restore();
 
-  // 大数字：本月贡献分，和上月比
-  y += 132;
-  const scoreEnd = posterRun(ctx, M - 4, y, [{ text: posterNumber(model.totals.score), color: theme.text, size: 136, weight: 700, gap: 16 }]);
-  posterRun(ctx, scoreEnd, y, [{ text: tr("贡献分", "points"), color: theme.secondary, size: 30, weight: 500 }]);
-  // 只在比上月高时显示；持平或下降不放在要分享的图上
-  if (model.delta !== null && model.delta > 0) {
-    const label = `↑ ${model.delta}%`;
-    const prefix = tr("比上月", "vs last month");
-    ctx.font = `500 24px ${PULSE_POSTER_FONT}`;
-    const pw = ctx.measureText(prefix).width;
-    ctx.font = `600 24px ${PULSE_POSTER_FONT}`;
-    const lw = ctx.measureText(label).width;
-    const bw = pw + lw + 10 + 40, bh = 48, bx = W - M - bw, by = y - 40;
-    posterRoundRect(ctx, bx, by, bw, bh, bh / 2);
-    ctx.fillStyle = accentAt(0.12);
-    ctx.fill();
-    posterRun(ctx, bx + 20, by + 32, [{ text: prefix, color: theme.secondary, size: 24, weight: 500, gap: 10 }, { text: label, color: accentAt(1), size: 24, weight: 600 }]);
+  ctx.save();
+  receiptPaperPath(ctx, paperX, paperY, paperW, paperH, teeth, toothH);
+  ctx.clip();
+  const paperGrad = ctx.createLinearGradient(0, paperY, 0, paperY + paperH);
+  paperGrad.addColorStop(0, theme.paperTop);
+  paperGrad.addColorStop(0.055, theme.paperFace);
+  paperGrad.addColorStop(0.55, theme.paperFace);
+  paperGrad.addColorStop(0.935, theme.paperLower);
+  paperGrad.addColorStop(1, theme.paperBottom);
+  ctx.fillStyle = paperGrad;
+  ctx.fillRect(paperX, paperY, paperW, paperH);
+
+  // 轻微确定性热敏纸纤维颗粒（不脏不糊，只消除纯白电子感）
+  let seed = ((model.year || 2026) * 131 + (model.month || 1) * 37) >>> 0;
+  const rand = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  for (let i = 0; i < 1600; i++) {
+    const gx = paperX + rand() * paperW;
+    const gy = paperY + rand() * paperH;
+    const dark = rand() > 0.35;
+    ctx.fillStyle = dark ? "rgba(28, 29, 36, 0.014)" : "rgba(255, 255, 255, 0.04)";
+    ctx.fillRect(gx, gy, rand() > 0.65 ? 2 : 1, 1);
+  }
+  ctx.strokeStyle = theme.paperRim;
+  ctx.lineWidth = 1;
+  receiptPaperPath(ctx, paperX + 0.5, paperY + 0.5, paperW - 1, paperH - 1, teeth, toothH);
+  ctx.stroke();
+
+  const innerX = 209, innerW = 662, rightX = innerX + innerW;
+  const setTracking = (val) => { if ("letterSpacing" in ctx) ctx.letterSpacing = val; };
+
+  // 3. 顶部商户印章 + 品牌抬头
+  const badgeR = 34, badgeCx = innerX + badgeR, badgeCy = 178;
+  ctx.fillStyle = theme.ink;
+  ctx.beginPath();
+  ctx.arc(badgeCx, badgeCy, badgeR, 0, Math.PI * 2);
+  ctx.fill();
+  // 印章内 3×3 Pulse 方块脉冲徽标
+  const sq = 7.2, sqGap = 3.2, gridSpan = sq * 3 + sqGap * 2;
+  const gx0 = badgeCx - gridSpan / 2, gy0 = badgeCy - gridSpan / 2;
+  const waveAlpha = [0.62, 0.82, 1.0, 0.82, 1.0, 0.82, 1.0, 0.82, 0.62];
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      ctx.fillStyle = `rgba(252, 252, 249, ${waveAlpha[r * 3 + c]})`;
+      posterRoundRect(ctx, gx0 + c * (sq + sqGap), gy0 + r * (sq + sqGap), sq, sq, 1.4);
+      ctx.fill();
+    }
   }
 
-  // 一句话：活跃天数、最长连续
-  y += 62;
-  const line = [{ text: tr("活跃 ", "Active "), color: theme.secondary, size: 28 }, { text: `${model.activeDays}`, color: theme.text, size: 28, weight: 600 }, { text: tr(` / ${model.elapsed} 天`, ` / ${model.elapsed} days`), color: theme.secondary, size: 28 }];
-  if (model.streak.length >= 2) line.push({ text: "   ·   ", color: theme.tertiary, size: 28 }, { text: tr("最长连续 ", "Longest streak "), color: theme.secondary, size: 28 }, { text: `${model.streak.length}`, color: theme.text, size: 28, weight: 600 }, { text: tr(" 天", " days"), color: theme.secondary, size: 28 });
-  posterRun(ctx, M, y, line);
+  const headX = innerX + badgeR * 2 + 22;
+  ctx.font = `700 26px ${PULSE_POSTER_FONT}`;
+  ctx.fillStyle = theme.ink;
+  setTracking("2.6px");
+  ctx.fillText("CRISP PULSE", headX, 171);
+  setTracking("0px");
+  const monthFullEn = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][model.month - 1];
+  const subLabel = !PULSE_ZH
+    ? `${monthFullEn} ${model.year} · Monthly receipt`
+    : zhText(`${model.year} 年 ${model.month} 月 · 知识工作月报`);
+  ctx.font = `400 18px ${PULSE_POSTER_FONT}`;
+  ctx.fillStyle = theme.inkMid;
+  ctx.fillText(subLabel, headX, 202);
 
-  // 左边日历：每天一格，深浅是当天在本月的排位；最投入的一天加一圈描边
-  const top = y + 56, cell = 50, gap = 10;
+  receiptDottedRule(ctx, innerX, 246, innerW, theme.rule);
+
+  // 4. 核心贡献分（对标小票主金额区）
+  ctx.font = `500 19px ${PULSE_POSTER_FONT}`;
+  ctx.fillStyle = theme.inkMid;
+  ctx.fillText(tr("月度贡献", "Monthly score"), innerX, 294);
+  ctx.textAlign = "right";
+  ctx.fillStyle = theme.inkMuted;
+  ctx.fillText(`NO. ${model.monthKey}`, rightX, 294);
+  ctx.textAlign = "left";
+
+  const scoreStr = posterNumber(model.totals.score);
+  let scoreSize = 84;
+  ctx.font = `700 ${scoreSize}px ${PULSE_POSTER_FONT}`;
+  while (scoreSize > 56 && ctx.measureText(scoreStr).width > innerW - 220) {
+    scoreSize -= 4;
+    ctx.font = `700 ${scoreSize}px ${PULSE_POSTER_FONT}`;
+  }
+  setTracking("-2px");
+  ctx.fillStyle = theme.ink;
+  ctx.fillText(scoreStr, innerX - 2, 382);
+  const scoreW = ctx.measureText(scoreStr).width;
+  setTracking("0px");
+  ctx.font = `600 22px ${PULSE_POSTER_FONT}`;
+  ctx.fillStyle = theme.inkMuted;
+  ctx.fillText(tr("分", "PTS"), innerX + scoreW + 10, 380);
+
+  // 高于上月时在右侧盖一枚简洁热敏印戳；持平或下降不显示
+  if (model.delta !== null && model.delta > 0) {
+    const stampText = tr(`↑ ${model.delta}% 较上月`, `↑ ${model.delta}% VS PREV`);
+    ctx.font = `600 17px ${PULSE_POSTER_FONT}`;
+    const sw = ctx.measureText(stampText).width + 24;
+    const sh = 36, sx = rightX - sw, sy = 346;
+    posterRoundRect(ctx, sx, sy, sw, sh, 5);
+    ctx.fillStyle = "rgba(28, 29, 36, 0.035)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(28, 29, 36, 0.30)";
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    ctx.fillStyle = theme.ink;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(stampText, sx + sw / 2, sy + sh / 2 + 0.5);
+    ctx.textBaseline = "alphabetic";
+    ctx.textAlign = "left";
+  }
+
+  // 统计区间与活跃天数
+  const mm = String(model.month).padStart(2, "0");
+  const endDay = String(Math.max(1, model.elapsed || model.daysInMonth)).padStart(2, "0");
+  const periodText = `${model.year}-${mm}-01 — ${mm}-${endDay}`;
+  ctx.font = `400 18px ${PULSE_POSTER_FONT}`;
+  ctx.fillStyle = theme.inkMuted;
+  ctx.fillText(periodText, innerX, 424);
+  ctx.textAlign = "right";
+  ctx.font = `500 18px ${PULSE_POSTER_FONT}`;
+  ctx.fillStyle = theme.inkMid;
+  ctx.fillText(tr(`活跃 ${model.activeDays}/${model.elapsed} 天`, `${model.activeDays}/${model.elapsed} active days`), rightX, 424);
+  ctx.textAlign = "left";
+
+  receiptDottedRule(ctx, innerX, 456, innerW, theme.rule);
+
+  // 5. 明细清单（四项核心产出）
+  const words = posterParts(model.totals.words);
+  const wordsVal = !PULSE_ZH && words[1] ? `${words[0]}${words[1]}` : words[0];
+  const wordsUnit = PULSE_ZH ? (words[1] ? zhText("万字") : zhText("字")) : "";
+  const focus = posterDuration(model.totals.focus);
+  const items = [
+    { label: tr("新增字数", "Words added"), value: wordsVal, unit: wordsUnit },
+    { label: tr("专注时长", "Focus time"), value: focus[0], unit: focus[1] },
+    { label: tr("新建笔记", "Notes created"), value: posterNumber(model.totals.notes), unit: PULSE_ZH ? zhText("篇") : "" },
+    { label: tr("完成任务", "Tasks done"), value: posterNumber(model.totals.tasks), unit: PULSE_ZH ? zhText("个") : "" },
+  ];
+  items.forEach((item, idx) => {
+    receiptRow(ctx, innerX, rightX, 502 + idx * 40, item.label, item.value, {
+      size: 21, leftWeight: 400, rightWeight: 500,
+      leftColor: theme.ink, rightColor: theme.ink,
+      unitText: item.unit, unitColor: theme.inkMid, unitSize: 18,
+    });
+  });
+
+  receiptDottedRule(ctx, innerX, 656, innerW, theme.rule);
+
+  // 6. 单色热敏日历矩阵（保留 Pulse 每日强弱与最投入日标记）
+  ctx.font = `600 16px ${PULSE_POSTER_FONT}`;
+  ctx.fillStyle = theme.inkMuted;
+  setTracking("1.4px");
+  ctx.fillText(tr("每日脉冲", "DAILY PULSE"), innerX, 694);
+  setTracking("0px");
+  if (model.streak.length >= 2) {
+    ctx.textAlign = "right";
+    ctx.font = `500 16px ${PULSE_POSTER_FONT}`;
+    ctx.fillStyle = theme.inkMid;
+    ctx.fillText(tr(`最长连续 ${model.streak.length} 天`, `STREAK ${model.streak.length}D`), rightX, 694);
+    ctx.textAlign = "left";
+  }
+
   const firstDow = model.weekStartsOn === "monday" ? 1 : 0;
   const weekdays = !PULSE_ZH ? ["S", "M", "T", "W", "T", "F", "S"] : ["日", "一", "二", "三", "四", "五", "六"];
-  ctx.font = `500 20px ${PULSE_POSTER_FONT}`;
-  ctx.fillStyle = theme.tertiary;
+  const cellW = 86, cellH = 32, gapX = 10, gapY = 8;
+  ctx.font = `500 16px ${PULSE_POSTER_FONT}`;
+  ctx.fillStyle = theme.inkMuted;
   ctx.textAlign = "center";
-  for (let c = 0; c < 7; c++) ctx.fillText(weekdays[(firstDow + c) % 7], M + c * (cell + gap) + cell / 2, top + 4);
-  const gridTop = top + 28;
+  for (let c = 0; c < 7; c++) {
+    ctx.fillText(weekdays[(firstDow + c) % 7], innerX + c * (cellW + gapX) + cellW / 2, 728);
+  }
+
+  const gridTop = 744;
   const offset = (model.firstWeekday - firstDow + 7) % 7;
-  const levelAlpha = [0, 0.22, 0.42, 0.62, 0.82, 1];
-  // 按 6 行留位置：不管这个月占几行，下面的文字和卡片都在同一个地方
-  const gridBottom = gridTop + 6 * cell + 5 * gap;
+  const levelFill = [
+    theme.cellEmpty,
+    "rgba(28, 29, 36, 0.13)",
+    "rgba(28, 29, 36, 0.27)",
+    "rgba(28, 29, 36, 0.50)",
+    "rgba(28, 29, 36, 0.76)",
+    theme.ink,
+  ];
   model.days.forEach((day, i) => {
     const slot = offset + i, col = slot % 7, row = Math.floor(slot / 7);
-    const x = M + col * (cell + gap), cy = gridTop + row * (cell + gap);
-    posterRoundRect(ctx, x, cy, cell, cell, 13);
-    ctx.fillStyle = day.status === "future" ? theme.future : day.level ? accentAt(levelAlpha[day.level]) : theme.empty;
+    const x = innerX + col * (cellW + gapX), cy = gridTop + row * (cellH + gapY);
+    posterRoundRect(ctx, x, cy, cellW, cellH, 5);
+    ctx.fillStyle = day.status === "future" ? theme.cellFuture : levelFill[day.level];
     ctx.fill();
-    if (model.best && day.day === model.best.day) {
-      posterRoundRect(ctx, x - 5, cy - 5, cell + 10, cell + 10, 17);
-      ctx.lineWidth = 2.5;
-      ctx.strokeStyle = theme.text;
+    if (day.status === "future") {
+      ctx.save();
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = theme.cellFutureStroke;
+      ctx.lineWidth = 1;
       ctx.stroke();
+      ctx.restore();
     }
-    ctx.font = `${day.level >= 3 ? 600 : 500} 18px ${PULSE_POSTER_FONT}`;
-    ctx.fillStyle = day.level >= 3 ? theme.onAccent : day.status === "future" ? theme.tertiary : theme.secondary;
-    ctx.fillText(String(day.day), x + cell / 2, cy + cell / 2 + 6);
+    const isBest = Boolean(model.best && day.day === model.best.day);
+    if (isBest) {
+      posterRoundRect(ctx, x - 2.5, cy - 2.5, cellW + 5, cellH + 5, 7);
+      ctx.strokeStyle = theme.ink;
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+      ctx.fillStyle = day.level >= 3 ? theme.onInk : theme.ink;
+      ctx.beginPath();
+      ctx.arc(x + cellW - 8, cy + 8, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.font = `${day.level >= 3 || isBest ? 600 : 500} 16px ${PULSE_POSTER_FONT}`;
+    ctx.fillStyle = day.level >= 3
+      ? theme.onInk
+      : day.status === "future"
+        ? theme.cellFutureText
+        : day.level === 2
+          ? theme.ink
+          : day.level === 1
+            ? "#3c3e48"
+            : theme.inkMuted;
+    ctx.fillText(String(day.day), x + cellW / 2, cy + cellH / 2 + 5.5);
   });
   ctx.textAlign = "left";
 
-  // 右边四块：字数、专注、新建笔记、完成任务
-  const tilesX = M + 7 * cell + 6 * gap + 40, tilesW = W - M - tilesX, tg = 16;
-  const tw = (tilesW - tg) / 2, th = (gridBottom - top - tg) / 2;
-  const focus = posterDuration(model.totals.focus);
-  const words = posterParts(model.totals.words);
-  const tiles = [
-    { label: tr("新增字数", "Words"), value: words[0], unit: words[1] ? (PULSE_ZH ? tr("万字", "") : words[1]) : tr("字", "") },
-    { label: tr("专注", "Focus"), value: focus[0], unit: focus[1] },
-    { label: tr("新建笔记", "New notes"), value: posterNumber(model.totals.notes), unit: tr("篇", "") },
-    { label: tr("完成任务", "Tasks done"), value: posterNumber(model.totals.tasks), unit: tr("个", "") },
-  ];
-  tiles.forEach((tile, i) => {
-    const x = tilesX + (i % 2) * (tw + tg), ty = top + Math.floor(i / 2) * (th + tg);
-    ctx.save();
-    ctx.shadowColor = theme.shadow;
-    ctx.shadowBlur = 24;
-    ctx.shadowOffsetY = 4;
-    posterRoundRect(ctx, x, ty, tw, th, 26);
-    ctx.fillStyle = theme.card;
-    ctx.fill();
-    ctx.restore();
-    posterRun(ctx, x + 26, ty + 48, [{ text: tile.label, color: theme.secondary, size: 22, weight: 500 }]);
-    let size = 62;
-    ctx.font = `700 ${size}px ${PULSE_POSTER_FONT}`;
-    while (size > 36 && ctx.measureText(tile.value).width > tw - 52 - (tile.unit ? 50 : 0)) { size -= 2; ctx.font = `700 ${size}px ${PULSE_POSTER_FONT}`; }
-    posterRun(ctx, x + 24, ty + th - 34, [{ text: tile.value, color: theme.text, size, weight: 700, gap: 8 }, { text: tile.unit, color: theme.secondary, size: 24, weight: 500 }]);
+  // 7. 摘要与合计（对标 Subtotal / Total）
+  receiptDottedRule(ctx, innerX, 1004, innerW, theme.rule);
+  if (model.empty) {
+    ctx.font = `400 19px ${PULSE_POSTER_FONT}`;
+    ctx.fillStyle = theme.inkMuted;
+    ctx.fillText(tr("这个月还没有记录", "No records this month yet"), innerX, 1056);
+  } else {
+    const bestLabel = model.best
+      ? `${tr(`${model.month} 月 ${model.best.day} 日`, pulseMonthDay(model.month, model.best.day))} · ${posterNumber(model.best.score)} ${tr("分", "pts")}`
+      : "—";
+    receiptRow(ctx, innerX, rightX, 1038, tr("最投入的一天", "Best day"), bestLabel, {
+      size: 19, leftWeight: 400, rightWeight: 500,
+      leftColor: theme.inkMid, rightColor: theme.ink,
+    });
+    if (model.peakHours) {
+      const peakText = `${String(model.peakHours.start).padStart(2, "0")}:00–${String(model.peakHours.end || 24).padStart(2, "0")}:00`;
+      receiptRow(ctx, innerX, rightX, 1072, tr("常在时段", "Peak hours"), peakText, {
+        size: 19, leftWeight: 400, rightWeight: 500,
+        leftColor: theme.inkMid, rightColor: theme.ink,
+      });
+    } else {
+      const rate = model.elapsed ? Math.round((model.activeDays / model.elapsed) * 100) : 0;
+      receiptRow(ctx, innerX, rightX, 1072, tr("活跃占比", "Active rate"), `${rate}%`, {
+        size: 19, leftWeight: 400, rightWeight: 500,
+        leftColor: theme.inkMid, rightColor: theme.ink,
+      });
+    }
+  }
+
+  receiptDottedRule(ctx, innerX, 1098, innerW, theme.rule);
+  receiptRow(ctx, innerX, rightX, 1140, tr("合计", "Total"), scoreStr, {
+    size: 26, leftWeight: 700, rightWeight: 700,
+    leftColor: theme.ink, rightColor: theme.ink,
+    unitText: tr("贡献分", "pts"), unitColor: theme.inkMid, unitSize: 19,
   });
 
-  // 一句话：最投入的一天、常在几点工作
-  y = gridBottom + 60;
-  const notes = [];
-  if (model.best) notes.push({ text: tr("最投入的一天 ", "Best day "), color: theme.secondary, size: 24 }, { text: tr(`${model.month} 月 ${model.best.day} 日`, `${pulseMonthDay(model.month, model.best.day)}`), color: theme.text, size: 24, weight: 600 }, { text: tr(` · ${posterNumber(model.best.score)} 分`, ` · ${posterNumber(model.best.score)} pts`), color: theme.secondary, size: 24 });
-  if (model.peakHours) {
-    if (notes.length) notes.push({ text: "   ·   ", color: theme.tertiary, size: 24 });
-    notes.push({ text: tr("常在 ", "Most active "), color: theme.secondary, size: 24 }, { text: `${model.peakHours.start}–${model.peakHours.end || 24}`, color: theme.text, size: 24, weight: 600 }, { text: tr(" 点工作", ":00"), color: theme.secondary, size: 24 });
+  // 8. Code 128B 条码与收尾寄语
+  const bars = encodeCode128B(`PULSE ${model.monthKey}`);
+  const totalModules = bars.reduce((a, b) => a + b, 0);
+  const barTop = 1172, barH = 74, unitW = innerW / totalModules;
+  ctx.fillStyle = theme.ink;
+  let bx = innerX;
+  for (let i = 0; i < bars.length; i++) {
+    const bw = bars[i] * unitW;
+    if (i % 2 === 0) ctx.fillRect(Math.round(bx), barTop, Math.max(1, Math.round(bx + bw) - Math.round(bx)), barH);
+    bx += bw;
   }
-  if (model.empty) notes.push({ text: tr("这个月还没有记录", "No records this month yet"), color: theme.secondary, size: 24 });
-  posterRun(ctx, M, y, notes);
 
-  // 底部：这个月每天的贡献画成山脊（或天际线），和天空同样的圆角卡片
-  const card = { x: M, w: W - 2 * M, h: 164 };
-  card.y = H - M - card.h;
-  const gw = Math.round(card.w / P), gh = Math.round(card.h / P);
-  const values = model.days.filter((day) => day.status !== "future").map((day) => day.score);
-  const ground = doc.createElement("canvas");
-  ground.width = gw;
-  ground.height = gh;
-  const profile = buildGroundProfile(values, gw), levels = groundDayLevels(values);
-  const n = values.length;
-  const stones = [];
-  for (let i = model.streak.start; model.streak.length >= 2 && i <= model.streak.end; i++) stones.push(groundDayX(i, n, gw));
-  const peakIndex = model.best ? model.best.day - 1 : -1;
-  scene.paintGround(ground, mode, profile, -1, { stones, weather: model.weather, season: model.season, peakX: peakIndex >= 0 && n ? groundDayX(peakIndex, n, gw) : -1, days: n, levels });
-  ctx.save();
-  posterRoundRect(ctx, card.x, card.y, card.w, card.h, 32);
-  ctx.clip();
-  ctx.fillStyle = theme.card;
-  ctx.fillRect(card.x, card.y, card.w, card.h);
-  blit(ground, card.x, card.y, card.w, card.h);
+  ctx.textAlign = "center";
+  ctx.font = `400 18px ${PULSE_POSTER_FONT}`;
+  ctx.fillStyle = theme.inkMid;
+  ctx.fillText(
+    model.empty ? tr("新的一页，从今天开始", "A fresh page starts today") : tr("持续记录，下月见", "Keep writing, see you next month"),
+    W / 2,
+    1292
+  );
+  ctx.textAlign = "left";
   ctx.restore();
   return canvas;
 }
@@ -11712,26 +11956,27 @@ class CrispPulsePosterModal extends Modal {
     this.titleEl = bar.createDiv({ cls: "crisp-pulse-poster-title" });
     this.nextBtn = bar.createEl("button", { cls: "clickable-icon", attr: { "aria-label": tr("下个月", "Next month") } });
     setIcon(this.nextBtn, "chevron-right");
-    this.prevBtn.addEventListener("click", () => { this.monthKey = shiftMonthKey(this.monthKey, -1); this.render(); });
-    this.nextBtn.addEventListener("click", () => { if (this.monthKey < getTodayKey().slice(0, 7)) { this.monthKey = shiftMonthKey(this.monthKey, 1); this.render(); } });
+    this.prevBtn.addEventListener("click", () => { this.monthKey = shiftMonthKey(this.monthKey, -1); this.render(true); });
+    this.nextBtn.addEventListener("click", () => { if (this.monthKey < getTodayKey().slice(0, 7)) { this.monthKey = shiftMonthKey(this.monthKey, 1); this.render(true); } });
     this.img = root.createDiv({ cls: "crisp-pulse-poster-frame" }).createEl("img");
     const actions = root.createDiv({ cls: "crisp-pulse-poster-actions" });
     actions.createEl("button", { text: tr("复制图片", "Copy image") }).addEventListener("click", () => this.copy());
     actions.createEl("button", { text: tr("保存到库", "Save to vault"), cls: "mod-cta" }).addEventListener("click", () => this.save());
     this.render();
   }
-  render() {
+  render(animate = false) {
     const doc = this.contentEl.ownerDocument;
     const model = this.plugin.buildMonthPoster(this.monthKey);
-    const style = doc.defaultView.getComputedStyle(doc.body);
-    const accent = style.getPropertyValue("--color-accent").trim() || style.getPropertyValue("--interactive-accent").trim();
     this.canvas = paintMonthPoster(doc.createElement("canvas"), model, {
       mode: doc.body.classList.contains("theme-dark") ? "night" : "day",
-      sceneId: this.plugin.settings.sceneStyle,
-      accent,
     });
     this.img.src = this.canvas.toDataURL("image/png");
     this.img.alt = tr(`${model.year} 年 ${model.month} 月月报`, `${model.year}-${String(model.month).padStart(2, "0")} poster`);
+    if (animate) {
+      this.img.classList.remove("is-feeding");
+      void this.img.offsetWidth;
+      this.img.classList.add("is-feeding");
+    }
     this.titleEl.setText(PULSE_ZH ? zhText(`${model.year} 年 ${model.month} 月`) : `${PULSE_MONTHS_EN[model.month - 1]} ${model.year}`);
     this.nextBtn.toggleAttribute("disabled", this.monthKey >= getTodayKey().slice(0, 7));
   }

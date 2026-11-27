@@ -71,7 +71,7 @@ function setup() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8').replace(PUBLIC_PEM_RE, '`' + LOCAL_PUBLIC_PEM + '`') +
-    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined,splitActiveInterval:typeof splitActiveInterval === "function" ? splitActiveInterval : undefined,buildHourlyProfile:typeof buildHourlyProfile === "function" ? buildHourlyProfile : undefined,getReviewClues,reviewWeekRange,buildOverviewModel:typeof buildOverviewModel === "function" ? buildOverviewModel : undefined,dayComposition:typeof dayComposition === "function" ? dayComposition : undefined,dayRhythm:typeof dayRhythm === "function" ? dayRhythm : undefined,entitle:(plugin,on)=>PULSE_LICENSE_STATE.set(pulseLicenseManagerFor(plugin),!!on),smoothLinePath:typeof smoothLinePath === "function" ? smoothLinePath : undefined,buildMonthPosterModel:typeof buildMonthPosterModel === "function" ? buildMonthPosterModel : undefined,typedWordsOf:typeof typedWordsOf === "function" ? typedWordsOf : undefined,sprintWords:typeof sprintWords === "function" ? sprintWords : undefined,shiftMonthKey:typeof shiftMonthKey === "function" ? shiftMonthKey : undefined,PulseSnapshotCache:typeof PulseSnapshotCache === "function" ? PulseSnapshotCache : undefined};',
+    '\nmodule.exports.helpers={sanitizeCSVCell,formatPulseMinutes:typeof formatPulseMinutes === "function" ? formatPulseMinutes : undefined,buildAnalyticsData:typeof buildAnalyticsData === "function" ? buildAnalyticsData : undefined,buildWritingMix:typeof buildWritingMix === "function" ? buildWritingMix : undefined,buildFolderShare:typeof buildFolderShare === "function" ? buildFolderShare : undefined,buildYearProfile:typeof buildYearProfile === "function" ? buildYearProfile : undefined,buildStrata:typeof buildStrata === "function" ? buildStrata : undefined,portraitDates:typeof portraitDates === "function" ? portraitDates : undefined,moonPath:typeof moonPath === "function" ? moonPath : undefined,buildWeekProfile:typeof buildWeekProfile === "function" ? buildWeekProfile : undefined,buildMonthPace:typeof buildMonthPace === "function" ? buildMonthPace : undefined,buildDayProfile:typeof buildDayProfile === "function" ? buildDayProfile : undefined,analyticsScale:typeof analyticsScale === "function" ? analyticsScale : undefined,analyticsLinePath:typeof analyticsLinePath === "function" ? analyticsLinePath : undefined,CrispPulseView,createEmptyDailyRecord,countTasks,countLinks,validateAndRepairStore,isPathIncluded,getScoreBreakdown,generateDailyCSV,filterDatesByRange,generateReviewData,generateWeeklyMarkdown,getLineSet,getCompletedTaskSet,getIsoWeekString,generateAnksWeeklyReviewFileContent,CrispFocusAdapter,verifyLicenseCode,CrispPulseLicenseManager,discoverVaultCrispLicense,renderAboutCard,ICON_COMPUTER_SVG,ICON_BLOCKS_WAVE_SVG,ICON_BLOCKS_WAVE_REGISTERED_SVG,CRISP_PULSE_ICON_ID:typeof CRISP_PULSE_ICON_ID !== "undefined" ? CRISP_PULSE_ICON_ID : undefined,checkBannerImageSize:typeof checkBannerImageSize === "function" ? checkBannerImageSize : undefined,splitActiveInterval:typeof splitActiveInterval === "function" ? splitActiveInterval : undefined,buildHourlyProfile:typeof buildHourlyProfile === "function" ? buildHourlyProfile : undefined,getReviewClues,reviewWeekRange,buildOverviewModel:typeof buildOverviewModel === "function" ? buildOverviewModel : undefined,dayComposition:typeof dayComposition === "function" ? dayComposition : undefined,dayRhythm:typeof dayRhythm === "function" ? dayRhythm : undefined,entitle:(plugin,on)=>PULSE_LICENSE_STATE.set(pulseLicenseManagerFor(plugin),!!on),smoothLinePath:typeof smoothLinePath === "function" ? smoothLinePath : undefined,buildMonthPosterModel:typeof buildMonthPosterModel === "function" ? buildMonthPosterModel : undefined,paintMonthPoster:typeof paintMonthPoster === "function" ? paintMonthPoster : undefined,encodeCode128B:typeof encodeCode128B === "function" ? encodeCode128B : undefined,PULSE_CODE128_PATTERNS:typeof PULSE_CODE128_PATTERNS !== "undefined" ? PULSE_CODE128_PATTERNS : undefined,typedWordsOf:typeof typedWordsOf === "function" ? typedWordsOf : undefined,sprintWords:typeof sprintWords === "function" ? sprintWords : undefined,shiftMonthKey:typeof shiftMonthKey === "function" ? shiftMonthKey : undefined,PulseSnapshotCache:typeof PulseSnapshotCache === "function" ? PulseSnapshotCache : undefined};',
     context
   );
   const Pulse = context.module.exports;
@@ -3595,6 +3595,52 @@ test('month poster: partial month compares with the same days of last month, fut
  const empty=helpers.buildMonthPosterModel({},'2026-11',include,'2026-11-06');
  assert.equal(empty.empty,true);
  assert.equal(empty.best,null);
+});
+
+test('month poster receipt: Code 128B patterns are valid and paintMonthPoster renders unified receipt in day/night/empty modes',()=>{
+ const { helpers } = setup();
+ assert.equal(helpers.PULSE_CODE128_PATTERNS.length, 107);
+ for (let i = 0; i < 106; i++) {
+  const sum = [...helpers.PULSE_CODE128_PATTERNS[i]].reduce((a, ch) => a + Number(ch), 0);
+  assert.equal(sum, 11, `Code 128 pattern ${i} should sum to 11 modules`);
+ }
+ assert.equal([...helpers.PULSE_CODE128_PATTERNS[106]].reduce((a, ch) => a + Number(ch), 0), 13);
+ const widths = helpers.encodeCode128B('PULSE 2026-11');
+ // Start B (11) + 13 chars (143) + checksum (11) + Stop (13) = 178 modules, odd count of alternating bars/spaces (97)
+ assert.equal(widths.reduce((a, b) => a + b, 0), 178);
+ assert.equal(widths.length, 97);
+
+ const makeMockCanvas = () => {
+  const texts = [];
+  const grad = { addColorStop() {} };
+  const ctx = {
+   letterSpacing: '0px',
+   setTransform() {}, createRadialGradient() { return grad; }, createLinearGradient() { return grad; },
+   fillRect() {}, save() {}, restore() {}, clip() {}, beginPath() {}, closePath() {},
+   moveTo() {}, lineTo() {}, arcTo() {}, arc() {}, fill() {}, stroke() {}, setLineDash() {},
+   measureText(t) { return { width: String(t).length * 10 }; },
+   fillText(t) { texts.push(String(t)); },
+  };
+  return { width: 0, height: 0, texts, getContext: () => ctx };
+ };
+ const day = (score) => ({ quality: 'recorded', contribution: { score, wordsAdded: score * 100, notesCreated: 1, tasksCompleted: 1, meaningfulEdits: 1 }, activity: { activeMinutes: 30, focusMinutes: 45 } });
+ const daily = { '2026-10-01': day(10), '2026-11-01': day(20), '2026-11-02': day(30) };
+ const model = helpers.buildMonthPosterModel(daily, '2026-11', () => true, '2026-11-02', { weekStartsOn: 'monday' });
+ for (const mode of ['day', 'night']) {
+  const c = makeMockCanvas();
+  helpers.paintMonthPoster(c, model, { mode, scale: 2 });
+  assert.equal(c.width, 2160);
+  assert.equal(c.height, 2880);
+  assert.ok(c.texts.includes('CRISP PULSE'));
+  assert.ok(c.texts.includes('NO. 2026-11'));
+  assert.ok(c.texts.some((t) => t.includes('↑ 400%')));
+ }
+ const emptyCanvas = makeMockCanvas();
+ const emptyModel = helpers.buildMonthPosterModel({}, '2026-08', () => true, '2026-11-02');
+ helpers.paintMonthPoster(emptyCanvas, emptyModel, { mode: 'day', scale: 1 });
+ assert.equal(emptyCanvas.width, 1080);
+ assert.equal(emptyCanvas.height, 1440);
+ assert.ok(emptyCanvas.texts.some((t) => t.includes('这个月还没有记录') || t.includes('No records')));
 });
 
 test('写作目标：只算自己打的字；冲刺跨零点也算对；写满目标算今天达标；坏的冲刺记录被清掉', async () => {
