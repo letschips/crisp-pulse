@@ -107,11 +107,11 @@ test('after the task is deleted in Tempo, converting again creates one new task 
  const snap=await f.tempo.getTasksBySource([`crisp-pulse:${m.id}`]);assert.equal(snap[`crisp-pulse:${m.id}`].id,second.id);
 });
 
-/* Tempo 完成的任务出现在 Pulse 当日明细（Tempo 0.10.0 getCompletedOn + Pulse 1.35.0），只展示、不计分。失败模式：
+/* Tempo 完成的任务出现在 Pulse 当日明细。失败模式：
  * - 列出了别的日子完成的、已取消的或已删除的任务；子任务看不出属于哪件事。
- * - 把 Tempo 的完成数加进 Pulse 的「完成任务」或贡献分（会被新建再勾掉刷分）。
+ * - 启用计分时改写了已经过去的日期；重读今天或重启时重复加分；撤销 Tempo 完成时扣掉了笔记复选框的分。
  * - Tempo 缺失、旧版、返回坏数据时 Pulse 报错，而不是安静地不显示。 */
-test('Pulse lists the Tempo tasks finished on a day, without scoring them',async t=>{
+test('Pulse lists Tempo completions on a historical day without backfilling the score',async t=>{
  const f=fixture(t);await f.makeTempo();
  const store=f.TempoStore.get(f.tempo);
  const day=new Date(2026,9,28,15,30).getTime(),dayKey='2026-10-28';
@@ -133,15 +133,49 @@ test('Pulse lists the Tempo tasks finished on a day, without scoring them',async
  const rec=f.pulse.store?.daily?.[dayKey];assert.ok(!rec||!(rec.contribution?.tasksCompleted>0),'不计入 Pulse 的完成任务');
 });
 
+test('today’s Tempo completions add to the Pulse task count and score, and reopening reverses them',async t=>{
+ const f=fixture(t);await f.makeTempo();
+ const task=await f.pulse.convertMemoToTempo(f.memos()[0]);
+ const store=f.TempoStore.get(f.tempo);
+ const today=f.Pulse.dashboardHelpers.todayKey();
+ let saved;
+ f.pulse.store={daily:{}};
+ f.pulse.settings.weightTaskCompleted=2;
+ f.pulse.refreshViews=()=>{};
+ f.pulse.savePluginData=async()=>{saved=JSON.stringify(f.pulse.store);};
+ const record=f.pulse.getOrCreateRecord(today);
+ record.contribution.tasksCompleted=1;
+ f.pulse.recomputeScore(record);
+ const setCompleted=completed=>store.updateDatabase(db=>({...db,tasks:{...db.tasks,[task.id]:{
+   ...db.tasks[task.id],status:completed?'done':'todo',completedAt:completed?Date.now():undefined,
+ }}}),false);
+ setCompleted(true);
+ await f.pulse.syncTempoCompletions?.();
+ assert.equal(record.contribution.tasksCompleted,2);
+ assert.equal(record.contribution.score,4);
+ f.pulse.store=f.Pulse.validateAndRepairStore(JSON.parse(saved)).store;
+ await f.pulse.syncTempoCompletions();
+ assert.equal(f.pulse.store.daily[today].contribution.score,4,'重读已保存的记录不会重复加分');
+ const getCompletedOn=f.tempo.getCompletedOn;
+ f.tempo.getCompletedOn=async()=>{throw new Error('Tempo is reloading');};
+ await f.pulse.syncTempoCompletions();
+ assert.equal(f.pulse.store.daily[today].contribution.score,4,'读取暂时失败保留已核对的分数');
+ f.tempo.getCompletedOn=getCompletedOn;
+ setCompleted(false);
+ await f.pulse.syncTempoCompletions();
+ assert.equal(f.pulse.store.daily[today].contribution.tasksCompleted,1);
+ assert.equal(f.pulse.store.daily[today].contribution.score,2);
+});
+
 test('without Tempo, with an older one or with bad data, Pulse shows no Tempo list and does not throw',async t=>{
  const f=fixture(t);
- assert.deepEqual(JSON.parse(JSON.stringify(await f.pulse.tempoCompletedOn('2026-10-28'))),[]);
+ assert.equal(await f.pulse.tempoCompletedOn('2026-10-28'),null);
  f.app.plugins.plugins['crisp-tempo']={getCompletedToday:async()=>({count:1})};
- assert.deepEqual(JSON.parse(JSON.stringify(await f.pulse.tempoCompletedOn('2026-10-28'))),[],'旧版没有接口');
+ assert.equal(await f.pulse.tempoCompletedOn('2026-10-28'),null,'旧版没有接口');
  f.app.plugins.plugins['crisp-tempo']={getCompletedOn:async()=>({tasks:[{id:'x',title:42},null,{id:'ok',title:'好的',completedAt:Date.now()}]})};
  assert.deepEqual(JSON.parse(JSON.stringify((await f.pulse.tempoCompletedOn('2026-10-28')).map(r=>r.id))),['ok'],'坏条目丢掉');
  f.app.plugins.plugins['crisp-tempo']={getCompletedOn:async()=>{throw new Error('reloading');}};
- assert.deepEqual(JSON.parse(JSON.stringify(await f.pulse.tempoCompletedOn('2026-10-28'))),[]);
+ assert.equal(await f.pulse.tempoCompletedOn('2026-10-28'),null);
 });
 
 /* 速记卡片上的截止倒计时（Pulse 1.46.0，读 Tempo 0.13.0 起的 getActionOverview）。失败模式：
