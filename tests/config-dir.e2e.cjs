@@ -10,6 +10,19 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const { generateKeyPairSync, sign, webcrypto, createHash } = require('node:crypto');
 
+// Obsidian's FileSystemAdapter surface (vault-relative paths) over real temp files.
+function fsAdapter(basePath) {
+  const abs = (p) => path.join(basePath, p);
+  return {
+    exists: async (p) => fs.existsSync(abs(p)),
+    read: async (p) => fs.readFileSync(abs(p), 'utf8'),
+    list: async (p) => {
+      const entries = fs.readdirSync(abs(p), { withFileTypes: true });
+      return { files: entries.filter((e) => e.isFile()).map((e) => `${p}/${e.name}`), folders: entries.filter((e) => e.isDirectory()).map((e) => `${p}/${e.name}`) };
+    },
+  };
+}
+
 async function run(options = {}) {
   const root = options.root || path.resolve(__dirname, '..');
   const id = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8')).id;
@@ -72,7 +85,7 @@ async function run(options = {}) {
         write(scenario.dir, 'crisp-reading-rail', { licenseCode: good, unrelated: 'keep' });
       }
       const app = { appId: 'LOCAL-CONFIG-E2E', plugins: { plugins: {} },
-        vault: { adapter: scenario.getter ? { getBasePath: () => basePath } : { basePath } },
+        vault: { adapter: { ...fsAdapter(basePath), ...(scenario.getter ? { getBasePath: () => basePath } : { basePath }) } },
         workspace: { getLeavesOfType: () => [] } };
       if (scenario.configured) app.vault.configDir = scenario.dir;
       const beforeCalls = onlineCalls;

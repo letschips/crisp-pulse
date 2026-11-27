@@ -175,7 +175,9 @@ function normalizeLicenseCode(input) {
 }
 
 // 库内其它 Crisp 插件保存的授权码，按「已加载插件 → 磁盘 data.json」顺序去重收集（不含 Pulse 自己）。
-function collectVaultCrispLicenseCandidates(app) {
+// 各款存法不一：多数是 licenseCode，Tempo 是 licenseKey，Pets / Ripple / Days 在内存里放 options。
+// 磁盘走 vault adapter，手机上没有 Node fs 也能读到。
+async function collectVaultCrispLicenseCandidates(app) {
   if (!app) return [];
   const seen = new Set();
   const candidates = [];
@@ -187,26 +189,24 @@ function collectVaultCrispLicenseCandidates(app) {
     candidates.push(trimmed);
   };
   for (const [pid, instance] of Object.entries(app.plugins?.plugins || {})) {
-    if (pid.startsWith("crisp-") && pid !== "crisp-pulse") add(instance?.settings?.licenseCode);
+    if (!pid.startsWith("crisp-") || pid === "crisp-pulse") continue;
+    add(instance?.settings?.licenseCode || instance?.settings?.licenseKey || instance?.options?.licenseCode || instance?.data?.licenseCode || instance?.data?.licenseKey);
   }
   try {
-    const pathMod = typeof require === "function" ? require("path") : null;
-    const fsMod = typeof require === "function" ? require("fs") : null;
-    if (pathMod && fsMod) {
-      const basePath = app.vault?.adapter?.basePath || (app.vault?.adapter?.getBasePath ? app.vault.adapter.getBasePath() : "");
-      const configDir = app.vault?.configDir || ".obsidian";
-      const pluginsDir = basePath ? pathMod.join(basePath, configDir, "plugins") : "";
-      if (pluginsDir && fsMod.existsSync(pluginsDir)) {
-        for (const d of fsMod.readdirSync(pluginsDir)) {
-          if (!d.startsWith("crisp-") || d === "crisp-pulse") continue;
-          const dataPath = pathMod.join(pluginsDir, d, "data.json");
-          if (!fsMod.existsSync(dataPath)) continue;
-          try {
-            const data = JSON.parse(fsMod.readFileSync(dataPath, "utf-8"));
-            add(data?.licenseCode || data?.settings?.licenseCode);
-          } catch (e) {
-            // 单个损坏的 data.json 不影响其余候选
-          }
+    const adapter = app.vault?.adapter;
+    const pluginsDir = `${app.vault?.configDir || ".obsidian"}/plugins`;
+    if (adapter && typeof adapter.list === "function" && await adapter.exists(pluginsDir)) {
+      const listing = await adapter.list(pluginsDir);
+      for (const folder of listing?.folders || []) {
+        const d = folder.split("/").pop() || "";
+        if (!d.startsWith("crisp-") || d === "crisp-pulse") continue;
+        const dataPath = `${folder}/data.json`;
+        try {
+          if (!(await adapter.exists(dataPath))) continue;
+          const data = JSON.parse(await adapter.read(dataPath));
+          add(data?.licenseCode || data?.licenseKey || data?.settings?.licenseCode || data?.license);
+        } catch (e) {
+          // 单个损坏的 data.json 不影响其余候选
         }
       }
     }
@@ -217,7 +217,7 @@ function collectVaultCrispLicenseCandidates(app) {
 // 返回一张对本插件确实可用的授权码，找不到则返回 null。候选只做本地校验（不增加在线请求），
 // 因此作用域不含 Pulse、已过期或签名无效的码不会再挡住后面可用的全家桶码。
 async function discoverVaultCrispLicense(app) {
-  for (const code of collectVaultCrispLicenseCandidates(app)) {
+  for (const code of await collectVaultCrispLicenseCandidates(app)) {
     const local = await verifyLicenseCode(code, "crisp-pulse", app, null, { skipOnline: true });
     if (local.valid) return code;
   }
@@ -1715,27 +1715,33 @@ class CrispFocusAdapter {
     return true;
   }
 
+  /** Focus 的状态：有公开的 getPomodoroSnapshot（带 kind、waiting）就用它，旧版才读内部计时器。 */
+  focusSnapshot() {
+    const p = this.getFocusPlugin();
+    if (!p) return null;
+    try {
+      if (Number(p.focusApiVersion) >= 1 && typeof p.getPomodoroSnapshot === "function") return p.getPomodoroSnapshot();
+      if (p.session && typeof p.session.getSnapshot === "function") return p.session.getSnapshot();
+    } catch {}
+    return null;
+  }
+
+  /** 正在专注：番茄休息时计时器也在走，但那不是专注。 */
   isFocusRunning() {
     if (!this.isAvailable()) return false;
-    const p = this.getFocusPlugin();
-    if (!p || !p.session || typeof p.session.getSnapshot !== "function") return false;
-    try {
-      const snap = p.session.getSnapshot();
-      return snap?.status === "running";
-    } catch {
-      return false;
-    }
+    const snap = this.focusSnapshot();
+    return snap?.status === "running" && snap.kind !== "break";
+  }
+
+  /** Focus 有没有进行中的东西（专注、休息、暂停，或休息完等下一轮）：有就别再替它开新的，否则会清掉整轮番茄。 */
+  isFocusBusy() {
+    if (!this.isAvailable()) return false;
+    const snap = this.focusSnapshot();
+    return !!snap && (snap.status !== "idle" || !!snap.waiting);
   }
 
   getFocusRemainingMs() {
-    const p = this.getFocusPlugin();
-    if (!p || !p.session || typeof p.session.getSnapshot !== "function") return 0;
-    try {
-      const snap = p.session.getSnapshot();
-      return snap?.remainingMs || 0;
-    } catch {
-      return 0;
-    }
+    return this.focusSnapshot()?.remainingMs || 0;
   }
 
   attach() {
@@ -2386,6 +2392,8 @@ class CrispPulsePlugin extends Plugin {
     this.stopped = true;
     this.connectSearch();
     if (this.snapshotSyncTimer) clearTimeout(this.snapshotSyncTimer);
+    window.clearTimeout(this.memoRefreshTimer);
+    window.clearTimeout(this.focusRefreshTimer);
     this.focusAdapter?.detach();
     this.flushAllSessions();
     const cache = this.snapshotCache;
@@ -3124,7 +3132,7 @@ class CrispPulsePlugin extends Plugin {
     const mins = Math.max(1, Math.min(240, Math.round(Number(minutes) || 25)));
     const date = getTodayKey();
     this.sprint = { start: Date.now(), minutes: mins, target: Math.max(0, Math.round(Number(target) || 0)), baseDate: date, base: typedWordsOf(this.store.daily[date]) };
-    if (this.settings.enableCrispFocusSync && this.focusAdapter?.isAvailable?.() && !this.focusAdapter.isFocusRunning()) {
+    if (this.settings.enableCrispFocusSync && this.focusAdapter?.isAvailable?.() && !this.focusAdapter.isFocusBusy()) {
       try { await this.focusAdapter.startFocusSession(mins); } catch (_) { /* Focus 开不了也照样冲刺 */ }
     }
     this.sprintTimer = window.setInterval(() => this.tickSprint(), 1000);
@@ -4749,6 +4757,7 @@ class CrispPulsePlugin extends Plugin {
   refreshMemoViews() {
     window.clearTimeout(this.memoRefreshTimer);
     this.memoRefreshTimer = window.setTimeout(() => {
+      if (this.stopped) return;
       this.emitPulseState("memos");
       for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MEMO)) {
         const root = leaf.view?.containerEl?.children?.[1];
@@ -12468,6 +12477,16 @@ function memoSearchTarget(entryId) {
   return at ? { path: at[3], startLine: Number(at[1]), hash: at[2] } : null;
 }
 
+/** 速记菜单里的 Tempo 项指向哪条任务。snapshots 为 null 表示还没从 Tempo 读回：先信速记里的凭据；
+    读回了且没有这条，才算在 Tempo 里删掉了。 */
+function memoMenuTempoTask(m, snapshots) {
+  const ids = m?.tempoTasks || [];
+  if (!snapshots || typeof snapshots !== "object") return { taskId: ids.length ? ids[ids.length - 1] : null, deleted: false };
+  const live = m?.id ? snapshots[`crisp-pulse:${m.id}`] : null;
+  if (live?.id) return { taskId: live.id, deleted: false };
+  return { taskId: null, deleted: ids.length > 0 };
+}
+
 /** 卡片上 Tempo 任务的状态文字；任务在 Tempo 里删掉了也要说清楚。 */
 function memoTempoLabel(task) {
   if (!task) return tr("任务已删除", "Task deleted");
@@ -15184,12 +15203,11 @@ class CrispPulseMemoView extends ItemView {
     // 装了 Tempo 才出现；已经转过的速记点它是打开那条任务
     const tempo = this.plugin.memoTempo();
     if (tempo) {
-      const live = m.id ? this.tempoSnapshots?.[`crisp-pulse:${m.id}`] : null;
-      const taskId = live?.id;
-      menu.addItem((i) => i.setTitle(taskId ? tr("在 Tempo 中打开任务", "Open task in Tempo") : m.tempoTasks?.length ? tr("重新转为 Tempo 任务", "Convert to a Tempo task again") : tr("转为 Tempo 任务", "Convert to a Tempo task")).setIcon("list-checks").onClick(async () => {
+      const { taskId, deleted } = memoMenuTempoTask(m, this.tempoSnapshots);
+      menu.addItem((i) => i.setTitle(taskId ? tr("在 Tempo 中打开任务", "Open task in Tempo") : deleted ? tr("重新转为 Tempo 任务", "Convert to a Tempo task again") : tr("转为 Tempo 任务", "Convert to a Tempo task")).setIcon("list-checks").onClick(async () => {
         if (!taskId && !pulseRequire(this.plugin, "memoConvert")) return;
         try {
-          if (taskId) await tempo.revealTask(taskId);
+          if (taskId) await this.plugin.memoTempo()?.revealTask(taskId);
           else { await this.plugin.convertMemoToTempo(m); new Notice(tr("已转为 Tempo 任务", "Converted to a Tempo task")); done(); }
         } catch (error) { new Notice(tr(`Crisp Pulse 速记：${error.message || error}`, `Crisp Pulse memos: ${error.message || error}`), 8000); }
       }));
@@ -16107,7 +16125,7 @@ module.exports.reviewWeekRange = reviewWeekRange;
 module.exports.CrispPulseEvidenceModal = CrispPulseEvidenceModal;
 module.exports.CrispPulseMemoView = CrispPulseMemoView;
 module.exports.memoHelpers = {
-  memoTempoDue, memoSearchEntries, memoSearchTarget,
+  memoTempoDue, memoMenuTempoTask, memoSearchEntries, memoSearchTarget,
   buildMemoBlock, buildSourceMemoText, parseMemoBlocks, extractMemoTags, insertMemoBlock, removeMemoBlock, appendMemoLink,
   memoStats, memoHeatLevel, memoHasImage, memoHasLink, memoHasAudio, memoTranscriptionState, memoHasTranscriptFor, memoAsrErrorInfo, memoConversionReview, memoWithTag, memoResolveRelative, writingKeyKind, memoTaskTitle, memoTempoLabel, bindHoldPress, memoAttachmentName, memoRecordingName, dailyNotePath, dailyDateFromPath, buildAnksMemoFile, pickRandomMemo, splitMemoLine,
   buildMemoQuestionNote, buildMemoNote, memoRelinkText, MemoStore,

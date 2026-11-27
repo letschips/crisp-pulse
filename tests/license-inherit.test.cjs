@@ -54,7 +54,15 @@ function makeVault(t, entries, loaded = {}) {
   const plugins = Object.fromEntries(Object.entries(loaded).map(([id, licenseCode]) => [id, { settings: { licenseCode } }]));
   return {
     appId: "local-fixture",
-    vault: { adapter: { basePath }, configDir: ".obsidian" },
+    vault: { adapter: {
+      basePath,
+      exists: async (p) => fs.existsSync(path.join(basePath, p)),
+      read: async (p) => fs.readFileSync(path.join(basePath, p), "utf8"),
+      list: async (p) => {
+        const entries = fs.readdirSync(path.join(basePath, p), { withFileTypes: true });
+        return { files: entries.filter((e) => e.isFile()).map((e) => `${p}/${e.name}`), folders: entries.filter((e) => e.isDirectory()).map((e) => `${p}/${e.name}`) };
+      },
+    }, configDir: ".obsidian" },
     plugins: { plugins },
     workspace: { getLeavesOfType: () => [] },
   };
@@ -336,4 +344,38 @@ test("规范化：兄弟插件 data.json 里带空白的码也能被继承，并
   const good = code(["all"]);
   const app = makeVault(t, [["crisp-a", { licenseCode: `卡密：\n${good}\n` }]]);
   assert.equal(await lib.discoverVaultCrispLicense(app), good);
+});
+
+// 2026-11-27 体检 P2-1：Tempo 把授权存在 licenseKey；手机上没有 Node fs，只能走 vault adapter。
+function adapterOnlyVault(entries) {
+  const files = new Map(entries.map(([dir, data]) => [`.obsidian/plugins/${dir}/data.json`, JSON.stringify(data)]));
+  const folders = [...new Set(entries.map(([dir]) => `.obsidian/plugins/${dir}`))];
+  return {
+    appId: "mobile-fixture",
+    vault: {
+      configDir: ".obsidian",
+      adapter: {
+        exists: async (p) => p === ".obsidian/plugins" || files.has(p) || folders.includes(p),
+        list: async (p) => ({ files: [], folders: p === ".obsidian/plugins" ? folders : [] }),
+        read: async (p) => { if (!files.has(p)) throw new Error("ENOENT"); return files.get(p); },
+      },
+    },
+    plugins: { plugins: {} },
+    workspace: { getLeavesOfType: () => [] },
+  };
+}
+
+test("没有 Node fs 的库（手机）也能从磁盘继承，含 Tempo 的 licenseKey", async () => {
+  const good = code(["all"]);
+  assert.equal(await lib.discoverVaultCrispLicense(adapterOnlyVault([["crisp-tempo", { licenseKey: good }]])), good);
+});
+
+test("已加载的 Tempo / Pets 把码放在 licenseKey、options 里也能读到", async (t) => {
+  const good = code(["all"]);
+  const app = makeVault(t, []);
+  app.plugins.plugins = { "crisp-tempo": { settings: undefined, data: { licenseKey: good } } };
+  assert.equal(await lib.discoverVaultCrispLicense(app), good);
+  const pets = code(["crisp-pulse"]);
+  app.plugins.plugins = { "crisp-pets": { options: { licenseCode: pets } } };
+  assert.equal(await lib.discoverVaultCrispLicense(app), pets);
 });

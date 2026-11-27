@@ -3697,3 +3697,76 @@ test('a snapshot records the stat seen before reading, so a write racing the rea
   await p.loadStartupSnapshots();await p.flushSnapshotCache();
   assert.equal(backend.files.get('race.md').mtime, 1);
 });
+
+/* Pulse ↔ Focus 状态语义（2026-11-27 体检 P2-2）。失败模式：
+   番茄休息期 Focus 的底层计时器也是 running，Pulse 状态栏误报「正在专注中」；
+   番茄暂停中或休息结束等下一轮时，写作冲刺调 startFocusSession 会清掉整轮番茄和绑定的任务。 */
+function pomodoroFocus(snap) {
+  const calls = [];
+  const focus = {
+    focusApiVersion: 3,
+    settings: { sessionDurationMinutes: 25 },
+    session: { getSnapshot: () => ({ status: snap.status, remainingMs: 999999, endAt: Date.now() + 999999 }) },
+    getPomodoroSnapshot: () => ({ waiting: false, kind: null, remainingMs: 0, ...snap }),
+    completeFocusSession: async () => {},
+    startFocusSession: async (m) => { calls.push(m); return {}; },
+  };
+  return { focus, calls };
+}
+
+test('Focus 番茄休息期不算专注中，剩余时间取公开快照', async () => {
+  const { p, helpers } = setup();
+  await p.loadPluginData();
+  p.settings.enableCrispFocusSync = true;
+  const brk = pomodoroFocus({ status: 'running', kind: 'break', remainingMs: 300000 });
+  p.app.plugins.getPlugin = (id) => (id === 'crisp-focus' ? brk.focus : null);
+  const a = new helpers.CrispFocusAdapter(p);
+  assert.equal(a.isFocusRunning(), false, '休息不是专注');
+  const run = pomodoroFocus({ status: 'running', kind: 'focus', remainingMs: 600000 });
+  p.app.plugins.getPlugin = (id) => (id === 'crisp-focus' ? run.focus : null);
+  assert.equal(a.isFocusRunning(), true);
+  assert.equal(a.getFocusRemainingMs(), 600000, '剩余时间用 getPomodoroSnapshot 校准后的值');
+});
+
+test('写作冲刺不覆盖暂停中、休息中或等待下一轮的 Focus 番茄', async () => {
+  for (const [snap, expected] of [
+    [{ status: 'paused', kind: 'focus' }, 0],
+    [{ status: 'idle', waiting: true }, 0],
+    [{ status: 'running', kind: 'break' }, 0],
+    [{ status: 'idle' }, 1],
+  ]) {
+    const { p, helpers } = setup();
+    await p.loadPluginData();
+    helpers.entitle(p, true);
+    p.settings.enableCrispFocusSync = true;
+    const f = pomodoroFocus(snap);
+    p.app.plugins.getPlugin = (id) => (id === 'crisp-focus' ? f.focus : null);
+    p.refreshViews = () => {};
+    assert.equal(await p.startSprint(25), true);
+    clearInterval(p.sprintTimer);
+    assert.equal(f.calls.length, expected, JSON.stringify(snap));
+  }
+});
+
+/* 速记菜单的 Tempo 项（体检 P2-3）：快照还没读回时，凭据里已有任务就是「打开任务」，不能误报成已删除。 */
+test('速记菜单在 Tempo 快照未就绪时按凭据打开任务', () => {
+  const { context } = setup();
+  const pick = (...a) => ({ ...context.module.exports.memoHelpers.memoMenuTempoTask(...a) });
+  const m = { id: 'm1', tempoTasks: ['task-a', 'task-b'] };
+  assert.deepEqual(pick(m, null), { taskId: 'task-b', deleted: false });
+  assert.deepEqual(pick(m, { 'crisp-pulse:m1': { id: 'task-c' } }), { taskId: 'task-c', deleted: false });
+  assert.deepEqual(pick(m, {}), { taskId: null, deleted: true }, '读回了且没有这条，才是已删除');
+  assert.deepEqual(pick({ id: 'm2' }, null), { taskId: null, deleted: false });
+});
+
+test('卸载后速记刷新防抖不再发 crisp-pulse:state', async () => {
+  const { p } = setup();
+  await p.loadPluginData();
+  let emitted = 0;
+  p.emitPulseState = () => { emitted++; };
+  p.flushAllSessions = () => {};
+  p.refreshMemoViews();
+  p.onunload();
+  await new Promise((r) => setTimeout(r, 450));
+  assert.equal(emitted, 0);
+});

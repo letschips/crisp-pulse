@@ -3729,3 +3729,10 @@ input.is-invalid[aria-invalid="true"] { border-color: var(--text-error); box-sha
     transition: none !important;
   }
 }
+
+/* Windows/Linux draw the option popup from CSS; the selects here sit on translucent surfaces,
+   so give the options an opaque background or they turn white in dark mode. */
+:is(.crisp-pulse-view, .crisp-pulse-memo-view, .crisp-pulse-evidence-modal, .crisp-pulse-memo-modal) select option {
+  background-color: var(--background-primary);
+  color: var(--text-normal);
+}
